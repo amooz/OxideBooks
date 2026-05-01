@@ -69,3 +69,24 @@ dotenvy = "0.15"
 
 # HTTP body utilities (used in integration tests)
 http-body-util = "0.1"
+
+# HTTP client (OIDC discovery, SAML metadata fetch)
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# OIDC / OAuth2
+openidconnect = { version = "4", features = ["reqwest"] }
+
+# SAML XML serialization / deserialization
+quick-xml = { version = "0.37", features = ["serialize"] }
+
+# Compression for SAML HTTP-Redirect binding (deflate)
+flate2 = "1"
+
+# Random token generation (SCIM tokens, OIDC state)
+rand = { version = "0.8", features = ["std"] }
+
+# Base64 (SAML XML encoding, SCIM)
+base64 = "0.22"
+
+# URL percent-encoding (SAML HTTP-Redirect binding)
+urlencoding = "2"

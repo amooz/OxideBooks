@@ -37,6 +37,7 @@ pub fn test_settings(db_url: &str) -> Settings {
         app: AppSettings {
             registration_open: true,
             default_currency: "USD".to_string(),
+            base_url: "http://localhost:3000".to_string(),
         },
     }
 }

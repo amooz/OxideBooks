@@ -1,5 +1,6 @@
 pub mod account;
 pub mod contact;
+pub mod identity;
 pub mod invoice;
 pub mod organization;
 pub mod reports;
@@ -8,6 +9,10 @@ pub mod transaction;
 
 pub use account::{Account, AccountType, CreateAccount, UpdateAccount};
 pub use contact::{Contact, ContactType, CreateContact, UpdateContact};
+pub use identity::{
+    CreateOidcProvider, CreateSamlProvider, CreateScimToken, CreatedScimToken, IdentityProvider,
+    ProviderSummary, ProviderType, ScimToken,
+};
 pub use invoice::{
     CreateInvoice, CreateInvoiceLine, Invoice, InvoiceLine, InvoiceStatus, InvoiceType,
 };

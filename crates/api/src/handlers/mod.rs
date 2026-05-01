@@ -1,7 +1,10 @@
 pub mod accounts;
 pub mod auth;
+pub mod auth_sso;
 pub mod contacts;
+pub mod identity;
 pub mod invoices;
 pub mod reports;
 pub mod roles;
+pub mod scim;
 pub mod transactions;

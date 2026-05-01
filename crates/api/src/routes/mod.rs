@@ -5,15 +5,33 @@ use axum::{
 };
 
 use crate::{
-    handlers::{accounts, auth, contacts, invoices, reports, roles, transactions},
+    handlers::{
+        accounts, auth, auth_sso, contacts, identity, invoices, reports, roles, scim, transactions,
+    },
     middleware::require_auth,
     state::AppState,
 };
 
 pub fn build(state: AppState) -> Router {
+    // Public auth routes (no JWT required)
     let public = Router::new()
         .route("/auth/register", post(auth::register))
-        .route("/auth/login", post(auth::login));
+        .route("/auth/login", post(auth::login))
+        // SSO initiation & callbacks (public — redirect-based flows)
+        .route("/auth/oidc/{provider_id}", get(auth_sso::oidc_initiate))
+        .route(
+            "/auth/oidc/{provider_id}/callback",
+            get(auth_sso::oidc_callback),
+        )
+        .route("/auth/saml/{provider_id}", get(auth_sso::saml_initiate))
+        .route(
+            "/auth/saml/{provider_id}/callback",
+            post(auth_sso::saml_callback),
+        )
+        .route(
+            "/auth/saml/{provider_id}/metadata",
+            get(auth_sso::saml_sp_metadata),
+        );
 
     let protected = Router::new()
         // Chart of Accounts
@@ -58,10 +76,45 @@ pub fn build(state: AppState) -> Router {
             "/roles/:role_id/permissions/:permission",
             delete(roles::remove_permission),
         )
+        // Identity providers (admin-managed)
+        .route("/identity-providers", get(identity::list_providers))
+        .route(
+            "/identity-providers/oidc",
+            post(identity::create_oidc_provider),
+        )
+        .route(
+            "/identity-providers/saml",
+            post(identity::create_saml_provider),
+        )
+        .route("/identity-providers/:id", delete(identity::delete_provider))
+        // SCIM token management (admin-managed)
+        .route(
+            "/scim/tokens",
+            get(identity::list_scim_tokens).post(identity::create_scim_token),
+        )
+        .route("/scim/tokens/:id", delete(identity::revoke_scim_token))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
+
+    // SCIM 2.0 endpoints (separate bearer-token auth, not JWT)
+    let scim_routes = Router::new()
+        .route(
+            "/scim/v2/ServiceProviderConfig",
+            get(scim::service_provider_config),
+        )
+        .route(
+            "/scim/v2/Users",
+            get(scim::list_users).post(scim::create_user),
+        )
+        .route(
+            "/scim/v2/Users/:id",
+            get(scim::get_user)
+                .patch(scim::patch_user)
+                .delete(scim::delete_user),
+        );
 
     Router::new()
         .nest("/api/v1", public.merge(protected))
+        .merge(scim_routes)
         .route("/health", get(health_check))
         .with_state(state)
 }

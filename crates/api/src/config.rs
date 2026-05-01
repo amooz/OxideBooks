@@ -30,6 +30,9 @@ pub struct AuthSettings {
 pub struct AppSettings {
     pub registration_open: bool,
     pub default_currency: String,
+    /// Public base URL of this API, used for OAuth2 redirect URIs and SAML ACS URLs.
+    /// E.g. "https://api.example.com"
+    pub base_url: String,
 }
 
 impl Settings {
@@ -49,6 +52,7 @@ impl Settings {
             .set_default("auth.refresh_expiry_days", 30)?
             .set_default("app.registration_open", true)?
             .set_default("app.default_currency", "USD")?
+            .set_default("app.base_url", "http://localhost:3000")?
             .build()?;
 
         Ok(cfg.try_deserialize()?)
