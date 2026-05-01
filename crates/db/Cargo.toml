@@ -6,6 +6,9 @@ authors.workspace = true
 license.workspace = true
 description = "Database layer (SQLite/PostgreSQL) for OxideBooks"
 
+[dev-dependencies]
+tokio = { workspace = true }
+
 [dependencies]
 oxidebooks-core = { workspace = true }
 sqlx = { workspace = true }

@@ -2,6 +2,7 @@ pub mod account;
 pub mod contact;
 pub mod invoice;
 pub mod organization;
+pub mod reports;
 pub mod transaction;
 
 pub use account::{Account, AccountType, CreateAccount, UpdateAccount};
@@ -10,6 +11,7 @@ pub use invoice::{
     CreateInvoice, CreateInvoiceLine, Invoice, InvoiceLine, InvoiceStatus, InvoiceType,
 };
 pub use organization::{CreateOrganization, Organization};
+pub use reports::{AccountBalance, TrialBalance};
 pub use transaction::{
     CreateJournalEntry, CreateJournalLine, JournalEntry, JournalEntryStatus, JournalLine,
 };

@@ -5,7 +5,7 @@ use axum::{
 };
 
 use crate::{
-    handlers::{accounts, auth, contacts, invoices, transactions},
+    handlers::{accounts, auth, contacts, invoices, reports, transactions},
     middleware::require_auth,
     state::AppState,
 };
@@ -16,7 +16,7 @@ pub fn build(state: AppState) -> Router {
         .route("/auth/login", post(auth::login));
 
     let protected = Router::new()
-        // Accounts (Chart of Accounts)
+        // Chart of Accounts
         .route("/accounts", get(accounts::list_accounts).post(accounts::create_account))
         .route(
             "/accounts/:id",
@@ -39,6 +39,8 @@ pub fn build(state: AppState) -> Router {
         // Invoices & bills
         .route("/invoices", get(invoices::list_invoices).post(invoices::create_invoice))
         .route("/invoices/:id", get(invoices::get_invoice))
+        // Reports
+        .route("/reports/trial-balance", get(reports::trial_balance))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     Router::new()

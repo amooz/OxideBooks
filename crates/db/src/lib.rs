@@ -4,9 +4,12 @@ pub mod repos;
 pub use error::DbError;
 pub use sqlx::PgPool;
 
-/// Run all pending SQLx migrations embedded from `./migrations/`.
+/// Embedded migrations — used both at runtime and by `#[sqlx::test]`.
+pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
+
+/// Run all pending migrations before the server starts accepting requests.
 pub async fn run_migrations(pool: &PgPool) -> Result<(), sqlx::migrate::MigrateError> {
-    sqlx::migrate!("./migrations").run(pool).await
+    MIGRATOR.run(pool).await
 }
 
 /// Open a PostgreSQL connection pool for the given `url`.

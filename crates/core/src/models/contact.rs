@@ -59,3 +59,48 @@ pub struct UpdateContact {
     pub currency: Option<String>,
     pub is_active: Option<bool>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn contact_type_display() {
+        assert_eq!(ContactType::Customer.to_string(), "customer");
+        assert_eq!(ContactType::Vendor.to_string(), "vendor");
+        assert_eq!(ContactType::Both.to_string(), "both");
+    }
+
+    #[test]
+    fn contact_type_serde_roundtrip() {
+        for ct in [ContactType::Customer, ContactType::Vendor, ContactType::Both] {
+            let json = serde_json::to_string(&ct).unwrap();
+            let parsed: ContactType = serde_json::from_str(&json).unwrap();
+            assert_eq!(parsed, ct);
+        }
+    }
+
+    #[test]
+    fn create_contact_optional_type_defaults_handled_by_repo() {
+        // ContactType is optional in CreateContact; the repo defaults to Both.
+        let c = CreateContact {
+            name: "Acme Corp".to_string(),
+            contact_type: None,
+            email: Some("acme@example.com".to_string()),
+            phone: None,
+            address: None,
+            tax_number: None,
+            currency: None,
+        };
+        assert!(c.contact_type.is_none());
+        assert_eq!(c.email.as_deref(), Some("acme@example.com"));
+    }
+
+    #[test]
+    fn update_contact_all_none_is_noop() {
+        // An all-None update is valid; repos use COALESCE to leave fields unchanged.
+        let u = UpdateContact::default();
+        assert!(u.name.is_none());
+        assert!(u.is_active.is_none());
+    }
+}
