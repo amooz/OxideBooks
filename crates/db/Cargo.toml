@@ -1,0 +1,18 @@
+[package]
+name = "oxidebooks-db"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Database layer (SQLite/PostgreSQL) for OxideBooks"
+
+[dependencies]
+oxidebooks-core = { workspace = true }
+sqlx = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+time = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

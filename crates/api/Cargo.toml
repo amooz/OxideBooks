@@ -1,0 +1,34 @@
+[package]
+name = "oxidebooks-api"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "HTTP API server for OxideBooks"
+
+[[bin]]
+name = "oxidebooks"
+path = "src/main.rs"
+
+[dependencies]
+oxidebooks-core = { workspace = true }
+oxidebooks-db = { workspace = true }
+
+axum = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+sqlx = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+jsonwebtoken = "9"
+argon2 = { workspace = true }
+rand_core = { workspace = true }
+uuid = { workspace = true }
+time = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+config = { workspace = true }
+dotenvy = { workspace = true }

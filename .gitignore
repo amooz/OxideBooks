@@ -1,0 +1,30 @@
+# Build artifacts
+/target/
+Cargo.lock
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Config with secrets
+config.toml
+.env
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Uploads / local data
+data/
+uploads/
