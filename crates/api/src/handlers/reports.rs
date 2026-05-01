@@ -1,17 +1,26 @@
-use axum::{extract::{Extension, State}, Json};
+use axum::{
+    extract::{Extension, State},
+    Json,
+};
 use oxidebooks_db::repos::ReportRepo;
 
-use crate::{error::ApiResult, middleware::Claims, state::AppState};
+use crate::{
+    error::{ApiError, ApiResult},
+    middleware::Claims,
+    state::AppState,
+};
 
 /// GET /api/v1/reports/trial-balance
 ///
-/// Returns the trial balance for the authenticated organization — one row per
-/// active account showing total debits, total credits, and the net balance in
-/// the account's normal direction. Only `posted` journal entries are included.
+/// Returns the trial balance for the authenticated organization. Only `posted`
+/// journal entries are included.
 pub async fn trial_balance(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("reports:read") {
+        return Err(ApiError::Forbidden);
+    }
     let tb = ReportRepo::trial_balance(&state.db, &claims.org).await?;
     Ok(Json(serde_json::json!({
         "data": {

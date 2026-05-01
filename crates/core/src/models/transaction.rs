@@ -165,7 +165,10 @@ mod tests {
             description: "Bad".to_string(),
             lines: vec![debit_line("cash", 100)],
         };
-        assert!(matches!(entry.validate(), Err(CoreError::InsufficientLines)));
+        assert!(matches!(
+            entry.validate(),
+            Err(CoreError::InsufficientLines)
+        ));
     }
 
     #[test]
@@ -176,7 +179,10 @@ mod tests {
             description: "Bad".to_string(),
             lines: vec![],
         };
-        assert!(matches!(entry.validate(), Err(CoreError::InsufficientLines)));
+        assert!(matches!(
+            entry.validate(),
+            Err(CoreError::InsufficientLines)
+        ));
     }
 
     #[test]
@@ -189,7 +195,10 @@ mod tests {
         };
         assert!(matches!(
             entry.validate(),
-            Err(CoreError::UnbalancedEntry { debits: 10_000, credits: 9_000 })
+            Err(CoreError::UnbalancedEntry {
+                debits: 10_000,
+                credits: 9_000
+            })
         ));
     }
 
@@ -200,11 +209,19 @@ mod tests {
             reference: None,
             description: "Bad".to_string(),
             lines: vec![
-                CreateJournalLine { account_id: "a".to_string(), description: None, debit: -100, credit: 0 },
+                CreateJournalLine {
+                    account_id: "a".to_string(),
+                    description: None,
+                    debit: -100,
+                    credit: 0,
+                },
                 credit_line("b", 100),
             ],
         };
-        assert!(matches!(entry.validate(), Err(CoreError::NegativeAmount(_))));
+        assert!(matches!(
+            entry.validate(),
+            Err(CoreError::NegativeAmount(_))
+        ));
     }
 
     #[test]
@@ -215,10 +232,18 @@ mod tests {
             description: "Bad".to_string(),
             lines: vec![
                 debit_line("a", 100),
-                CreateJournalLine { account_id: "b".to_string(), description: None, debit: 0, credit: -100 },
+                CreateJournalLine {
+                    account_id: "b".to_string(),
+                    description: None,
+                    debit: 0,
+                    credit: -100,
+                },
             ],
         };
-        assert!(matches!(entry.validate(), Err(CoreError::NegativeAmount(_))));
+        assert!(matches!(
+            entry.validate(),
+            Err(CoreError::NegativeAmount(_))
+        ));
     }
 
     #[test]
@@ -228,11 +253,19 @@ mod tests {
             reference: None,
             description: "Bad".to_string(),
             lines: vec![
-                CreateJournalLine { account_id: "a".to_string(), description: None, debit: 100, credit: 100 },
+                CreateJournalLine {
+                    account_id: "a".to_string(),
+                    description: None,
+                    debit: 100,
+                    credit: 100,
+                },
                 credit_line("b", 0),
             ],
         };
-        assert!(matches!(entry.validate(), Err(CoreError::BothDebitAndCredit)));
+        assert!(matches!(
+            entry.validate(),
+            Err(CoreError::BothDebitAndCredit)
+        ));
     }
 
     // ── JournalEntry::is_balanced ─────────────────────────────────────────────

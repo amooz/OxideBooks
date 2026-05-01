@@ -35,7 +35,14 @@ async fn list_accounts_returns_all_for_org(pool: sqlx::PgPool) {
     let org = helpers::seed_org(&pool).await;
 
     helpers::seed_account(&pool, &org.id, "1000", "Cash", AccountType::Asset).await;
-    helpers::seed_account(&pool, &org.id, "2000", "Accounts Payable", AccountType::Liability).await;
+    helpers::seed_account(
+        &pool,
+        &org.id,
+        "2000",
+        "Accounts Payable",
+        AccountType::Liability,
+    )
+    .await;
     helpers::seed_account(&pool, &org.id, "4000", "Revenue", AccountType::Revenue).await;
 
     let accounts = AccountRepo::list(&pool, &org.id).await.unwrap();
@@ -73,7 +80,9 @@ async fn get_account_by_id(pool: sqlx::PgPool) {
     let org = helpers::seed_org(&pool).await;
     let created = helpers::seed_account(&pool, &org.id, "1000", "Cash", AccountType::Asset).await;
 
-    let fetched = AccountRepo::get_by_id(&pool, &org.id, &created.id).await.unwrap();
+    let fetched = AccountRepo::get_by_id(&pool, &org.id, &created.id)
+        .await
+        .unwrap();
     assert_eq!(fetched.id, created.id);
     assert_eq!(fetched.code, "1000");
 }
@@ -136,7 +145,9 @@ async fn delete_account(pool: sqlx::PgPool) {
     let org = helpers::seed_org(&pool).await;
     let account = helpers::seed_account(&pool, &org.id, "1000", "Cash", AccountType::Asset).await;
 
-    AccountRepo::delete(&pool, &org.id, &account.id).await.unwrap();
+    AccountRepo::delete(&pool, &org.id, &account.id)
+        .await
+        .unwrap();
 
     let result = AccountRepo::get_by_id(&pool, &org.id, &account.id).await;
     assert!(matches!(result, Err(oxidebooks_db::DbError::NotFound)));

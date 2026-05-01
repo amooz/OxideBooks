@@ -7,9 +7,11 @@ use jsonwebtoken::{encode, EncodingKey, Header};
 use oxidebooks_core::models::CreateOrganization;
 use oxidebooks_db::repos::{
     organizations::OrganizationRepo,
+    permissions::PermissionRepo,
     users::{CreateUser, UserRepo},
 };
 use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
 
 use crate::{
     error::{ApiError, ApiResult},
@@ -62,7 +64,9 @@ pub async fn register(
         &state.db,
         CreateOrganization {
             name: body.org_name,
-            currency: body.currency.unwrap_or_else(|| state.config.app.default_currency.clone()),
+            currency: body
+                .currency
+                .unwrap_or_else(|| state.config.app.default_currency.clone()),
             fiscal_year_start: None,
         },
     )
@@ -80,7 +84,7 @@ pub async fn register(
     )
     .await?;
 
-    let token = mint_token(&user.id, &org.id, &user.role, &state)?;
+    let token = mint_token(&state.db, &user.id, &org.id, &user.role, &state).await?;
 
     Ok(Json(AuthResponse {
         token,
@@ -101,7 +105,14 @@ pub async fn login(
 
     verify_password(&body.password, &record.password_hash)?;
 
-    let token = mint_token(&record.user.id, &record.user.organization_id, &record.user.role, &state)?;
+    let token = mint_token(
+        &state.db,
+        &record.user.id,
+        &record.user.organization_id,
+        &record.user.role,
+        &state,
+    )
+    .await?;
 
     Ok(Json(AuthResponse {
         token,
@@ -120,15 +131,31 @@ fn hash_password(password: &str) -> ApiResult<String> {
 }
 
 fn verify_password(password: &str, hash: &str) -> ApiResult<()> {
-    let parsed = PasswordHash::new(hash)
-        .map_err(|_| ApiError::Unauthorized)?;
+    let parsed = PasswordHash::new(hash).map_err(|_| ApiError::Unauthorized)?;
     Argon2::default()
         .verify_password(password.as_bytes(), &parsed)
         .map_err(|_| ApiError::Unauthorized)
 }
 
-fn mint_token(user_id: &str, org_id: &str, role: &str, state: &AppState) -> ApiResult<String> {
-    let claims = Claims::new(user_id, org_id, role, state.config.auth.token_expiry_hours);
+async fn mint_token(
+    pool: &PgPool,
+    user_id: &str,
+    org_id: &str,
+    role: &str,
+    state: &AppState,
+) -> ApiResult<String> {
+    let permissions = PermissionRepo::list_for_user(pool, user_id)
+        .await
+        .map_err(ApiError::Db)?;
+
+    let claims = Claims::new(
+        user_id,
+        org_id,
+        role,
+        permissions,
+        state.config.auth.token_expiry_hours,
+    );
+
     encode(
         &Header::default(),
         &claims,

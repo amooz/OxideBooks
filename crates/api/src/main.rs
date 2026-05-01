@@ -1,16 +1,9 @@
-mod config;
-mod error;
-mod handlers;
-mod middleware;
-mod routes;
-mod state;
-
 use std::net::SocketAddr;
 
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
-use crate::{config::Settings, state::AppState};
+use oxidebooks_api::{config::Settings, routes, state::AppState};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -37,8 +30,7 @@ async fn main() -> anyhow::Result<()> {
     let app_state = AppState::new(pool, settings.clone());
     let app = routes::build(app_state);
 
-    let addr: SocketAddr = format!("{}:{}", settings.server.host, settings.server.port)
-        .parse()?;
+    let addr: SocketAddr = format!("{}:{}", settings.server.host, settings.server.port).parse()?;
 
     info!(%addr, "listening");
 

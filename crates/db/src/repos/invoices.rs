@@ -1,6 +1,4 @@
-use oxidebooks_core::models::{
-    CreateInvoice, Invoice, InvoiceLine, InvoiceStatus, InvoiceType,
-};
+use oxidebooks_core::models::{CreateInvoice, Invoice, InvoiceLine, InvoiceStatus, InvoiceType};
 use sqlx::PgPool;
 use std::str::FromStr;
 use time::{Date, OffsetDateTime};
@@ -91,8 +89,7 @@ impl InvoiceRepo {
         let org_uuid = parse_uuid(org_id)?;
         let contact_uuid = parse_uuid(&input.contact_id)?;
         let id = Uuid::new_v4();
-        let invoice_number =
-            generate_invoice_number(pool, org_uuid, &input.invoice_type).await?;
+        let invoice_number = generate_invoice_number(pool, org_uuid, &input.invoice_type).await?;
         let invoice_type = input.invoice_type.to_string();
         let currency = input.currency.unwrap_or_else(|| "USD".to_string());
 

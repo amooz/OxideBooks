@@ -17,6 +17,9 @@ pub async fn list_invoices(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("invoices:read") {
+        return Err(ApiError::Forbidden);
+    }
     let invoices = InvoiceRepo::list(&state.db, &claims.org).await?;
     Ok(Json(serde_json::json!({ "data": invoices })))
 }
@@ -27,6 +30,9 @@ pub async fn get_invoice(
     Extension(claims): Extension<Claims>,
     Path(id): Path<String>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("invoices:read") {
+        return Err(ApiError::Forbidden);
+    }
     let invoice = InvoiceRepo::get_by_id(&state.db, &claims.org, &id).await?;
     Ok(Json(serde_json::json!({ "data": invoice })))
 }
@@ -37,9 +43,12 @@ pub async fn create_invoice(
     Extension(claims): Extension<Claims>,
     Json(body): Json<CreateInvoice>,
 ) -> ApiResult<(StatusCode, Json<serde_json::Value>)> {
-    if !claims.is_at_least_accountant() {
+    if !claims.has("invoices:write") {
         return Err(ApiError::Forbidden);
     }
     let invoice = InvoiceRepo::create(&state.db, &claims.org, body).await?;
-    Ok((StatusCode::CREATED, Json(serde_json::json!({ "data": invoice }))))
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({ "data": invoice })),
+    ))
 }

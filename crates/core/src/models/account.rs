@@ -129,10 +129,22 @@ mod tests {
     #[test]
     fn from_str_valid() {
         assert_eq!(AccountType::from_str("asset").unwrap(), AccountType::Asset);
-        assert_eq!(AccountType::from_str("liability").unwrap(), AccountType::Liability);
-        assert_eq!(AccountType::from_str("equity").unwrap(), AccountType::Equity);
-        assert_eq!(AccountType::from_str("revenue").unwrap(), AccountType::Revenue);
-        assert_eq!(AccountType::from_str("expense").unwrap(), AccountType::Expense);
+        assert_eq!(
+            AccountType::from_str("liability").unwrap(),
+            AccountType::Liability
+        );
+        assert_eq!(
+            AccountType::from_str("equity").unwrap(),
+            AccountType::Equity
+        );
+        assert_eq!(
+            AccountType::from_str("revenue").unwrap(),
+            AccountType::Revenue
+        );
+        assert_eq!(
+            AccountType::from_str("expense").unwrap(),
+            AccountType::Expense
+        );
     }
 
     #[test]

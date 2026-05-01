@@ -73,7 +73,11 @@ mod tests {
 
     #[test]
     fn contact_type_serde_roundtrip() {
-        for ct in [ContactType::Customer, ContactType::Vendor, ContactType::Both] {
+        for ct in [
+            ContactType::Customer,
+            ContactType::Vendor,
+            ContactType::Both,
+        ] {
             let json = serde_json::to_string(&ct).unwrap();
             let parsed: ContactType = serde_json::from_str(&json).unwrap();
             assert_eq!(parsed, ct);

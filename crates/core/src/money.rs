@@ -19,8 +19,8 @@ pub fn format_amount(amount: MinorUnits, currency: &str) -> String {
 
 fn minor_unit_divisor(currency: &str) -> i64 {
     match currency {
-        "JPY" | "KRW" | "VND" => 1,       // zero-decimal currencies
-        "KWD" | "BHD" | "OMR" => 1_000,   // three-decimal currencies
+        "JPY" | "KRW" | "VND" => 1,     // zero-decimal currencies
+        "KWD" | "BHD" | "OMR" => 1_000, // three-decimal currencies
         _ => 100,
     }
 }

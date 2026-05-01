@@ -209,12 +209,30 @@ mod tests {
 
     #[test]
     fn invoice_status_from_str_valid() {
-        assert_eq!(InvoiceStatus::from_str("draft").unwrap(), InvoiceStatus::Draft);
-        assert_eq!(InvoiceStatus::from_str("sent").unwrap(), InvoiceStatus::Sent);
-        assert_eq!(InvoiceStatus::from_str("partial").unwrap(), InvoiceStatus::Partial);
-        assert_eq!(InvoiceStatus::from_str("paid").unwrap(), InvoiceStatus::Paid);
-        assert_eq!(InvoiceStatus::from_str("overdue").unwrap(), InvoiceStatus::Overdue);
-        assert_eq!(InvoiceStatus::from_str("voided").unwrap(), InvoiceStatus::Voided);
+        assert_eq!(
+            InvoiceStatus::from_str("draft").unwrap(),
+            InvoiceStatus::Draft
+        );
+        assert_eq!(
+            InvoiceStatus::from_str("sent").unwrap(),
+            InvoiceStatus::Sent
+        );
+        assert_eq!(
+            InvoiceStatus::from_str("partial").unwrap(),
+            InvoiceStatus::Partial
+        );
+        assert_eq!(
+            InvoiceStatus::from_str("paid").unwrap(),
+            InvoiceStatus::Paid
+        );
+        assert_eq!(
+            InvoiceStatus::from_str("overdue").unwrap(),
+            InvoiceStatus::Overdue
+        );
+        assert_eq!(
+            InvoiceStatus::from_str("voided").unwrap(),
+            InvoiceStatus::Voided
+        );
     }
 
     #[test]
@@ -370,7 +388,10 @@ mod tests {
                 tax_rate: None,
             }],
         };
-        assert!(matches!(input.validate(), Err(CoreError::NegativeAmount(-1))));
+        assert!(matches!(
+            input.validate(),
+            Err(CoreError::NegativeAmount(-1))
+        ));
     }
 
     #[test]

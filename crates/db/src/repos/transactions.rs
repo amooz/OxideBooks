@@ -1,6 +1,4 @@
-use oxidebooks_core::models::{
-    CreateJournalEntry, JournalEntry, JournalEntryStatus, JournalLine,
-};
+use oxidebooks_core::models::{CreateJournalEntry, JournalEntry, JournalEntryStatus, JournalLine};
 use sqlx::PgPool;
 use time::{Date, OffsetDateTime};
 use uuid::Uuid;
@@ -55,11 +53,7 @@ impl TransactionRepo {
         Ok(entries)
     }
 
-    pub async fn get_by_id(
-        pool: &PgPool,
-        org_id: &str,
-        id: &str,
-    ) -> Result<JournalEntry, DbError> {
+    pub async fn get_by_id(pool: &PgPool, org_id: &str, id: &str) -> Result<JournalEntry, DbError> {
         let org_uuid = parse_uuid(org_id)?;
         let id_uuid = parse_uuid(id)?;
 
