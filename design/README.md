@@ -44,6 +44,7 @@ Color is used sparingly and consistently. Teal is the action color — links, fo
 | [tokens.json](tokens.json) | Design token definitions for Figma / Style Dictionary |
 | [typography.md](typography.md) | Type scale, font families, numeric formatting |
 | [iconography.md](iconography.md) | Icon style, grid, usage guidelines |
+| [logging.md](logging.md) | Log level semantics, structured field conventions, emoji legend |
 
 ---
 
