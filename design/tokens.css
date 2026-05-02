@@ -1,0 +1,418 @@
+/**
+ * OxideBooks Design Tokens
+ *
+ * Import this file once at the root of your application. All design decisions
+ * are expressed as CSS custom properties. Use the semantic tokens (--color-*)
+ * in components — not the raw palette values — so light/dark switching works
+ * automatically.
+ *
+ * Light mode is the default. Dark mode activates via `prefers-color-scheme`
+ * and can be forced with the `data-theme="dark"` attribute on <html>.
+ */
+
+/* ── Raw Palette ──────────────────────────────────────────────────────────────
+   Reference only. Prefer the semantic tokens below in component code.
+   Named after Tailwind's scale conventions for familiarity.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Teal (brand) */
+  --palette-teal-50:  #F0FDFA;
+  --palette-teal-100: #CCFBF1;
+  --palette-teal-200: #99F6E4;
+  --palette-teal-300: #5EEAD4;
+  --palette-teal-400: #2DD4BF;
+  --palette-teal-500: #14B8A6;
+  --palette-teal-600: #0D9488;
+  --palette-teal-700: #0F766E;
+  --palette-teal-800: #115E59;
+  --palette-teal-900: #134E4A;
+  --palette-teal-950: #042F2E;
+
+  /* Zinc (neutrals — slightly warm, not blue-shifted) */
+  --palette-zinc-50:  #FAFAFA;
+  --palette-zinc-100: #F4F4F5;
+  --palette-zinc-200: #E4E4E7;
+  --palette-zinc-300: #D4D4D8;
+  --palette-zinc-400: #A1A1AA;
+  --palette-zinc-500: #71717A;
+  --palette-zinc-600: #52525B;
+  --palette-zinc-700: #3F3F46;
+  --palette-zinc-800: #27272A;
+  --palette-zinc-900: #18181B;
+  --palette-zinc-950: #09090B;
+
+  /* Stone (warm neutrals for light-mode text and surfaces) */
+  --palette-stone-50:  #FAFAF9;
+  --palette-stone-100: #F5F5F4;
+  --palette-stone-200: #E7E5E4;
+  --palette-stone-300: #D6D3D1;
+  --palette-stone-400: #A8A29E;
+  --palette-stone-500: #78716C;
+  --palette-stone-600: #57534E;
+  --palette-stone-700: #44403C;
+  --palette-stone-800: #292524;
+  --palette-stone-900: #1C1917;
+  --palette-stone-950: #0C0A09;
+
+  /* Green (positive / income) */
+  --palette-green-50:  #F0FDF4;
+  --palette-green-100: #DCFCE7;
+  --palette-green-400: #4ADE80;
+  --palette-green-500: #22C55E;
+  --palette-green-600: #16A34A;
+  --palette-green-700: #15803D;
+  --palette-green-950: #052E16;
+
+  /* Red (negative / expense) */
+  --palette-red-50:  #FEF2F2;
+  --palette-red-100: #FEE2E2;
+  --palette-red-400: #F87171;
+  --palette-red-500: #EF4444;
+  --palette-red-600: #DC2626;
+  --palette-red-700: #B91C1C;
+  --palette-red-950: #450A0A;
+
+  /* Amber (warning / partial) */
+  --palette-amber-50:  #FFFBEB;
+  --palette-amber-100: #FEF3C7;
+  --palette-amber-300: #FCD34D;
+  --palette-amber-400: #FBBF24;
+  --palette-amber-500: #F59E0B;
+  --palette-amber-600: #D97706;
+  --palette-amber-950: #451A03;
+
+  /* Indigo (neutral status / draft) */
+  --palette-indigo-50:  #EEF2FF;
+  --palette-indigo-100: #E0E7FF;
+  --palette-indigo-400: #818CF8;
+  --palette-indigo-500: #6366F1;
+  --palette-indigo-600: #4F46E5;
+  --palette-indigo-950: #1E1B4B;
+}
+
+
+/* ── Semantic Tokens: Light Mode ──────────────────────────────────────────────
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root,
+[data-theme="light"] {
+
+  /* Page & surface backgrounds */
+  --color-bg:           #FFFFFF;        /* page / body */
+  --color-surface:      var(--palette-stone-50);   /* card, panel */
+  --color-surface-2:    var(--palette-stone-100);  /* input bg, subtle section */
+  --color-surface-3:    var(--palette-stone-200);  /* hovered row, disabled */
+
+  /* Borders */
+  --color-border:       var(--palette-stone-200);  /* default divider */
+  --color-border-2:     var(--palette-stone-300);  /* stronger divider */
+  --color-border-focus: var(--palette-teal-700);   /* focus ring */
+
+  /* Text */
+  --color-text-1:       var(--palette-stone-900);  /* primary body */
+  --color-text-2:       var(--palette-stone-600);  /* secondary / caption */
+  --color-text-3:       var(--palette-stone-400);  /* placeholder / disabled */
+  --color-text-inverse: #FFFFFF;                   /* on filled buttons */
+
+  /* Primary (teal) */
+  --color-primary:          var(--palette-teal-700);
+  --color-primary-hover:    var(--palette-teal-600);
+  --color-primary-active:   var(--palette-teal-800);
+  --color-primary-muted-bg: var(--palette-teal-100);
+  --color-primary-text:     var(--palette-teal-700); /* text/link on white bg */
+
+  /* Positive (green — credits, income, paid) */
+  --color-positive:          var(--palette-green-600);
+  --color-positive-hover:    var(--palette-green-700);
+  --color-positive-muted-bg: var(--palette-green-50);
+  --color-positive-border:   var(--palette-green-100);
+
+  /* Negative (red — debits, expenses, overdue, error) */
+  --color-negative:          var(--palette-red-600);
+  --color-negative-hover:    var(--palette-red-700);
+  --color-negative-muted-bg: var(--palette-red-50);
+  --color-negative-border:   var(--palette-red-100);
+
+  /* Warning (amber — partial, pending, caution) */
+  --color-warning:          var(--palette-amber-600);
+  --color-warning-hover:    var(--palette-amber-500);
+  --color-warning-muted-bg: var(--palette-amber-50);
+  --color-warning-border:   var(--palette-amber-100);
+
+  /* Neutral status (indigo — draft, informational) */
+  --color-neutral-status:          var(--palette-indigo-500);
+  --color-neutral-status-muted-bg: var(--palette-indigo-50);
+  --color-neutral-status-border:   var(--palette-indigo-100);
+}
+
+
+/* ── Semantic Tokens: Dark Mode (High Contrast) ───────────────────────────────
+   Dark backgrounds use the zinc family (slightly warm).
+   Accent and semantic colors shift toward their lighter variants to maintain
+   WCAG AA (≥4.5:1) contrast against dark surfaces; AAA (≥7:1) for body text.
+   ───────────────────────────────────────────────────────────────────────── */
+
+@media (prefers-color-scheme: dark) { :root {
+  --color-bg:           var(--palette-zinc-950);   /* #09090B */
+  --color-surface:      var(--palette-zinc-900);   /* #18181B */
+  --color-surface-2:    var(--palette-zinc-800);   /* #27272A */
+  --color-surface-3:    var(--palette-zinc-700);   /* #3F3F46 */
+
+  --color-border:       var(--palette-zinc-700);
+  --color-border-2:     var(--palette-zinc-600);
+  --color-border-focus: var(--palette-teal-400);
+
+  --color-text-1:       var(--palette-zinc-50);    /* #FAFAFA */
+  --color-text-2:       var(--palette-zinc-400);   /* #A1A1AA */
+  --color-text-3:       var(--palette-zinc-500);   /* #71717A */
+  --color-text-inverse: var(--palette-zinc-950);
+
+  --color-primary:          var(--palette-teal-400);
+  --color-primary-hover:    var(--palette-teal-300);
+  --color-primary-active:   var(--palette-teal-500);
+  --color-primary-muted-bg: var(--palette-teal-950);
+  --color-primary-text:     var(--palette-teal-400);
+
+  --color-positive:          var(--palette-green-400);
+  --color-positive-hover:    var(--palette-green-500);
+  --color-positive-muted-bg: var(--palette-green-950);
+  --color-positive-border:   #14532D; /* green-900 */
+
+  --color-negative:          var(--palette-red-400);
+  --color-negative-hover:    var(--palette-red-500);
+  --color-negative-muted-bg: var(--palette-red-950);
+  --color-negative-border:   #7F1D1D; /* red-900 */
+
+  --color-warning:          var(--palette-amber-300);
+  --color-warning-hover:    var(--palette-amber-400);
+  --color-warning-muted-bg: var(--palette-amber-950);
+  --color-warning-border:   #78350F; /* amber-900 */
+
+  --color-neutral-status:          var(--palette-indigo-400);
+  --color-neutral-status-muted-bg: var(--palette-indigo-950);
+  --color-neutral-status-border:   #312E81; /* indigo-900 */
+}}
+
+/* Explicit override — force dark regardless of system preference */
+[data-theme="dark"] {
+  --color-bg:           var(--palette-zinc-950);
+  --color-surface:      var(--palette-zinc-900);
+  --color-surface-2:    var(--palette-zinc-800);
+  --color-surface-3:    var(--palette-zinc-700);
+  --color-border:       var(--palette-zinc-700);
+  --color-border-2:     var(--palette-zinc-600);
+  --color-border-focus: var(--palette-teal-400);
+  --color-text-1:       var(--palette-zinc-50);
+  --color-text-2:       var(--palette-zinc-400);
+  --color-text-3:       var(--palette-zinc-500);
+  --color-text-inverse: var(--palette-zinc-950);
+  --color-primary:          var(--palette-teal-400);
+  --color-primary-hover:    var(--palette-teal-300);
+  --color-primary-active:   var(--palette-teal-500);
+  --color-primary-muted-bg: var(--palette-teal-950);
+  --color-primary-text:     var(--palette-teal-400);
+  --color-positive:          var(--palette-green-400);
+  --color-positive-hover:    var(--palette-green-500);
+  --color-positive-muted-bg: var(--palette-green-950);
+  --color-positive-border:   #14532D;
+  --color-negative:          var(--palette-red-400);
+  --color-negative-hover:    var(--palette-red-500);
+  --color-negative-muted-bg: var(--palette-red-950);
+  --color-negative-border:   #7F1D1D;
+  --color-warning:          var(--palette-amber-300);
+  --color-warning-hover:    var(--palette-amber-400);
+  --color-warning-muted-bg: var(--palette-amber-950);
+  --color-warning-border:   #78350F;
+  --color-neutral-status:          var(--palette-indigo-400);
+  --color-neutral-status-muted-bg: var(--palette-indigo-950);
+  --color-neutral-status-border:   #312E81;
+}
+
+
+/* ── Typography ───────────────────────────────────────────────────────────────
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Font families */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+               "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* Monospace — for all numeric/code values */
+  --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", ui-monospace,
+               "SF Mono", "Monaco", "Inconsolata", "Roboto Mono", monospace;
+
+  /* Type scale (rem) */
+  --text-xs:   0.75rem;   /*  12px */
+  --text-sm:   0.875rem;  /*  14px */
+  --text-base: 1rem;      /*  16px */
+  --text-lg:   1.125rem;  /*  18px */
+  --text-xl:   1.25rem;   /*  20px */
+  --text-2xl:  1.5rem;    /*  24px */
+  --text-3xl:  1.875rem;  /*  30px */
+  --text-4xl:  2.25rem;   /*  36px */
+
+  /* Line heights */
+  --leading-tight:  1.25;
+  --leading-snug:   1.375;
+  --leading-normal: 1.5;
+  --leading-relaxed:1.625;
+
+  /* Font weights */
+  --weight-normal:   400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+  /* Letter spacing */
+  --tracking-tight:  -0.025em;
+  --tracking-normal:  0em;
+  --tracking-wide:    0.025em;
+  --tracking-wider:   0.05em;
+  --tracking-widest:  0.1em;
+}
+
+
+/* ── Spacing (4px base grid) ──────────────────────────────────────────────────
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --space-0:  0;
+  --space-px: 1px;
+  --space-0-5: 0.125rem; /*  2px */
+  --space-1:   0.25rem;  /*  4px */
+  --space-1-5: 0.375rem; /*  6px */
+  --space-2:   0.5rem;   /*  8px */
+  --space-2-5: 0.625rem; /* 10px */
+  --space-3:   0.75rem;  /* 12px */
+  --space-4:   1rem;     /* 16px */
+  --space-5:   1.25rem;  /* 20px */
+  --space-6:   1.5rem;   /* 24px */
+  --space-8:   2rem;     /* 32px */
+  --space-10:  2.5rem;   /* 40px */
+  --space-12:  3rem;     /* 48px */
+  --space-16:  4rem;     /* 64px */
+  --space-20:  5rem;     /* 80px */
+  --space-24:  6rem;     /* 96px */
+}
+
+
+/* ── Border Radius ────────────────────────────────────────────────────────────
+   Corners are subtle — this is utility software, not a marketing site.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --radius-sm:   0.25rem;  /* 4px  — inputs, badges, tags */
+  --radius-base: 0.375rem; /* 6px  — buttons, cards */
+  --radius-lg:   0.5rem;   /* 8px  — modals, dropdowns */
+  --radius-xl:   0.75rem;  /* 12px — panels */
+  --radius-full: 9999px;   /* pill — status chips only */
+}
+
+
+/* ── Shadows ──────────────────────────────────────────────────────────────────
+   Minimal. Shadows express elevation only for floating elements (dropdown,
+   tooltip, modal). Never use shadows purely for decoration.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --shadow-sm:  0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-base:0 1px 3px 0 rgb(0 0 0 / 0.10), 0 1px 2px -1px rgb(0 0 0 / 0.10);
+  --shadow-md:  0 4px 6px -1px rgb(0 0 0 / 0.10), 0 2px 4px -2px rgb(0 0 0 / 0.10);
+  --shadow-lg:  0 10px 15px -3px rgb(0 0 0 / 0.10), 0 4px 6px -4px rgb(0 0 0 / 0.10);
+  --shadow-xl:  0 20px 25px -5px rgb(0 0 0 / 0.10), 0 8px 10px -6px rgb(0 0 0 / 0.10);
+}
+
+@media (prefers-color-scheme: dark) { :root {
+  /* Slightly deeper shadows on dark to maintain floating element separation */
+  --shadow-sm:   0 1px 2px 0 rgb(0 0 0 / 0.30);
+  --shadow-base: 0 1px 3px 0 rgb(0 0 0 / 0.40), 0 1px 2px -1px rgb(0 0 0 / 0.40);
+  --shadow-md:   0 4px 6px -1px rgb(0 0 0 / 0.40), 0 2px 4px -2px rgb(0 0 0 / 0.40);
+  --shadow-lg:   0 10px 15px -3px rgb(0 0 0 / 0.40), 0 4px 6px -4px rgb(0 0 0 / 0.40);
+  --shadow-xl:   0 20px 25px -5px rgb(0 0 0 / 0.40), 0 8px 10px -6px rgb(0 0 0 / 0.40);
+}}
+
+[data-theme="dark"] {
+  --shadow-sm:   0 1px 2px 0 rgb(0 0 0 / 0.30);
+  --shadow-base: 0 1px 3px 0 rgb(0 0 0 / 0.40), 0 1px 2px -1px rgb(0 0 0 / 0.40);
+  --shadow-md:   0 4px 6px -1px rgb(0 0 0 / 0.40), 0 2px 4px -2px rgb(0 0 0 / 0.40);
+  --shadow-lg:   0 10px 15px -3px rgb(0 0 0 / 0.40), 0 4px 6px -4px rgb(0 0 0 / 0.40);
+  --shadow-xl:   0 20px 25px -5px rgb(0 0 0 / 0.40), 0 8px 10px -6px rgb(0 0 0 / 0.40);
+}
+
+
+/* ── Transitions ──────────────────────────────────────────────────────────────
+   Short, purposeful transitions. Nothing should take longer than 200ms for
+   interactive feedback. Theme switching is instant (0ms).
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --duration-fast:   75ms;
+  --duration-base:   150ms;
+  --duration-slow:   300ms;
+  --ease-default:    cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-in:         cubic-bezier(0.4, 0, 1, 1);
+  --ease-out:        cubic-bezier(0, 0, 0.2, 1);
+}
+
+
+/* ── Z-index scale ────────────────────────────────────────────────────────────
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --z-base:     0;
+  --z-raised:   10;   /* sticky table headers */
+  --z-dropdown: 100;  /* menus, comboboxes */
+  --z-sticky:   200;  /* nav bar */
+  --z-overlay:  300;  /* modal backdrop */
+  --z-modal:    400;  /* modal / dialog */
+  --z-toast:    500;  /* toast notifications */
+}
+
+
+/* ── Focus styles ─────────────────────────────────────────────────────────────
+   2px offset ring using the primary focus color. Applied globally via
+   :focus-visible so keyboard users get a clear indicator.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --focus-ring: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-border-focus);
+}
+
+*:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+
+/* ── Status chip token map ────────────────────────────────────────────────────
+   Maps invoice/entry statuses to semantic color tokens. Consume these in
+   a <StatusChip> component rather than hardcoding color names per status.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Invoice statuses */
+  --status-draft-text:    var(--color-neutral-status);
+  --status-draft-bg:      var(--color-neutral-status-muted-bg);
+  --status-draft-border:  var(--color-neutral-status-border);
+
+  --status-sent-text:     var(--color-primary-text);
+  --status-sent-bg:       var(--color-primary-muted-bg);
+  --status-sent-border:   var(--palette-teal-200);
+
+  --status-partial-text:  var(--color-warning);
+  --status-partial-bg:    var(--color-warning-muted-bg);
+  --status-partial-border:var(--color-warning-border);
+
+  --status-paid-text:     var(--color-positive);
+  --status-paid-bg:       var(--color-positive-muted-bg);
+  --status-paid-border:   var(--color-positive-border);
+
+  --status-overdue-text:  var(--color-negative);
+  --status-overdue-bg:    var(--color-negative-muted-bg);
+  --status-overdue-border:var(--color-negative-border);
+
+  --status-voided-text:   var(--color-text-3);
+  --status-voided-bg:     var(--color-surface-2);
+  --status-voided-border: var(--color-border);
+}
