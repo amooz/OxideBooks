@@ -165,6 +165,8 @@ pub async fn po_create_bill(
         due_date: None,
         reference: Some(po.po_number.clone()),
         description: format!("Bill for PO {}", po.po_number),
+        currency_code: "USD".into(),
+        exchange_rate: rust_decimal::Decimal::ONE,
         lines,
     };
 

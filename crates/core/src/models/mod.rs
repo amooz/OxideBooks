@@ -14,6 +14,7 @@ pub mod contact_group;
 pub mod credit_note;
 pub mod custom_field;
 pub mod department;
+pub mod doc_sequence;
 pub mod dunning;
 pub mod email;
 pub mod employee;
@@ -44,6 +45,7 @@ pub mod product;
 pub mod product_category;
 pub mod project;
 pub mod purchase_order;
+pub mod purchase_requisition;
 pub mod recurring;
 pub mod reports;
 pub mod retainer;
@@ -84,6 +86,7 @@ pub use custom_field::{
     UpdateCustomFieldDefinition,
 };
 pub use department::{CreateDepartment, Department, DepartmentPlReport, UpdateDepartment};
+pub use doc_sequence::{DocSequence, ResetDocSequence, UpsertDocSequence};
 pub use dunning::{CreateDunningRule, DunningRule, InvoiceReminder, OverdueInvoice};
 pub use email::{EmailLog, EmailSettings, SendEmailRequest, UpsertEmailSettings};
 pub use employee::{CreateEmployee, Employee, UpdateEmployee};
@@ -139,6 +142,10 @@ pub use project::{CreateProject, Project, ProjectSummary, UpdateProject};
 pub use purchase_order::{
     CreatePoLine, CreatePurchaseOrder, PoStatus, PurchaseOrder, PurchaseOrderLine, ReceivePoLine,
     UpdatePurchaseOrder,
+};
+pub use purchase_requisition::{
+    ConvertPrToPo, CreatePrLine, CreatePurchaseRequisition, PrLine, PurchaseRequisition,
+    UpdatePurchaseRequisition,
 };
 pub use recurring::{
     CreateRecurringSchedule, Frequency, RecurringSchedule, UpdateRecurringSchedule,
