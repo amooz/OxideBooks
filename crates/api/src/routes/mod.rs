@@ -23,8 +23,8 @@ use crate::{
         invoices, late_fees, leave, mileage, notes, notifications, opening_balances, organizations,
         payment_links, payment_terms, payments, payroll, payslips, prepayments, price_lists,
         product_categories, products, projects, purchase_orders, purchase_requisitions, recurring,
-        reports, retainers, roles, scim, sessions, stripe_webhook, tags, tax_periods, tax_rates,
-        time_entries, totp, transactions, users, vendor_credits, webhooks,
+        reports, retainers, roles, sales_orders, scim, sessions, stripe_webhook, tags, tax_groups,
+        tax_periods, tax_rates, time_entries, totp, transactions, users, vendor_credits, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -935,6 +935,38 @@ pub fn build(state: AppState) -> Router {
         .route("/auth/totp/setup", post(totp::setup_totp))
         .route("/auth/totp/verify", post(totp::verify_totp))
         .route("/auth/totp", delete(totp::disable_totp))
+        // Sales orders
+        .route(
+            "/sales-orders",
+            get(sales_orders::list_sales_orders).post(sales_orders::create_sales_order),
+        )
+        .route(
+            "/sales-orders/:id",
+            get(sales_orders::get_sales_order).patch(sales_orders::update_sales_order),
+        )
+        .route(
+            "/sales-orders/:id/confirm",
+            post(sales_orders::confirm_sales_order),
+        )
+        .route(
+            "/sales-orders/:id/cancel",
+            post(sales_orders::cancel_sales_order),
+        )
+        .route(
+            "/sales-orders/:id/convert-to-invoice",
+            post(sales_orders::convert_so_to_invoice),
+        )
+        // Tax groups
+        .route(
+            "/tax-groups",
+            get(tax_groups::list_tax_groups).post(tax_groups::create_tax_group),
+        )
+        .route(
+            "/tax-groups/:id",
+            get(tax_groups::get_tax_group)
+                .patch(tax_groups::update_tax_group)
+                .delete(tax_groups::delete_tax_group),
+        )
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     // SCIM 2.0 endpoints (separate bearer-token auth, not JWT)
