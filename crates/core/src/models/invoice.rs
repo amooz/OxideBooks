@@ -429,7 +429,7 @@ mod tests {
             date: date(),
             due_date: date(),
             currency: None,
-                exchange_rate: None,
+            exchange_rate: None,
             notes: None,
             lines: vec![CreateInvoiceLine {
                 description: "Widget".to_string(),
@@ -452,7 +452,7 @@ mod tests {
             date: date(),
             due_date: date(),
             currency: None,
-                exchange_rate: None,
+            exchange_rate: None,
             notes: None,
             lines: vec![],
         };
@@ -467,7 +467,7 @@ mod tests {
             date: date(),
             due_date: date(),
             currency: None,
-                exchange_rate: None,
+            exchange_rate: None,
             notes: None,
             lines: vec![CreateInvoiceLine {
                 description: "Bad".to_string(),
@@ -490,7 +490,7 @@ mod tests {
             date: date(),
             due_date: date(),
             currency: None,
-                exchange_rate: None,
+            exchange_rate: None,
             notes: None,
             lines: vec![CreateInvoiceLine {
                 description: "Bad".to_string(),
@@ -513,7 +513,7 @@ mod tests {
             date: date(),
             due_date: date(),
             currency: None,
-                exchange_rate: None,
+            exchange_rate: None,
             notes: None,
             lines: vec![CreateInvoiceLine {
                 description: "Bad".to_string(),
@@ -539,7 +539,7 @@ mod tests {
             date: date(),
             due_date: date(),
             currency: None,
-                exchange_rate: None,
+            exchange_rate: None,
             notes: None,
             lines: vec![CreateInvoiceLine {
                 description: "Free item".to_string(),

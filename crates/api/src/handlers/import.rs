@@ -115,6 +115,7 @@ pub async fn import_accounts_csv(
                     name: row.name,
                     account_type,
                     parent_id: None,
+                    sub_type: None,
                     description: row.description,
                 };
                 match AccountRepo::create(&state.db, &claims.org, create).await {

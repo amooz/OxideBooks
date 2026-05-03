@@ -56,6 +56,7 @@ pub struct Account {
     pub name: String,
     pub account_type: AccountType,
     pub parent_id: Option<String>,
+    pub sub_type: Option<String>,
     pub description: Option<String>,
     pub is_active: bool,
     #[serde(with = "time::serde::rfc3339")]
@@ -70,6 +71,7 @@ pub struct CreateAccount {
     pub name: String,
     pub account_type: AccountType,
     pub parent_id: Option<String>,
+    pub sub_type: Option<String>,
     pub description: Option<String>,
 }
 
@@ -77,6 +79,7 @@ pub struct CreateAccount {
 pub struct UpdateAccount {
     pub code: Option<String>,
     pub name: Option<String>,
+    pub sub_type: Option<String>,
     pub description: Option<String>,
     pub is_active: Option<bool>,
 }

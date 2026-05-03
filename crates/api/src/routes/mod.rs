@@ -15,16 +15,16 @@ use tower_http::{
 
 use crate::{
     handlers::{
-        accounts, api_keys, attachments, audit, auth, auth_sso, bank, bank_rules, batch_payments,
-        bills, budgets, bulk, client_portal, closed_periods, consolidated, contact_groups,
-        contacts, credit_notes, custom_fields, departments, doc_sequences, dunning, email,
-        employees, exchange_rates, expense_categories, expense_policies, expense_reports, expenses,
-        export, fixed_assets, fx, health, identity, import, inventory, invoice_templates, invoices,
-        late_fees, leave, mileage, notes, notifications, opening_balances, organizations,
+        accounts, api_keys, approval_rules, attachments, audit, auth, auth_sso, bank, bank_rules,
+        batch_payments, bills, budgets, bulk, client_portal, closed_periods, consolidated,
+        contact_groups, contacts, credit_notes, custom_fields, departments, doc_sequences, dunning,
+        email, employees, exchange_rates, expense_categories, expense_policies, expense_reports,
+        expenses, export, fixed_assets, fx, health, identity, import, inventory, invoice_templates,
+        invoices, late_fees, leave, mileage, notes, notifications, opening_balances, organizations,
         payment_links, payment_terms, payments, payroll, payslips, prepayments, price_lists,
         product_categories, products, projects, purchase_orders, purchase_requisitions, recurring,
         reports, retainers, roles, scim, sessions, stripe_webhook, tags, tax_periods, tax_rates,
-        time_entries, totp, transactions, users, webhooks,
+        time_entries, totp, transactions, users, vendor_credits, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -351,6 +351,17 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/recurring-schedules/:id/run",
             post(recurring::run_schedule),
+        )
+        // Approval workflow rules
+        .route(
+            "/approval-rules",
+            get(approval_rules::list_approval_rules).post(approval_rules::create_approval_rule),
+        )
+        .route(
+            "/approval-rules/:id",
+            get(approval_rules::get_approval_rule)
+                .patch(approval_rules::update_approval_rule)
+                .delete(approval_rules::delete_approval_rule),
         )
         // RBAC: permissions & roles
         .route("/permissions", get(roles::list_permissions))
@@ -849,6 +860,27 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/bills/:id/payments",
             post(bills::create_bill_payment).get(bills::list_bill_payments),
+        )
+        // Vendor credits (AP credit memos)
+        .route(
+            "/vendor-credits",
+            get(vendor_credits::list_vendor_credits).post(vendor_credits::create_vendor_credit),
+        )
+        .route(
+            "/vendor-credits/:id",
+            get(vendor_credits::get_vendor_credit),
+        )
+        .route(
+            "/vendor-credits/:id/void",
+            post(vendor_credits::void_vendor_credit),
+        )
+        .route(
+            "/vendor-credits/:id/apply",
+            post(vendor_credits::apply_vendor_credit),
+        )
+        .route(
+            "/vendor-credits/:id/applications",
+            get(vendor_credits::list_credit_applications),
         )
         // Credit notes
         .route(
