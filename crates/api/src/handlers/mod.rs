@@ -21,6 +21,7 @@ pub mod dunning;
 pub mod email;
 pub mod employees;
 pub mod exchange_rates;
+pub mod expense_categories;
 pub mod expense_policies;
 pub mod expenses;
 pub mod export;

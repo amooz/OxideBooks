@@ -82,7 +82,10 @@ pub use department::{CreateDepartment, Department, DepartmentPlReport, UpdateDep
 pub use dunning::{CreateDunningRule, DunningRule, InvoiceReminder, OverdueInvoice};
 pub use email::{EmailLog, EmailSettings, SendEmailRequest, UpsertEmailSettings};
 pub use employee::{CreateEmployee, Employee, UpdateEmployee};
-pub use expense::{CreateExpense, Expense, ExpenseStatus, UpdateExpense};
+pub use expense::{
+    CreateExpense, CreateExpenseCategory, Expense, ExpenseCategory, ExpenseStatus, UpdateExpense,
+    UpdateExpenseCategory,
+};
 pub use expense_policy::{ContactStatement, ExpensePolicy, StatementLine, UpsertExpensePolicy};
 pub use fixed_asset::{
     AssetRegisterRow, CreateFixedAsset, DepreciationMethod, FixedAsset, UpdateFixedAsset,
