@@ -15,10 +15,10 @@ use tower_http::{
 
 use crate::{
     handlers::{
-        accounts, audit, auth, auth_sso, bank, budgets, contacts, custom_fields, exchange_rates,
-        expenses, fixed_assets, fx, health, identity, inventory, invoices, organizations, payments,
-        products, projects, purchase_orders, recurring, reports, roles, scim, tax_rates,
-        time_entries, transactions, users, webhooks,
+        accounts, audit, auth, auth_sso, bank, budgets, contacts, custom_fields, email,
+        exchange_rates, expenses, fixed_assets, fx, health, identity, inventory, invoices, notes,
+        notifications, organizations, payments, products, projects, purchase_orders, recurring,
+        reports, roles, scim, tags, tax_rates, time_entries, transactions, users, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -406,6 +406,45 @@ pub fn build(state: AppState) -> Router {
         )
         // FX gain/loss report
         .route("/reports/fx-summary", get(fx::fx_summary))
+        // Tags
+        .route("/tags", get(tags::list_tags).post(tags::create_tag))
+        .route(
+            "/tags/:id",
+            get(tags::get_tag)
+                .patch(tags::update_tag)
+                .delete(tags::delete_tag),
+        )
+        .route("/:entity_type/:entity_id/tags", get(tags::list_entity_tags))
+        .route(
+            "/:entity_type/:entity_id/tags/:tag_id",
+            post(tags::add_entity_tag).delete(tags::remove_entity_tag),
+        )
+        // Notes
+        .route(
+            "/:entity_type/:entity_id/notes",
+            get(notes::list_notes).post(notes::create_note),
+        )
+        .route(
+            "/:entity_type/:entity_id/notes/:id",
+            delete(notes::delete_note),
+        )
+        // Notifications
+        .route("/notifications", get(notifications::list_notifications))
+        .route(
+            "/notifications/:id/read",
+            post(notifications::mark_notification_read),
+        )
+        .route(
+            "/notifications/read-all",
+            post(notifications::mark_all_notifications_read),
+        )
+        // Email settings & log
+        .route(
+            "/email-settings",
+            get(email::get_email_settings).put(email::upsert_email_settings),
+        )
+        .route("/email-log", get(email::list_email_log))
+        .route("/email/send", post(email::send_email))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     // SCIM 2.0 endpoints (separate bearer-token auth, not JWT)
