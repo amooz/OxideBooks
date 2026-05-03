@@ -1,6 +1,4 @@
-use oxidebooks_core::models::{
-    CreateJournalEntry, JournalEntry, JournalEntryStatus, JournalLine,
-};
+use oxidebooks_core::models::{CreateJournalEntry, JournalEntry, JournalEntryStatus, JournalLine};
 use sqlx::PgPool;
 use time::{Date, OffsetDateTime};
 use uuid::Uuid;
@@ -55,11 +53,7 @@ impl TransactionRepo {
         Ok(entries)
     }
 
-    pub async fn get_by_id(
-        pool: &PgPool,
-        org_id: &str,
-        id: &str,
-    ) -> Result<JournalEntry, DbError> {
+    pub async fn get_by_id(pool: &PgPool, org_id: &str, id: &str) -> Result<JournalEntry, DbError> {
         let org_uuid = parse_uuid(org_id)?;
         let id_uuid = parse_uuid(id)?;
 
@@ -130,6 +124,46 @@ impl TransactionRepo {
         tx.commit().await.map_err(map_sqlx_err)?;
 
         Self::get_by_id(pool, org_id, &id.to_string()).await
+    }
+
+    pub async fn void(pool: &PgPool, org_id: &str, id: &str) -> Result<JournalEntry, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let id_uuid = parse_uuid(id)?;
+
+        let rows_affected = sqlx::query(
+            "UPDATE journal_entries \
+             SET status = 'voided', updated_at = NOW() \
+             WHERE id = $1 AND organization_id = $2 AND status = 'posted'",
+        )
+        .bind(id_uuid)
+        .bind(org_uuid)
+        .execute(pool)
+        .await
+        .map_err(map_sqlx_err)?
+        .rows_affected();
+
+        if rows_affected == 0 {
+            // Either not found or not in 'posted' state — distinguish by fetching.
+            let entry = Self::get_by_id(pool, org_id, id).await?;
+            return Err(DbError::Conflict(format!(
+                "journal entry cannot be voided from status '{}'",
+                entry.status
+            )));
+        }
+
+        // If this entry is linked to an invoice, void that invoice too.
+        sqlx::query(
+            "UPDATE invoices \
+             SET status = 'voided', updated_at = NOW() \
+             WHERE journal_entry_id = $1 AND organization_id = $2",
+        )
+        .bind(id_uuid)
+        .bind(org_uuid)
+        .execute(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        Self::get_by_id(pool, org_id, id).await
     }
 
     async fn fetch_lines(pool: &PgPool, entry_id: Uuid) -> Result<Vec<JournalLine>, DbError> {

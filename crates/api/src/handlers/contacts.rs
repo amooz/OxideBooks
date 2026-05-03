@@ -17,6 +17,9 @@ pub async fn list_contacts(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("contacts:read") {
+        return Err(ApiError::Forbidden);
+    }
     let contacts = ContactRepo::list(&state.db, &claims.org).await?;
     Ok(Json(serde_json::json!({ "data": contacts })))
 }
@@ -27,6 +30,9 @@ pub async fn get_contact(
     Extension(claims): Extension<Claims>,
     Path(id): Path<String>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("contacts:read") {
+        return Err(ApiError::Forbidden);
+    }
     let contact = ContactRepo::get_by_id(&state.db, &claims.org, &id).await?;
     Ok(Json(serde_json::json!({ "data": contact })))
 }
@@ -37,11 +43,14 @@ pub async fn create_contact(
     Extension(claims): Extension<Claims>,
     Json(body): Json<CreateContact>,
 ) -> ApiResult<(StatusCode, Json<serde_json::Value>)> {
-    if !claims.is_at_least_accountant() {
+    if !claims.has("contacts:write") {
         return Err(ApiError::Forbidden);
     }
     let contact = ContactRepo::create(&state.db, &claims.org, body).await?;
-    Ok((StatusCode::CREATED, Json(serde_json::json!({ "data": contact }))))
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({ "data": contact })),
+    ))
 }
 
 /// PATCH /api/v1/contacts/:id
@@ -51,7 +60,7 @@ pub async fn update_contact(
     Path(id): Path<String>,
     Json(body): Json<UpdateContact>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    if !claims.is_at_least_accountant() {
+    if !claims.has("contacts:write") {
         return Err(ApiError::Forbidden);
     }
     let contact = ContactRepo::update(&state.db, &claims.org, &id, body).await?;

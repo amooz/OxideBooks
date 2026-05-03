@@ -1,4 +1,4 @@
-use oxidebooks_core::models::{CreateOrganization, Organization};
+use oxidebooks_core::models::{CreateOrganization, Organization, UpdateOrganization};
 use sqlx::PgPool;
 use time::OffsetDateTime;
 use uuid::Uuid;
@@ -35,6 +35,54 @@ impl OrganizationRepo {
         .map_err(map_sqlx_err)?;
 
         Self::get_by_id(pool, id).await
+    }
+
+    pub async fn get_by_id_str(pool: &PgPool, id: &str) -> Result<Organization, DbError> {
+        let uuid =
+            Uuid::parse_str(id).map_err(|_| DbError::Conflict(format!("invalid UUID: {id}")))?;
+        Self::get_by_id(pool, uuid).await
+    }
+
+    pub async fn update(
+        pool: &PgPool,
+        org_id: &str,
+        input: UpdateOrganization,
+    ) -> Result<Organization, DbError> {
+        let uuid = Uuid::parse_str(org_id)
+            .map_err(|_| DbError::Conflict(format!("invalid UUID: {org_id}")))?;
+
+        if let Some(ref name) = input.name {
+            sqlx::query("UPDATE organizations SET name = $1, updated_at = NOW() WHERE id = $2")
+                .bind(name)
+                .bind(uuid)
+                .execute(pool)
+                .await
+                .map_err(map_sqlx_err)?;
+        }
+
+        if let Some(ref currency) = input.currency {
+            sqlx::query("UPDATE organizations SET currency = $1, updated_at = NOW() WHERE id = $2")
+                .bind(currency)
+                .bind(uuid)
+                .execute(pool)
+                .await
+                .map_err(map_sqlx_err)?;
+        }
+
+        if let Some(fys) = input.fiscal_year_start {
+            sqlx::query(
+                "UPDATE organizations \
+                 SET fiscal_year_start = $1, updated_at = NOW() \
+                 WHERE id = $2",
+            )
+            .bind(fys as i16)
+            .bind(uuid)
+            .execute(pool)
+            .await
+            .map_err(map_sqlx_err)?;
+        }
+
+        Self::get_by_id(pool, uuid).await
     }
 
     pub async fn get_by_id(pool: &PgPool, id: Uuid) -> Result<Organization, DbError> {

@@ -80,3 +80,112 @@ pub struct UpdateAccount {
     pub description: Option<String>,
     pub is_active: Option<bool>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    // ── AccountType::is_debit_normal ──────────────────────────────────────────
+
+    #[test]
+    fn asset_is_debit_normal() {
+        assert!(AccountType::Asset.is_debit_normal());
+    }
+
+    #[test]
+    fn expense_is_debit_normal() {
+        assert!(AccountType::Expense.is_debit_normal());
+    }
+
+    #[test]
+    fn liability_is_credit_normal() {
+        assert!(!AccountType::Liability.is_debit_normal());
+    }
+
+    #[test]
+    fn equity_is_credit_normal() {
+        assert!(!AccountType::Equity.is_debit_normal());
+    }
+
+    #[test]
+    fn revenue_is_credit_normal() {
+        assert!(!AccountType::Revenue.is_debit_normal());
+    }
+
+    // ── AccountType Display ───────────────────────────────────────────────────
+
+    #[test]
+    fn display_all_variants() {
+        assert_eq!(AccountType::Asset.to_string(), "asset");
+        assert_eq!(AccountType::Liability.to_string(), "liability");
+        assert_eq!(AccountType::Equity.to_string(), "equity");
+        assert_eq!(AccountType::Revenue.to_string(), "revenue");
+        assert_eq!(AccountType::Expense.to_string(), "expense");
+    }
+
+    // ── AccountType FromStr ───────────────────────────────────────────────────
+
+    #[test]
+    fn from_str_valid() {
+        assert_eq!(AccountType::from_str("asset").unwrap(), AccountType::Asset);
+        assert_eq!(
+            AccountType::from_str("liability").unwrap(),
+            AccountType::Liability
+        );
+        assert_eq!(
+            AccountType::from_str("equity").unwrap(),
+            AccountType::Equity
+        );
+        assert_eq!(
+            AccountType::from_str("revenue").unwrap(),
+            AccountType::Revenue
+        );
+        assert_eq!(
+            AccountType::from_str("expense").unwrap(),
+            AccountType::Expense
+        );
+    }
+
+    #[test]
+    fn from_str_case_sensitive() {
+        assert!(AccountType::from_str("Asset").is_err());
+        assert!(AccountType::from_str("ASSET").is_err());
+        assert!(AccountType::from_str("Liability").is_err());
+    }
+
+    #[test]
+    fn from_str_unknown() {
+        assert!(AccountType::from_str("").is_err());
+        assert!(AccountType::from_str("bank").is_err());
+        assert!(AccountType::from_str("income").is_err());
+    }
+
+    // ── Roundtrip (Display → FromStr) ─────────────────────────────────────────
+
+    #[test]
+    fn display_then_parse_roundtrip() {
+        for t in [
+            AccountType::Asset,
+            AccountType::Liability,
+            AccountType::Equity,
+            AccountType::Revenue,
+            AccountType::Expense,
+        ] {
+            let s = t.to_string();
+            let parsed = AccountType::from_str(&s).unwrap();
+            assert_eq!(parsed, t);
+        }
+    }
+
+    // ── Serde roundtrip ───────────────────────────────────────────────────────
+
+    #[test]
+    fn serde_roundtrip() {
+        let t = AccountType::Revenue;
+        let json = serde_json::to_string(&t).unwrap();
+        assert_eq!(json, r#""revenue""#);
+        let parsed: AccountType = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, t);
+    }
+}

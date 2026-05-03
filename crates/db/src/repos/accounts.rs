@@ -82,11 +82,7 @@ impl AccountRepo {
         let org_uuid = parse_uuid(org_id)?;
         let id = Uuid::new_v4();
         let account_type = input.account_type.to_string();
-        let parent_uuid = input
-            .parent_id
-            .as_deref()
-            .map(parse_uuid)
-            .transpose()?;
+        let parent_uuid = input.parent_id.as_deref().map(parse_uuid).transpose()?;
 
         sqlx::query(
             "INSERT INTO accounts \
@@ -142,14 +138,12 @@ impl AccountRepo {
         let org_uuid = parse_uuid(org_id)?;
         let id_uuid = parse_uuid(id)?;
 
-        let result = sqlx::query(
-            "DELETE FROM accounts WHERE organization_id = $1 AND id = $2",
-        )
-        .bind(org_uuid)
-        .bind(id_uuid)
-        .execute(pool)
-        .await
-        .map_err(map_sqlx_err)?;
+        let result = sqlx::query("DELETE FROM accounts WHERE organization_id = $1 AND id = $2")
+            .bind(org_uuid)
+            .bind(id_uuid)
+            .execute(pool)
+            .await
+            .map_err(map_sqlx_err)?;
 
         if result.rows_affected() == 0 {
             return Err(DbError::NotFound);
@@ -159,7 +153,5 @@ impl AccountRepo {
 }
 
 fn parse_uuid(s: &str) -> Result<Uuid, DbError> {
-    Uuid::parse_str(s).map_err(|_| {
-        DbError::Conflict(format!("invalid UUID: {s}"))
-    })
+    Uuid::parse_str(s).map_err(|_| DbError::Conflict(format!("invalid UUID: {s}")))
 }

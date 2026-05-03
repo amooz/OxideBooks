@@ -8,6 +8,9 @@ pub enum CoreError {
     #[error("journal entry must have at least two lines")]
     InsufficientLines,
 
+    #[error("a journal line cannot have both a debit and a credit amount")]
+    BothDebitAndCredit,
+
     #[error("unknown account type: {0}")]
     UnknownAccountType(String),
 

@@ -3,6 +3,7 @@ use sqlx::PgPool;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
+use super::roles::system_role_id;
 use crate::error::{map_sqlx_err, DbError};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -11,6 +12,7 @@ pub struct User {
     pub organization_id: String,
     pub email: String,
     pub name: String,
+    /// Role name resolved via JOIN with the roles table.
     pub role: String,
     pub is_active: bool,
     #[serde(with = "time::serde::rfc3339")]
@@ -29,6 +31,7 @@ pub struct CreateUser {
     pub email: String,
     pub password_hash: String,
     pub name: String,
+    /// Role name (e.g. "owner", "admin"). Resolved to a role_id internally.
     pub role: String,
 }
 
@@ -38,7 +41,7 @@ struct UserRow {
     organization_id: Uuid,
     email: String,
     name: String,
-    role: String,
+    role_name: String,
     is_active: bool,
     created_at: OffsetDateTime,
     updated_at: OffsetDateTime,
@@ -51,10 +54,15 @@ struct UserRowWithHash {
     email: String,
     password_hash: String,
     name: String,
-    role: String,
+    role_name: String,
     is_active: bool,
     created_at: OffsetDateTime,
     updated_at: OffsetDateTime,
+}
+
+pub struct UpdateUser {
+    pub role: Option<String>,
+    pub is_active: Option<bool>,
 }
 
 pub struct UserRepo;
@@ -64,8 +72,15 @@ impl UserRepo {
         let id = Uuid::new_v4();
         let org_uuid = parse_uuid(&input.organization_id)?;
 
+        // Look up role_id: prefer the system role by name, falling back to
+        // an org-custom role with that name.
+        let role_id_str = system_role_id(&input.role)
+            .map(String::from)
+            .ok_or_else(|| DbError::Conflict(format!("unknown role: {}", input.role)))?;
+        let role_uuid = parse_uuid(&role_id_str)?;
+
         sqlx::query(
-            "INSERT INTO users (id, organization_id, email, password_hash, name, role) \
+            "INSERT INTO users (id, organization_id, email, password_hash, name, role_id) \
              VALUES ($1, $2, $3, $4, $5, $6)",
         )
         .bind(id)
@@ -73,7 +88,7 @@ impl UserRepo {
         .bind(&input.email)
         .bind(&input.password_hash)
         .bind(&input.name)
-        .bind(&input.role)
+        .bind(role_uuid)
         .execute(pool)
         .await
         .map_err(map_sqlx_err)?;
@@ -85,8 +100,11 @@ impl UserRepo {
         let id_uuid = parse_uuid(id)?;
 
         let row: UserRow = sqlx::query_as(
-            "SELECT id, organization_id, email, name, role, is_active, created_at, updated_at \
-             FROM users WHERE id = $1",
+            "SELECT u.id, u.organization_id, u.email, u.name, r.name AS role_name, \
+                    u.is_active, u.created_at, u.updated_at \
+             FROM users u \
+             JOIN roles r ON r.id = u.role_id \
+             WHERE u.id = $1",
         )
         .bind(id_uuid)
         .fetch_optional(pool)
@@ -97,6 +115,141 @@ impl UserRepo {
         Ok(row.into())
     }
 
+    pub async fn list(pool: &PgPool, org_id: &str) -> Result<Vec<User>, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        let rows: Vec<UserRow> = sqlx::query_as(
+            "SELECT u.id, u.organization_id, u.email, u.name, r.name AS role_name, \
+                    u.is_active, u.created_at, u.updated_at \
+             FROM users u \
+             JOIN roles r ON r.id = u.role_id \
+             WHERE u.organization_id = $1 \
+             ORDER BY u.created_at ASC",
+        )
+        .bind(org_uuid)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        Ok(rows.into_iter().map(User::from).collect())
+    }
+
+    pub async fn get_by_id_with_hash(pool: &PgPool, id: &str) -> Result<UserWithHash, DbError> {
+        let id_uuid = parse_uuid(id)?;
+
+        let row: UserRowWithHash = sqlx::query_as(
+            "SELECT u.id, u.organization_id, u.email, u.password_hash, u.name, \
+                    r.name AS role_name, u.is_active, u.created_at, u.updated_at \
+             FROM users u \
+             JOIN roles r ON r.id = u.role_id \
+             WHERE u.id = $1",
+        )
+        .bind(id_uuid)
+        .fetch_optional(pool)
+        .await
+        .map_err(map_sqlx_err)?
+        .ok_or(DbError::NotFound)?;
+
+        Ok(UserWithHash {
+            password_hash: row.password_hash,
+            user: User {
+                id: row.id.to_string(),
+                organization_id: row.organization_id.to_string(),
+                email: row.email,
+                name: row.name,
+                role: row.role_name,
+                is_active: row.is_active,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+            },
+        })
+    }
+
+    pub async fn update_password(
+        pool: &PgPool,
+        user_id: &str,
+        new_hash: &str,
+    ) -> Result<(), DbError> {
+        let id_uuid = parse_uuid(user_id)?;
+
+        let rows_affected =
+            sqlx::query("UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2")
+                .bind(new_hash)
+                .bind(id_uuid)
+                .execute(pool)
+                .await
+                .map_err(map_sqlx_err)?
+                .rows_affected();
+
+        if rows_affected == 0 {
+            return Err(DbError::NotFound);
+        }
+        Ok(())
+    }
+
+    pub async fn update(
+        pool: &PgPool,
+        org_id: &str,
+        user_id: &str,
+        input: UpdateUser,
+    ) -> Result<User, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let id_uuid = parse_uuid(user_id)?;
+
+        if let Some(ref role_name) = input.role {
+            let role_id_str = super::roles::system_role_id(role_name)
+                .map(String::from)
+                .ok_or_else(|| DbError::Conflict(format!("unknown role: {role_name}")))?;
+            let role_uuid = parse_uuid(&role_id_str)?;
+            sqlx::query(
+                "UPDATE users SET role_id = $1, updated_at = NOW() \
+                 WHERE id = $2 AND organization_id = $3",
+            )
+            .bind(role_uuid)
+            .bind(id_uuid)
+            .bind(org_uuid)
+            .execute(pool)
+            .await
+            .map_err(map_sqlx_err)?;
+        }
+
+        if let Some(is_active) = input.is_active {
+            sqlx::query(
+                "UPDATE users SET is_active = $1, updated_at = NOW() \
+                 WHERE id = $2 AND organization_id = $3",
+            )
+            .bind(is_active)
+            .bind(id_uuid)
+            .bind(org_uuid)
+            .execute(pool)
+            .await
+            .map_err(map_sqlx_err)?;
+        }
+
+        Self::get_by_id(pool, &id_uuid.to_string()).await
+    }
+
+    pub async fn deactivate(pool: &PgPool, org_id: &str, user_id: &str) -> Result<(), DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let id_uuid = parse_uuid(user_id)?;
+
+        let rows_affected = sqlx::query(
+            "UPDATE users SET is_active = FALSE, updated_at = NOW() \
+             WHERE id = $1 AND organization_id = $2",
+        )
+        .bind(id_uuid)
+        .bind(org_uuid)
+        .execute(pool)
+        .await
+        .map_err(map_sqlx_err)?
+        .rows_affected();
+
+        if rows_affected == 0 {
+            return Err(DbError::NotFound);
+        }
+        Ok(())
+    }
+
     pub async fn get_by_email(
         pool: &PgPool,
         org_id: &str,
@@ -105,9 +258,11 @@ impl UserRepo {
         let org_uuid = parse_uuid(org_id)?;
 
         let row: UserRowWithHash = sqlx::query_as(
-            "SELECT id, organization_id, email, password_hash, name, role, is_active, \
-             created_at, updated_at \
-             FROM users WHERE organization_id = $1 AND email = $2 AND is_active = TRUE",
+            "SELECT u.id, u.organization_id, u.email, u.password_hash, u.name, \
+                    r.name AS role_name, u.is_active, u.created_at, u.updated_at \
+             FROM users u \
+             JOIN roles r ON r.id = u.role_id \
+             WHERE u.organization_id = $1 AND u.email = $2 AND u.is_active = TRUE",
         )
         .bind(org_uuid)
         .bind(email)
@@ -116,19 +271,20 @@ impl UserRepo {
         .map_err(map_sqlx_err)?
         .ok_or(DbError::NotFound)?;
 
+        let user = User {
+            id: row.id.to_string(),
+            organization_id: row.organization_id.to_string(),
+            email: row.email,
+            name: row.name,
+            role: row.role_name,
+            is_active: row.is_active,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        };
+
         Ok(UserWithHash {
-            password_hash: row.password_hash.clone(),
-            user: UserRow {
-                id: row.id,
-                organization_id: row.organization_id,
-                email: row.email,
-                name: row.name,
-                role: row.role,
-                is_active: row.is_active,
-                created_at: row.created_at,
-                updated_at: row.updated_at,
-            }
-            .into(),
+            password_hash: row.password_hash,
+            user,
         })
     }
 }
@@ -140,7 +296,7 @@ impl From<UserRow> for User {
             organization_id: r.organization_id.to_string(),
             email: r.email,
             name: r.name,
-            role: r.role,
+            role: r.role_name,
             is_active: r.is_active,
             created_at: r.created_at,
             updated_at: r.updated_at,

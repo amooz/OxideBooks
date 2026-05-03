@@ -33,23 +33,21 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> axum::response::Response {
         let (status, code, message) = match &self {
             ApiError::NotFound => (StatusCode::NOT_FOUND, "not_found", self.to_string()),
-            ApiError::Unauthorized => {
-                (StatusCode::UNAUTHORIZED, "unauthorized", self.to_string())
-            }
+            ApiError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized", self.to_string()),
             ApiError::Forbidden => (StatusCode::FORBIDDEN, "forbidden", self.to_string()),
-            ApiError::BadRequest(msg) => {
-                (StatusCode::BAD_REQUEST, "bad_request", msg.clone())
-            }
+            ApiError::BadRequest(msg) => (StatusCode::BAD_REQUEST, "bad_request", msg.clone()),
             ApiError::Conflict(msg) => (StatusCode::CONFLICT, "conflict", msg.clone()),
-            ApiError::Validation(e) => {
-                (StatusCode::UNPROCESSABLE_ENTITY, "validation_error", e.to_string())
-            }
-            ApiError::Db(e) if e.is_not_found() => {
-                (StatusCode::NOT_FOUND, "not_found", "record not found".into())
-            }
-            ApiError::Db(e) if e.is_conflict() => {
-                (StatusCode::CONFLICT, "conflict", e.to_string())
-            }
+            ApiError::Validation(e) => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "validation_error",
+                e.to_string(),
+            ),
+            ApiError::Db(e) if e.is_not_found() => (
+                StatusCode::NOT_FOUND,
+                "not_found",
+                "record not found".into(),
+            ),
+            ApiError::Db(e) if e.is_conflict() => (StatusCode::CONFLICT, "conflict", e.to_string()),
             ApiError::Db(_) | ApiError::Internal(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "internal_error",
@@ -57,7 +55,11 @@ impl IntoResponse for ApiError {
             ),
         };
 
-        (status, Json(json!({ "error": { "code": code, "message": message } }))).into_response()
+        (
+            status,
+            Json(json!({ "error": { "code": code, "message": message } })),
+        )
+            .into_response()
     }
 }
 

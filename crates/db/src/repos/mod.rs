@@ -1,13 +1,21 @@
 pub mod accounts;
 pub mod contacts;
+pub mod identity;
 pub mod invoices;
 pub mod organizations;
+pub mod permissions;
+pub mod reports;
+pub mod roles;
 pub mod transactions;
 pub mod users;
 
 pub use accounts::AccountRepo;
 pub use contacts::ContactRepo;
+pub use identity::{IdentityProviderRepo, ScimTokenRepo};
 pub use invoices::InvoiceRepo;
 pub use organizations::OrganizationRepo;
+pub use permissions::PermissionRepo;
+pub use reports::ReportRepo;
+pub use roles::{RoleRepo, ROLE_ACCOUNTANT_ID, ROLE_ADMIN_ID, ROLE_OWNER_ID, ROLE_VIEWER_ID};
 pub use transactions::TransactionRepo;
-pub use users::UserRepo;
+pub use users::{UpdateUser, UserRepo};

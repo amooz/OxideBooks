@@ -17,6 +17,9 @@ pub async fn list_accounts(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("accounts:read") {
+        return Err(ApiError::Forbidden);
+    }
     let accounts = AccountRepo::list(&state.db, &claims.org).await?;
     Ok(Json(serde_json::json!({ "data": accounts })))
 }
@@ -27,6 +30,9 @@ pub async fn get_account(
     Extension(claims): Extension<Claims>,
     Path(id): Path<String>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("accounts:read") {
+        return Err(ApiError::Forbidden);
+    }
     let account = AccountRepo::get_by_id(&state.db, &claims.org, &id).await?;
     Ok(Json(serde_json::json!({ "data": account })))
 }
@@ -37,11 +43,14 @@ pub async fn create_account(
     Extension(claims): Extension<Claims>,
     Json(body): Json<CreateAccount>,
 ) -> ApiResult<(StatusCode, Json<serde_json::Value>)> {
-    if !claims.is_at_least_accountant() {
+    if !claims.has("accounts:write") {
         return Err(ApiError::Forbidden);
     }
     let account = AccountRepo::create(&state.db, &claims.org, body).await?;
-    Ok((StatusCode::CREATED, Json(serde_json::json!({ "data": account }))))
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({ "data": account })),
+    ))
 }
 
 /// PATCH /api/v1/accounts/:id
@@ -51,7 +60,7 @@ pub async fn update_account(
     Path(id): Path<String>,
     Json(body): Json<UpdateAccount>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    if !claims.is_at_least_accountant() {
+    if !claims.has("accounts:write") {
         return Err(ApiError::Forbidden);
     }
     let account = AccountRepo::update(&state.db, &claims.org, &id, body).await?;
@@ -64,7 +73,7 @@ pub async fn delete_account(
     Extension(claims): Extension<Claims>,
     Path(id): Path<String>,
 ) -> ApiResult<StatusCode> {
-    if !claims.is_admin() {
+    if !claims.has("accounts:delete") {
         return Err(ApiError::Forbidden);
     }
     AccountRepo::delete(&state.db, &claims.org, &id).await?;

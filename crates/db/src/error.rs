@@ -8,6 +8,9 @@ pub enum DbError {
     #[error("unique constraint violation: {0}")]
     Conflict(String),
 
+    #[error("internal error: {0}")]
+    Internal(String),
+
     #[error("database error: {0}")]
     Sqlx(#[from] sqlx::Error),
 
