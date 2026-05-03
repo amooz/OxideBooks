@@ -48,6 +48,7 @@ sha2 = { workspace = true }
 hmac = { workspace = true }
 x509-cert = { workspace = true }
 tower_governor = { workspace = true }
+csv = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

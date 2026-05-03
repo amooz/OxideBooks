@@ -15,10 +15,11 @@ use tower_http::{
 
 use crate::{
     handlers::{
-        accounts, audit, auth, auth_sso, bank, budgets, contacts, custom_fields, email,
-        exchange_rates, expenses, fixed_assets, fx, health, identity, inventory, invoices, notes,
-        notifications, organizations, payments, products, projects, purchase_orders, recurring,
-        reports, roles, scim, tags, tax_rates, time_entries, transactions, users, webhooks,
+        accounts, attachments, audit, auth, auth_sso, bank, budgets, contacts, custom_fields,
+        email, exchange_rates, expenses, export, fixed_assets, fx, health, identity, inventory,
+        invoices, notes, notifications, organizations, payment_links, payments, payroll, products,
+        projects, purchase_orders, recurring, reports, roles, scim, tags, tax_rates, time_entries,
+        transactions, users, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -108,7 +109,9 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/auth/saml/{provider_id}/metadata",
             get(auth_sso::saml_sp_metadata),
-        );
+        )
+        // Public payment link view (no JWT)
+        .route("/pay/:token", get(payment_links::view_payment_link));
 
     let protected = Router::new()
         // Chart of Accounts
@@ -445,6 +448,45 @@ pub fn build(state: AppState) -> Router {
         )
         .route("/email-log", get(email::list_email_log))
         .route("/email/send", post(email::send_email))
+        // Attachments
+        .route(
+            "/:entity_type/:entity_id/attachments",
+            get(attachments::list_attachments).post(attachments::create_attachment),
+        )
+        .route(
+            "/:entity_type/:entity_id/attachments/:id",
+            delete(attachments::delete_attachment),
+        )
+        // Payment links
+        .route(
+            "/payment-links",
+            get(payment_links::list_payment_links).post(payment_links::create_payment_link),
+        )
+        .route(
+            "/payment-links/:id",
+            get(payment_links::get_payment_link).delete(payment_links::cancel_payment_link),
+        )
+        // Payroll
+        .route(
+            "/payroll-runs",
+            get(payroll::list_payroll_runs).post(payroll::create_payroll_run),
+        )
+        .route("/payroll-runs/:id", get(payroll::get_payroll_run))
+        .route(
+            "/payroll-runs/:id/entries",
+            post(payroll::add_payroll_entry),
+        )
+        .route(
+            "/payroll-runs/:id/approve",
+            post(payroll::approve_payroll_run),
+        )
+        .route("/payroll-runs/:id/pay", post(payroll::pay_payroll_run))
+        // CSV exports
+        .route("/export/invoices", get(export::export_invoices))
+        .route("/export/expenses", get(export::export_expenses))
+        .route("/export/transactions", get(export::export_transactions))
+        .route("/export/profit-loss", get(export::export_profit_loss))
+        .route("/export/trial-balance", get(export::export_trial_balance))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     // SCIM 2.0 endpoints (separate bearer-token auth, not JWT)

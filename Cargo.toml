@@ -99,3 +99,6 @@ x509-cert = { version = "0.2", features = ["pem"] }
 
 # Per-IP rate limiting for auth endpoints
 tower_governor = "0.4"
+
+# CSV serialization (export endpoints)
+csv = "1"
