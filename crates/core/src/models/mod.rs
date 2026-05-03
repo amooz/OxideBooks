@@ -28,9 +28,11 @@ pub mod expense_report;
 pub mod fixed_asset;
 pub mod fx;
 pub mod fx_revaluation;
+pub mod grn;
 pub mod identity;
 pub mod import;
 pub mod inventory;
+pub mod inventory_lot;
 pub mod invoice;
 pub mod invoice_template;
 pub mod late_fee;
@@ -126,6 +128,7 @@ pub use fixed_asset::{
 };
 pub use fx::{FxSummaryRow, RealizedFxEntry};
 pub use fx_revaluation::{CreateFxRevaluation, FxRevaluation};
+pub use grn::{CreateGrn, CreateGrnLine, GoodsReceiptNote, GrnLine};
 pub use identity::{
     CreateOidcProvider, CreateSamlProvider, CreateScimToken, CreatedScimToken, IdentityProvider,
     ProviderSummary, ProviderType, ScimToken,
@@ -135,6 +138,7 @@ pub use inventory::{
     CreateInventoryItem, InventoryAdjustment, InventoryItem, InventoryMovement,
     InventoryValuationReport, InventoryValuationRow, LowStockItem, UpdateInventoryItem,
 };
+pub use inventory_lot::{CreateInventoryLot, InventoryLot, UpdateInventoryLot};
 pub use invoice::{
     CreateInvoice, CreateInvoiceLine, Invoice, InvoiceFilters, InvoiceLine, InvoiceStatus,
     InvoiceType, UpdateInvoice,
