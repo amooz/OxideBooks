@@ -14,6 +14,7 @@ pub mod contact;
 pub mod contact_group;
 pub mod credit_note;
 pub mod custom_field;
+pub mod deferred_revenue;
 pub mod department;
 pub mod doc_sequence;
 pub mod dunning;
@@ -37,6 +38,7 @@ pub mod notification;
 pub mod organization;
 pub mod payment;
 pub mod payment_link;
+pub mod payment_plan;
 pub mod payment_terms;
 pub mod payroll;
 pub mod payslip;
@@ -90,6 +92,9 @@ pub use custom_field::{
     CreateCustomFieldDefinition, CustomFieldDefinition, CustomFieldValue, SetCustomFieldValue,
     UpdateCustomFieldDefinition,
 };
+pub use deferred_revenue::{
+    CreateDeferredRevenueSchedule, DeferredRevenueEntry, DeferredRevenueSchedule, RecognizeRevenue,
+};
 pub use department::{CreateDepartment, Department, DepartmentPlReport, UpdateDepartment};
 pub use doc_sequence::{DocSequence, ResetDocSequence, UpsertDocSequence};
 pub use dunning::{CreateDunningRule, DunningRule, InvoiceReminder, OverdueInvoice};
@@ -131,6 +136,9 @@ pub use notification::{CreateNotification, Notification};
 pub use organization::{CreateOrganization, Organization, UpdateOrganization};
 pub use payment::{CreatePayment, CreateRefund, Payment, Refund, VALID_METHODS};
 pub use payment_link::{CreatePaymentLink, PaymentLink};
+pub use payment_plan::{
+    CreateInstallment, CreatePaymentPlan, PayInstallment, PaymentPlan, PaymentPlanInstallment,
+};
 pub use payment_terms::{CreatePaymentTerms, PaymentTerms, UpdatePaymentTerms};
 pub use payroll::{
     CreatePayrollEntry, CreatePayrollRun, PayrollEntry, PayrollRun, PayrollRunSummary,
