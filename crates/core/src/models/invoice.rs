@@ -136,12 +136,25 @@ pub struct InvoiceLine {
     pub unit_price: MinorUnits,
     /// Tax rate × 100 (e.g. 10% → 1000)
     pub tax_rate: i64,
+    /// Discount percent × 100 (e.g. 10% → 1000); 0 = no discount
+    pub discount_pct: i64,
     pub sort_order: i32,
 }
 
 impl InvoiceLine {
-    pub fn line_total(&self) -> MinorUnits {
+    /// Pre-discount subtotal for this line
+    pub fn gross_total(&self) -> MinorUnits {
         self.quantity * self.unit_price / 100
+    }
+
+    /// Discount amount in minor units
+    pub fn discount_amount(&self) -> MinorUnits {
+        self.gross_total() * self.discount_pct / 10_000
+    }
+
+    /// Net line total after discount, before tax
+    pub fn line_total(&self) -> MinorUnits {
+        self.gross_total() - self.discount_amount()
     }
 
     pub fn tax_amount(&self) -> MinorUnits {
@@ -243,6 +256,9 @@ pub struct CreateInvoiceLine {
     pub unit_price: MinorUnits,
     /// Tax rate × 100 (e.g. 10% → 1000); defaults to 0
     pub tax_rate: Option<i64>,
+    /// Discount percent × 100 (e.g. 10% → 1000); defaults to 0
+    #[serde(default)]
+    pub discount_pct: i64,
 }
 
 #[cfg(test)]
@@ -264,6 +280,7 @@ mod tests {
             quantity,
             unit_price,
             tax_rate,
+            discount_pct: 0,
             sort_order: 0,
         }
     }
@@ -376,6 +393,25 @@ mod tests {
         assert_eq!(line.tax_amount(), 1_000);
     }
 
+    #[test]
+    fn discount_reduces_line_total() {
+        // 1 unit × $100.00 with 10% discount = $90.00 net
+        let mut line = make_line(100, 10_000, 0);
+        line.discount_pct = 1_000; // 10%
+        assert_eq!(line.gross_total(), 10_000);
+        assert_eq!(line.discount_amount(), 1_000);
+        assert_eq!(line.line_total(), 9_000);
+    }
+
+    #[test]
+    fn discount_then_tax() {
+        // 1 unit × $100.00, 20% discount → $80.00, then 10% tax → $8.00 tax
+        let mut line = make_line(100, 10_000, 1_000);
+        line.discount_pct = 2_000; // 20%
+        assert_eq!(line.line_total(), 8_000);
+        assert_eq!(line.tax_amount(), 800);
+    }
+
     // ── CreateInvoice::validate ───────────────────────────────────────────────
 
     #[test]
@@ -393,6 +429,7 @@ mod tests {
                 quantity: 100,
                 unit_price: 5_000,
                 tax_rate: None,
+                discount_pct: 0,
             }],
         };
         assert!(input.validate().is_ok());
@@ -427,6 +464,7 @@ mod tests {
                 quantity: 0,
                 unit_price: 1_000,
                 tax_rate: None,
+                discount_pct: 0,
             }],
         };
         assert!(matches!(input.validate(), Err(CoreError::ZeroQuantity)));
@@ -447,6 +485,7 @@ mod tests {
                 quantity: -1,
                 unit_price: 1_000,
                 tax_rate: None,
+                discount_pct: 0,
             }],
         };
         assert!(matches!(input.validate(), Err(CoreError::ZeroQuantity)));
@@ -467,6 +506,7 @@ mod tests {
                 quantity: 100,
                 unit_price: -1,
                 tax_rate: None,
+                discount_pct: 0,
             }],
         };
         assert!(matches!(
@@ -490,6 +530,7 @@ mod tests {
                 quantity: 100,
                 unit_price: 0,
                 tax_rate: None,
+                discount_pct: 0,
             }],
         };
         assert!(input.validate().is_ok());

@@ -17,12 +17,13 @@ use crate::{
     handlers::{
         accounts, api_keys, attachments, audit, auth, auth_sso, bank, bank_rules, batch_payments,
         bills, budgets, bulk, client_portal, closed_periods, consolidated, contacts, credit_notes,
-        custom_fields, departments, dunning, email, employees, exchange_rates, expense_policies,
-        expenses, export, fixed_assets, fx, health, identity, import, inventory, invoice_templates,
-        invoices, late_fees, leave, mileage, notes, notifications, organizations, payment_links,
-        payments, payroll, payslips, price_lists, product_categories, products, projects,
-        purchase_orders, recurring, reports, retainers, roles, scim, sessions, stripe_webhook,
-        tags, tax_periods, tax_rates, time_entries, totp, transactions, users, webhooks,
+        custom_fields, departments, dunning, email, employees, exchange_rates, expense_categories,
+        expense_policies, expenses, export, fixed_assets, fx, health, identity, import, inventory,
+        invoice_templates, invoices, late_fees, leave, mileage, notes, notifications,
+        organizations, payment_links, payments, payroll, payslips, price_lists, product_categories,
+        products, projects, purchase_orders, recurring, reports, retainers, roles, scim, sessions,
+        stripe_webhook, tags, tax_periods, tax_rates, time_entries, totp, transactions, users,
+        webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -249,6 +250,18 @@ pub fn build(state: AppState) -> Router {
         .route("/expenses/:id/approve", post(expenses::approve_expense))
         .route("/expenses/:id/reject", post(expenses::reject_expense))
         .route("/expenses/:id/reimburse", post(expenses::reimburse_expense))
+        // Expense categories
+        .route(
+            "/expense-categories",
+            get(expense_categories::list_expense_categories)
+                .post(expense_categories::create_expense_category),
+        )
+        .route(
+            "/expense-categories/:id",
+            get(expense_categories::get_expense_category)
+                .patch(expense_categories::update_expense_category)
+                .delete(expense_categories::delete_expense_category),
+        )
         // Products / services catalog
         .route(
             "/products",

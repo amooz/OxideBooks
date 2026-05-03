@@ -36,6 +36,7 @@ struct InvoiceLineRow {
     quantity: i64,
     unit_price: i64,
     tax_rate: i64,
+    discount_pct: i64,
     sort_order: i32,
 }
 
@@ -192,8 +193,9 @@ impl InvoiceRepo {
             let tax_rate = line.tax_rate.unwrap_or(0);
             sqlx::query(
                 "INSERT INTO invoice_lines \
-                 (id, invoice_id, description, account_id, quantity, unit_price, tax_rate, sort_order) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+                 (id, invoice_id, description, account_id, quantity, unit_price, \
+                  tax_rate, discount_pct, sort_order) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
             )
             .bind(line_id)
             .bind(id)
@@ -202,6 +204,7 @@ impl InvoiceRepo {
             .bind(line.quantity)
             .bind(line.unit_price)
             .bind(tax_rate)
+            .bind(line.discount_pct)
             .bind(i as i32)
             .execute(&mut *tx)
             .await
@@ -389,8 +392,9 @@ impl InvoiceRepo {
             let acct_uuid = line.account_id.as_deref().map(parse_uuid).transpose()?;
             sqlx::query(
                 "INSERT INTO invoice_lines \
-                 (id, invoice_id, description, account_id, quantity, unit_price, tax_rate, sort_order) \
-                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
+                 (id, invoice_id, description, account_id, quantity, unit_price, \
+                  tax_rate, discount_pct, sort_order) \
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
             )
             .bind(line_id)
             .bind(new_id)
@@ -399,6 +403,7 @@ impl InvoiceRepo {
             .bind(line.quantity)
             .bind(line.unit_price)
             .bind(line.tax_rate)
+            .bind(line.discount_pct)
             .bind(i as i32)
             .execute(&mut *tx)
             .await
@@ -470,7 +475,8 @@ impl InvoiceRepo {
 
     async fn fetch_lines(pool: &PgPool, invoice_id: Uuid) -> Result<Vec<InvoiceLine>, DbError> {
         let rows: Vec<InvoiceLineRow> = sqlx::query_as(
-            "SELECT id, invoice_id, description, account_id, quantity, unit_price, tax_rate, sort_order \
+            "SELECT id, invoice_id, description, account_id, quantity, unit_price, \
+             tax_rate, discount_pct, sort_order \
              FROM invoice_lines WHERE invoice_id = $1 ORDER BY sort_order",
         )
         .bind(invoice_id)
@@ -488,6 +494,7 @@ impl InvoiceRepo {
                 quantity: r.quantity,
                 unit_price: r.unit_price,
                 tax_rate: r.tax_rate,
+                discount_pct: r.discount_pct,
                 sort_order: r.sort_order,
             })
             .collect())
