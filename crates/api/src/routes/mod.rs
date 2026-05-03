@@ -20,10 +20,10 @@ use crate::{
         custom_fields, departments, dunning, email, employees, exchange_rates, expense_categories,
         expense_policies, expenses, export, fixed_assets, fx, health, identity, import, inventory,
         invoice_templates, invoices, late_fees, leave, mileage, notes, notifications,
-        organizations, payment_links, payments, payroll, payslips, price_lists, product_categories,
-        products, projects, purchase_orders, recurring, reports, retainers, roles, scim, sessions,
-        stripe_webhook, tags, tax_periods, tax_rates, time_entries, totp, transactions, users,
-        webhooks,
+        organizations, payment_links, payments, payroll, payslips, prepayments, price_lists,
+        product_categories, products, projects, purchase_orders, recurring, reports, retainers,
+        roles, scim, sessions, stripe_webhook, tags, tax_periods, tax_rates, time_entries, totp,
+        transactions, users, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -150,6 +150,14 @@ pub fn build(state: AppState) -> Router {
             "/transactions/:id/reverse",
             post(transactions::reverse_transaction),
         )
+        .route(
+            "/transactions/:id/submit",
+            post(transactions::submit_transaction),
+        )
+        .route(
+            "/transactions/:id/approve",
+            post(transactions::approve_transaction),
+        )
         // Contacts
         .route(
             "/contacts",
@@ -209,6 +217,7 @@ pub fn build(state: AppState) -> Router {
         .route("/reports/budget-vs-actual", get(budgets::budget_vs_actual))
         .route("/reports/1099-summary", get(reports::summary_1099))
         .route("/reports/account-ledger", get(reports::account_ledger))
+        .route("/reports/sales-by-product", get(reports::sales_by_product))
         // Dashboard
         .route("/dashboard", get(reports::dashboard))
         // Global search
@@ -684,6 +693,17 @@ pub fn build(state: AppState) -> Router {
             get(api_keys::list_api_keys).post(api_keys::create_api_key),
         )
         .route("/api-keys/:id/revoke", post(api_keys::revoke_api_key))
+        // Prepayments (customer advance payments)
+        .route(
+            "/prepayments",
+            get(prepayments::list_prepayments).post(prepayments::create_prepayment),
+        )
+        .route("/prepayments/:id", get(prepayments::get_prepayment))
+        .route(
+            "/prepayments/:id/apply",
+            post(prepayments::apply_prepayment),
+        )
+        .route("/prepayments/:id/void", post(prepayments::void_prepayment))
         // Price lists
         .route(
             "/price-lists",

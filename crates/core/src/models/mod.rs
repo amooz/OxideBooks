@@ -35,6 +35,7 @@ pub mod payment;
 pub mod payment_link;
 pub mod payroll;
 pub mod payslip;
+pub mod prepayment;
 pub mod price_list;
 pub mod product;
 pub mod product_category;
@@ -119,6 +120,7 @@ pub use payroll::{
     CreatePayrollEntry, CreatePayrollRun, PayrollEntry, PayrollRun, PayrollRunSummary,
 };
 pub use payslip::{CreatePayslip, Payslip};
+pub use prepayment::{ApplyPrepayment, CreatePrepayment, Prepayment};
 pub use price_list::{
     CreatePriceList, PriceList, PriceListItem, SpendAnalysisReport, SpendAnalysisRow,
     UpsertPriceListItem,
@@ -136,7 +138,8 @@ pub use recurring::{
 pub use reports::{
     AccountBalance, AccountLedger, AgingReport, AgingRow, BalanceSheetReport, CashFlowReport,
     CashFlowSection, DashboardKpis, LedgerLine, ProfitLossReport, ReportLine, ReportSection,
-    SearchHit, Summary1099, TaxSummaryLine, TaxSummaryReport, TrialBalance, Vendor1099Row,
+    SalesByProductReport, SalesByProductRow, SearchHit, Summary1099, TaxSummaryLine,
+    TaxSummaryReport, TrialBalance, Vendor1099Row,
 };
 pub use retainer::{ApplyRetainer, CreateRetainer, DepositRetainer, Retainer, RetainerTransaction};
 pub use role::{AssignPermission, CreateRole, Permission, Role};

@@ -7,6 +7,7 @@ use crate::{money::MinorUnits, CoreError};
 #[serde(rename_all = "snake_case")]
 pub enum JournalEntryStatus {
     Draft,
+    Submitted,
     Posted,
     Voided,
 }
@@ -15,6 +16,7 @@ impl std::fmt::Display for JournalEntryStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
             JournalEntryStatus::Draft => "draft",
+            JournalEntryStatus::Submitted => "submitted",
             JournalEntryStatus::Posted => "posted",
             JournalEntryStatus::Voided => "voided",
         };
@@ -34,6 +36,12 @@ pub struct JournalEntry {
     pub lines: Vec<JournalLine>,
     pub created_by: String,
     pub reversal_of: Option<String>,
+    pub submitted_by: Option<String>,
+    #[serde(default, with = "time::serde::rfc3339::option")]
+    pub submitted_at: Option<OffsetDateTime>,
+    pub approved_by: Option<String>,
+    #[serde(default, with = "time::serde::rfc3339::option")]
+    pub approved_at: Option<OffsetDateTime>,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
@@ -274,6 +282,7 @@ mod tests {
     #[test]
     fn status_display() {
         assert_eq!(JournalEntryStatus::Draft.to_string(), "draft");
+        assert_eq!(JournalEntryStatus::Submitted.to_string(), "submitted");
         assert_eq!(JournalEntryStatus::Posted.to_string(), "posted");
         assert_eq!(JournalEntryStatus::Voided.to_string(), "voided");
     }

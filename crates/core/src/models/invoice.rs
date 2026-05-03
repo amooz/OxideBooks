@@ -139,6 +139,7 @@ pub struct InvoiceLine {
     /// Discount percent × 100 (e.g. 10% → 1000); 0 = no discount
     pub discount_pct: i64,
     pub sort_order: i32,
+    pub product_id: Option<String>,
 }
 
 impl InvoiceLine {
@@ -259,6 +260,7 @@ pub struct CreateInvoiceLine {
     /// Discount percent × 100 (e.g. 10% → 1000); defaults to 0
     #[serde(default)]
     pub discount_pct: i64,
+    pub product_id: Option<String>,
 }
 
 #[cfg(test)]
@@ -282,6 +284,7 @@ mod tests {
             tax_rate,
             discount_pct: 0,
             sort_order: 0,
+            product_id: None,
         }
     }
 
@@ -430,6 +433,7 @@ mod tests {
                 unit_price: 5_000,
                 tax_rate: None,
                 discount_pct: 0,
+                product_id: None,
             }],
         };
         assert!(input.validate().is_ok());
@@ -465,6 +469,7 @@ mod tests {
                 unit_price: 1_000,
                 tax_rate: None,
                 discount_pct: 0,
+                product_id: None,
             }],
         };
         assert!(matches!(input.validate(), Err(CoreError::ZeroQuantity)));
@@ -486,6 +491,7 @@ mod tests {
                 unit_price: 1_000,
                 tax_rate: None,
                 discount_pct: 0,
+                product_id: None,
             }],
         };
         assert!(matches!(input.validate(), Err(CoreError::ZeroQuantity)));
@@ -507,6 +513,7 @@ mod tests {
                 unit_price: -1,
                 tax_rate: None,
                 discount_pct: 0,
+                product_id: None,
             }],
         };
         assert!(matches!(
@@ -531,6 +538,7 @@ mod tests {
                 unit_price: 0,
                 tax_rate: None,
                 discount_pct: 0,
+                product_id: None,
             }],
         };
         assert!(input.validate().is_ok());

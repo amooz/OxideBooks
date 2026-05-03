@@ -253,3 +253,21 @@ pub async fn account_ledger(
         ReportRepo::account_ledger(&state.db, &claims.org, &q.account_id, from, to).await?;
     Ok(Json(serde_json::json!({ "data": ledger })))
 }
+
+/// GET /api/v1/reports/sales-by-product?from=YYYY-MM-DD&to=YYYY-MM-DD
+pub async fn sales_by_product(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<DateRangeQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("reports:read") {
+        return Err(ApiError::Forbidden);
+    }
+    let from = parse_date(&q.from)?;
+    let to = parse_date(&q.to)?;
+    if to < from {
+        return Err(ApiError::BadRequest("to must be >= from".into()));
+    }
+    let report = ReportRepo::sales_by_product(&state.db, &claims.org, from, to).await?;
+    Ok(Json(serde_json::json!({ "data": report })))
+}

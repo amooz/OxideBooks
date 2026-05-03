@@ -1,8 +1,8 @@
 use oxidebooks_core::models::{
     AccountBalance, AccountLedger, AccountType, AgingReport, AgingRow, BalanceSheetReport,
     CashFlowReport, CashFlowSection, ConsolidatedProfitLoss, ContactStatement, DashboardKpis,
-    LedgerLine, OrgProfitLoss, ProfitLossReport, ReportLine, ReportSection, StatementLine,
-    TaxSummaryLine, TaxSummaryReport, TrialBalance,
+    LedgerLine, OrgProfitLoss, ProfitLossReport, ReportLine, ReportSection, SalesByProductReport,
+    SalesByProductRow, StatementLine, TaxSummaryLine, TaxSummaryReport, TrialBalance,
 };
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -1166,4 +1166,91 @@ impl ReportRepo {
 
 fn parse_uuid(s: &str) -> Result<Uuid, DbError> {
     Uuid::parse_str(s).map_err(|_| DbError::Conflict(format!("invalid UUID: {s}")))
+}
+
+#[derive(sqlx::FromRow)]
+struct SalesByProductRowDb {
+    product_id: Uuid,
+    product_name: String,
+    sku: Option<String>,
+    quantity: i64,
+    gross_amount: i64,
+    discount_amount: i64,
+    net_amount: i64,
+    tax_amount: i64,
+}
+
+impl ReportRepo {
+    pub async fn sales_by_product(
+        pool: &PgPool,
+        org_id: &str,
+        from: Date,
+        to: Date,
+    ) -> Result<SalesByProductReport, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        let rows: Vec<SalesByProductRowDb> = sqlx::query_as(
+            r#"
+            SELECT
+                p.id                                                           AS product_id,
+                p.name                                                         AS product_name,
+                p.sku,
+                SUM(il.quantity)                                               AS quantity,
+                SUM(il.quantity * il.unit_price / 100)                        AS gross_amount,
+                SUM(il.quantity * il.unit_price / 100 * il.discount_pct / 10000) AS discount_amount,
+                SUM(il.quantity * il.unit_price / 100
+                    - il.quantity * il.unit_price / 100 * il.discount_pct / 10000)
+                                                                               AS net_amount,
+                SUM((il.quantity * il.unit_price / 100
+                     - il.quantity * il.unit_price / 100 * il.discount_pct / 10000)
+                    * il.tax_rate / 10000)                                     AS tax_amount
+            FROM invoice_lines il
+            JOIN invoices i  ON i.id  = il.invoice_id
+            JOIN products  p ON p.id  = il.product_id
+            WHERE i.organization_id = $1
+              AND i.invoice_type     = 'invoice'
+              AND i.status NOT IN ('voided', 'draft')
+              AND i.date >= $2
+              AND i.date <= $3
+              AND il.product_id IS NOT NULL
+            GROUP BY p.id, p.name, p.sku
+            ORDER BY net_amount DESC
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let total_gross: i64 = rows.iter().map(|r| r.gross_amount).sum();
+        let total_discount: i64 = rows.iter().map(|r| r.discount_amount).sum();
+        let total_net: i64 = rows.iter().map(|r| r.net_amount).sum();
+        let total_tax: i64 = rows.iter().map(|r| r.tax_amount).sum();
+
+        let result_rows = rows
+            .into_iter()
+            .map(|r| SalesByProductRow {
+                product_id: r.product_id.to_string(),
+                product_name: r.product_name,
+                sku: r.sku,
+                quantity: r.quantity,
+                gross_amount: r.gross_amount,
+                discount_amount: r.discount_amount,
+                net_amount: r.net_amount,
+                tax_amount: r.tax_amount,
+            })
+            .collect();
+
+        Ok(SalesByProductReport {
+            from,
+            to,
+            rows: result_rows,
+            total_gross,
+            total_discount,
+            total_net,
+            total_tax,
+        })
+    }
 }

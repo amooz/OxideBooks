@@ -106,6 +106,52 @@ pub async fn void_transaction(
     Ok(Json(serde_json::json!({ "data": entry })))
 }
 
+/// POST /api/v1/transactions/:id/submit
+pub async fn submit_transaction(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("transactions:write") {
+        return Err(ApiError::Forbidden);
+    }
+    let entry = TransactionRepo::submit(&state.db, &claims.org, &claims.sub, &id).await?;
+    let _ = AuditRepo::record(
+        &state.db,
+        &claims.org,
+        Some(&claims.sub),
+        "submit",
+        "journal_entry",
+        &id,
+        None,
+    )
+    .await;
+    Ok(Json(serde_json::json!({ "data": entry })))
+}
+
+/// POST /api/v1/transactions/:id/approve
+pub async fn approve_transaction(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_admin() {
+        return Err(ApiError::Forbidden);
+    }
+    let entry = TransactionRepo::approve(&state.db, &claims.org, &claims.sub, &id).await?;
+    let _ = AuditRepo::record(
+        &state.db,
+        &claims.org,
+        Some(&claims.sub),
+        "approve",
+        "journal_entry",
+        &id,
+        None,
+    )
+    .await;
+    Ok(Json(serde_json::json!({ "data": entry })))
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ReverseRequest {
     pub date: Option<String>,
