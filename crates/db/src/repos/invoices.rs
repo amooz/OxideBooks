@@ -424,6 +424,86 @@ impl InvoiceRepo {
         Self::get_by_id(pool, org_id, &new_id.to_string()).await
     }
 
+    /// Progress invoice: bill a percentage of each line on an accepted quote.
+    /// `pct_bps` is expressed in basis-point × 100 (e.g. 5000 = 50%).
+    pub async fn progress_invoice(
+        pool: &PgPool,
+        org_id: &str,
+        quote_id: &str,
+        pct_bps: i64,
+        invoice_date: time::Date,
+        due_date: time::Date,
+    ) -> Result<Invoice, DbError> {
+        if pct_bps <= 0 || pct_bps > 10_000 {
+            return Err(DbError::Conflict(
+                "pct_bps must be between 1 and 10000 (1–100%)".into(),
+            ));
+        }
+
+        let quote = Self::get_by_id(pool, org_id, quote_id).await?;
+        if quote.invoice_type != InvoiceType::Quote {
+            return Err(DbError::Conflict("source must be a quote".into()));
+        }
+        if quote.status != InvoiceStatus::Accepted {
+            return Err(DbError::Conflict(
+                "quote must be in 'accepted' status for progress invoicing".into(),
+            ));
+        }
+
+        let org_uuid = parse_uuid(org_id)?;
+        let mut tx = pool.begin().await.map_err(map_sqlx_err)?;
+        let invoice_number =
+            generate_invoice_number(&mut tx, org_uuid, &InvoiceType::Invoice).await?;
+        let new_id = Uuid::new_v4();
+
+        sqlx::query(
+            "INSERT INTO invoices \
+             (id, organization_id, invoice_number, contact_id, invoice_type, \
+              date, due_date, currency, notes) \
+             VALUES ($1,$2,$3,$4,'invoice',$5,$6,$7,$8)",
+        )
+        .bind(new_id)
+        .bind(org_uuid)
+        .bind(&invoice_number)
+        .bind(parse_uuid(&quote.contact_id)?)
+        .bind(invoice_date)
+        .bind(due_date)
+        .bind(&quote.currency)
+        .bind(&quote.notes)
+        .execute(&mut *tx)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        for (i, line) in quote.lines.iter().enumerate() {
+            let line_id = Uuid::new_v4();
+            let acct_uuid = line.account_id.as_deref().map(parse_uuid).transpose()?;
+            let prod_uuid = line.product_id.as_deref().map(parse_uuid).transpose()?;
+            let scaled_price = line.unit_price * pct_bps / 10_000;
+            sqlx::query(
+                "INSERT INTO invoice_lines \
+                 (id, invoice_id, description, account_id, quantity, unit_price, \
+                  tax_rate, discount_pct, sort_order, product_id) \
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
+            )
+            .bind(line_id)
+            .bind(new_id)
+            .bind(&line.description)
+            .bind(acct_uuid)
+            .bind(line.quantity)
+            .bind(scaled_price)
+            .bind(line.tax_rate)
+            .bind(line.discount_pct)
+            .bind(i as i32)
+            .bind(prod_uuid)
+            .execute(&mut *tx)
+            .await
+            .map_err(map_sqlx_err)?;
+        }
+
+        tx.commit().await.map_err(map_sqlx_err)?;
+        Self::get_by_id(pool, org_id, &new_id.to_string()).await
+    }
+
     /// Apply a credit note against an invoice. Creates a payment of type 'credit_note'.
     pub async fn apply_credit(
         pool: &PgPool,

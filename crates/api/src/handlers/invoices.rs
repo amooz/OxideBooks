@@ -3,7 +3,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use oxidebooks_core::models::{CreateInvoice, InvoiceFilters, UpdateInvoice};
+use oxidebooks_core::models::{CreateInvoice, InvoiceFilters, ProgressInvoiceInput, UpdateInvoice};
 use oxidebooks_core::pagination::PageParams;
 use oxidebooks_db::repos::{AuditRepo, InvoiceRepo};
 use serde::Deserialize;
@@ -190,6 +190,31 @@ pub async fn decline_quote(
     }
     let invoice = InvoiceRepo::update_quote_status(&state.db, &claims.org, &id, "declined").await?;
     Ok(Json(serde_json::json!({ "data": invoice })))
+}
+
+/// POST /api/v1/quotes/:id/progress-invoice
+pub async fn progress_invoice(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<String>,
+    Json(body): Json<ProgressInvoiceInput>,
+) -> ApiResult<(StatusCode, Json<serde_json::Value>)> {
+    if !claims.has("invoices:write") {
+        return Err(ApiError::Forbidden);
+    }
+    let invoice = InvoiceRepo::progress_invoice(
+        &state.db,
+        &claims.org,
+        &id,
+        body.pct_bps,
+        body.invoice_date,
+        body.due_date,
+    )
+    .await?;
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({ "data": invoice })),
+    ))
 }
 
 /// POST /api/v1/quotes/:id/expire

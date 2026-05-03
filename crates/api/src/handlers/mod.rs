@@ -18,6 +18,7 @@ pub mod contact_groups;
 pub mod contacts;
 pub mod credit_notes;
 pub mod custom_fields;
+pub mod deferred_charges;
 pub mod deferred_revenue;
 pub mod departments;
 pub mod doc_sequences;

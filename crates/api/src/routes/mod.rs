@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use axum::{
     http::{HeaderValue, Method},
     middleware,
-    routing::{delete, get, post},
+    routing::{delete, get, post, put},
     Router,
 };
 use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
@@ -17,8 +17,8 @@ use crate::{
     handlers::{
         accounts, api_keys, approval_rules, attachments, audit, auth, auth_sso, bank, bank_rules,
         batch_payments, bills, budgets, bulk, client_portal, closed_periods, consolidated,
-        contact_groups, contacts, credit_notes, custom_fields, deferred_revenue, departments,
-        doc_sequences, dunning, email, employees, exchange_rates, expense_categories,
+        contact_groups, contacts, credit_notes, custom_fields, deferred_charges, deferred_revenue,
+        departments, doc_sequences, dunning, email, employees, exchange_rates, expense_categories,
         expense_policies, expense_reports, expenses, export, fixed_assets, fx, health, identity,
         import, inventory, invoice_templates, invoices, late_fees, leave, mileage, notes,
         notifications, opening_balances, organizations, payment_links, payment_plans,
@@ -215,6 +215,10 @@ pub fn build(state: AppState) -> Router {
         .route("/quotes/:id/accept", post(invoices::accept_quote))
         .route("/quotes/:id/decline", post(invoices::decline_quote))
         .route("/quotes/:id/expire", post(invoices::expire_quote))
+        .route(
+            "/quotes/:id/progress-invoice",
+            post(invoices::progress_invoice),
+        )
         .route("/invoices/:id/apply-credit", post(invoices::apply_credit))
         // Organization settings
         .route(
@@ -307,6 +311,10 @@ pub fn build(state: AppState) -> Router {
             get(products::get_product)
                 .patch(products::update_product)
                 .delete(products::delete_product),
+        )
+        .route(
+            "/products/:id/bundle-components",
+            put(products::set_bundle_components),
         )
         // Product categories
         .route(
@@ -982,6 +990,25 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/deferred-revenue/:id/cancel",
             post(deferred_revenue::cancel_schedule),
+        )
+        // Deferred charges (bill-later / progress charge capture)
+        .route(
+            "/deferred-charges",
+            get(deferred_charges::list_deferred_charges)
+                .post(deferred_charges::create_deferred_charge),
+        )
+        .route(
+            "/deferred-charges/:id",
+            get(deferred_charges::get_deferred_charge)
+                .patch(deferred_charges::update_deferred_charge),
+        )
+        .route(
+            "/deferred-charges/:id/void",
+            post(deferred_charges::void_deferred_charge),
+        )
+        .route(
+            "/deferred-charges/:id/invoice",
+            post(deferred_charges::invoice_deferred_charges),
         )
         // Payment plans
         .route(
