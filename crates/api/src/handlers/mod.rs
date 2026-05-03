@@ -15,6 +15,7 @@ pub mod custom_fields;
 pub mod dunning;
 pub mod email;
 pub mod exchange_rates;
+pub mod expense_policies;
 pub mod expenses;
 pub mod export;
 pub mod fixed_assets;

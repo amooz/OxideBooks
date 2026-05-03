@@ -23,6 +23,8 @@ fn parse_date(s: &str) -> Result<Date, ApiError> {
 pub struct DateRangeQuery {
     pub from: String,
     pub to: String,
+    #[serde(default)]
+    pub basis: String,
 }
 
 #[derive(Deserialize)]
@@ -68,8 +70,14 @@ pub async fn profit_loss(
             "'from' must be on or before 'to'".into(),
         ));
     }
-    let report = ReportRepo::profit_loss(&state.db, &claims.org, from, to).await?;
-    Ok(Json(serde_json::json!({ "data": report })))
+    let report = if q.basis == "cash" {
+        ReportRepo::profit_loss_cash(&state.db, &claims.org, from, to).await?
+    } else {
+        ReportRepo::profit_loss(&state.db, &claims.org, from, to).await?
+    };
+    Ok(Json(
+        serde_json::json!({ "data": report, "basis": q.basis }),
+    ))
 }
 
 /// GET /api/v1/reports/balance-sheet?as_of=YYYY-MM-DD

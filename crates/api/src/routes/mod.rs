@@ -17,11 +17,11 @@ use crate::{
     handlers::{
         accounts, api_keys, attachments, audit, auth, auth_sso, bank, budgets, bulk, client_portal,
         closed_periods, consolidated, contacts, custom_fields, dunning, email, exchange_rates,
-        expenses, export, fixed_assets, fx, health, identity, import, inventory, invoices,
-        late_fees, mileage, notes, notifications, organizations, payment_links, payments, payroll,
-        price_lists, products, projects, purchase_orders, recurring, reports, retainers, roles,
-        scim, sessions, stripe_webhook, tags, tax_rates, time_entries, totp, transactions, users,
-        webhooks,
+        expense_policies, expenses, export, fixed_assets, fx, health, identity, import, inventory,
+        invoices, late_fees, mileage, notes, notifications, organizations, payment_links, payments,
+        payroll, price_lists, products, projects, purchase_orders, recurring, reports, retainers,
+        roles, scim, sessions, stripe_webhook, tags, tax_rates, time_entries, totp, transactions,
+        users, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -251,10 +251,18 @@ pub fn build(state: AppState) -> Router {
             get(recurring::list_schedules).post(recurring::create_schedule),
         )
         .route(
+            "/recurring-schedules/run-due",
+            post(recurring::run_due_schedules),
+        )
+        .route(
             "/recurring-schedules/:id",
             get(recurring::get_schedule)
                 .patch(recurring::update_schedule)
                 .delete(recurring::delete_schedule),
+        )
+        .route(
+            "/recurring-schedules/:id/run",
+            post(recurring::run_schedule),
         )
         // RBAC: permissions & roles
         .route("/permissions", get(roles::list_permissions))
@@ -518,8 +526,21 @@ pub fn build(state: AppState) -> Router {
         )
         .route("/mileage/summary", get(mileage::mileage_summary))
         .route("/mileage/:id", delete(mileage::delete_mileage_trip))
+        // Contacts statement
+        .route("/contacts/:id/statement", get(contacts::contact_statement))
+        // Expense policies
+        .route(
+            "/expense-policies",
+            get(expense_policies::list_expense_policies),
+        )
+        .route(
+            "/expense-policies/:category",
+            axum::routing::put(expense_policies::upsert_expense_policy)
+                .delete(expense_policies::delete_expense_policy),
+        )
         // CSV import
         .route("/import/contacts", post(import::import_contacts_csv))
+        .route("/import/accounts", post(import::import_accounts_csv))
         // Late fees
         .route(
             "/late-fee-rule",

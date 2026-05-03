@@ -11,6 +11,7 @@ pub mod custom_field;
 pub mod dunning;
 pub mod email;
 pub mod expense;
+pub mod expense_policy;
 pub mod fixed_asset;
 pub mod fx;
 pub mod identity;
@@ -62,6 +63,7 @@ pub use custom_field::{
 pub use dunning::{CreateDunningRule, DunningRule, InvoiceReminder, OverdueInvoice};
 pub use email::{EmailLog, EmailSettings, SendEmailRequest, UpsertEmailSettings};
 pub use expense::{CreateExpense, Expense, ExpenseStatus, UpdateExpense};
+pub use expense_policy::{ContactStatement, ExpensePolicy, StatementLine, UpsertExpensePolicy};
 pub use fixed_asset::{
     AssetRegisterRow, CreateFixedAsset, DepreciationMethod, FixedAsset, UpdateFixedAsset,
 };
@@ -70,7 +72,7 @@ pub use identity::{
     CreateOidcProvider, CreateSamlProvider, CreateScimToken, CreatedScimToken, IdentityProvider,
     ProviderSummary, ProviderType, ScimToken,
 };
-pub use import::{ContactCsvRow, ImportError, ImportResult};
+pub use import::{AccountCsvRow, ContactCsvRow, ImportError, ImportResult};
 pub use inventory::{
     CreateInventoryItem, InventoryAdjustment, InventoryItem, InventoryMovement, LowStockItem,
     UpdateInventoryItem,

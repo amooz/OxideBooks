@@ -5,13 +5,42 @@ use axum::{
 };
 use oxidebooks_core::models::{CreateContact, UpdateContact};
 use oxidebooks_core::pagination::PageParams;
-use oxidebooks_db::repos::{AuditRepo, ContactRepo};
+use oxidebooks_db::repos::{AuditRepo, ContactRepo, ReportRepo};
+use serde::Deserialize;
+use time::{macros::format_description, Date};
 
 use crate::{
     error::{ApiError, ApiResult},
     middleware::Claims,
     state::AppState,
 };
+
+fn parse_date(s: &str) -> Result<Date, ApiError> {
+    let fmt = format_description!("[year]-[month]-[day]");
+    Date::parse(s, fmt)
+        .map_err(|_| ApiError::BadRequest(format!("invalid date '{s}'; expected YYYY-MM-DD")))
+}
+
+#[derive(Deserialize)]
+pub struct StatementQuery {
+    pub from: String,
+    pub to: String,
+}
+
+pub async fn contact_statement(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    Query(q): Query<StatementQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("reports:read") {
+        return Err(ApiError::Forbidden);
+    }
+    let from = parse_date(&q.from)?;
+    let to = parse_date(&q.to)?;
+    let statement = ReportRepo::contact_statement(&state.db, &claims.org, &id, from, to).await?;
+    Ok(Json(serde_json::json!({ "data": statement })))
+}
 
 /// GET /api/v1/contacts
 pub async fn list_contacts(
