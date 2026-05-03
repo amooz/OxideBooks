@@ -49,6 +49,8 @@ pub struct RecurringSchedule {
     pub end_date: Option<Date>,
     pub auto_send: bool,
     pub is_active: bool,
+    pub max_occurrences: Option<i32>,
+    pub occurrences_count: i32,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
@@ -81,4 +83,5 @@ pub struct UpdateRecurringSchedule {
     pub end_date: Option<Date>,
     pub auto_send: Option<bool>,
     pub is_active: Option<bool>,
+    pub max_occurrences: Option<i32>,
 }

@@ -72,7 +72,28 @@ async fn run_schedule_inner(
         .await;
     }
 
-    if let Some(next_due) = advance_date(
+    // Increment occurrences counter and check if we've hit the max.
+    let new_count = RecurringRepo::increment_occurrences(&state.db, &schedule.id)
+        .await
+        .unwrap_or(schedule.occurrences_count + 1);
+
+    let hit_max = schedule.max_occurrences.is_some_and(|max| new_count >= max);
+
+    if hit_max {
+        let _ = RecurringRepo::update(
+            &state.db,
+            org_id,
+            &schedule.id,
+            UpdateRecurringSchedule {
+                is_active: Some(false),
+                next_due_date: None,
+                end_date: None,
+                auto_send: None,
+                max_occurrences: None,
+            },
+        )
+        .await;
+    } else if let Some(next_due) = advance_date(
         schedule.next_due_date,
         &schedule.frequency,
         schedule.interval_count,
@@ -88,6 +109,7 @@ async fn run_schedule_inner(
                     next_due_date: None,
                     end_date: None,
                     auto_send: None,
+                    max_occurrences: None,
                 },
             )
             .await;

@@ -160,6 +160,32 @@ pub struct TaxSummaryReport {
     pub net: MinorUnits,
 }
 
+// ── 1099 Summary ─────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Vendor1099Row {
+    pub contact_id: String,
+    pub contact_name: String,
+    pub tax_id: Option<String>,
+    pub total_paid: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Summary1099 {
+    pub year: i32,
+    pub vendors: Vec<Vendor1099Row>,
+}
+
+// ── Global Search ─────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchHit {
+    pub id: String,
+    pub display: String,
+    #[serde(rename = "type")]
+    pub hit_type: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

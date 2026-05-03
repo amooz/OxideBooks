@@ -888,6 +888,170 @@ impl ReportRepo {
             combined_net_income,
         })
     }
+
+    /// Returns all 1099-eligible vendor contacts with total payments made to them during `year`.
+    pub async fn summary_1099(
+        pool: &PgPool,
+        org_id: &str,
+        year: i32,
+    ) -> Result<oxidebooks_core::models::Summary1099, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            contact_id: Uuid,
+            contact_name: String,
+            tax_id: Option<String>,
+            total_paid: i64,
+        }
+
+        let rows: Vec<Row> = sqlx::query_as(
+            "SELECT c.id AS contact_id, c.name AS contact_name, c.tax_id, \
+             COALESCE(SUM(p.amount), 0)::BIGINT AS total_paid \
+             FROM contacts c \
+             LEFT JOIN invoices i ON i.contact_id = c.id \
+               AND i.organization_id = c.organization_id \
+               AND i.invoice_type = 'bill' \
+             LEFT JOIN payments p ON p.invoice_id = i.id \
+               AND EXTRACT(YEAR FROM p.payment_date) = $2 \
+             WHERE c.organization_id = $1 AND c.is_1099_vendor = TRUE \
+             GROUP BY c.id, c.name, c.tax_id \
+             ORDER BY c.name ASC",
+        )
+        .bind(org_uuid)
+        .bind(year)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let vendors = rows
+            .into_iter()
+            .map(|r| oxidebooks_core::models::Vendor1099Row {
+                contact_id: r.contact_id.to_string(),
+                contact_name: r.contact_name,
+                tax_id: r.tax_id,
+                total_paid: r.total_paid,
+            })
+            .collect();
+
+        Ok(oxidebooks_core::models::Summary1099 { year, vendors })
+    }
+
+    /// Global text search across contacts, invoices, products, and accounts.
+    pub async fn search(
+        pool: &PgPool,
+        org_id: &str,
+        query: &str,
+        types: &[&str],
+        limit: i64,
+    ) -> Result<Vec<oxidebooks_core::models::SearchHit>, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let pattern = format!("%{query}%");
+        let mut hits: Vec<oxidebooks_core::models::SearchHit> = Vec::new();
+
+        if types.contains(&"contacts") {
+            #[derive(sqlx::FromRow)]
+            struct ContactR {
+                id: Uuid,
+                name: String,
+            }
+            let rows: Vec<ContactR> = sqlx::query_as(
+                "SELECT id, name FROM contacts \
+                 WHERE organization_id = $1 AND name ILIKE $2 LIMIT $3",
+            )
+            .bind(org_uuid)
+            .bind(&pattern)
+            .bind(limit)
+            .fetch_all(pool)
+            .await
+            .map_err(map_sqlx_err)?;
+            for r in rows {
+                hits.push(oxidebooks_core::models::SearchHit {
+                    id: r.id.to_string(),
+                    display: r.name,
+                    hit_type: "contact".into(),
+                });
+            }
+        }
+
+        if types.contains(&"invoices") {
+            #[derive(sqlx::FromRow)]
+            struct InvoiceR {
+                id: Uuid,
+                invoice_number: String,
+            }
+            let rows: Vec<InvoiceR> = sqlx::query_as(
+                "SELECT id, invoice_number FROM invoices \
+                 WHERE organization_id = $1 AND invoice_number ILIKE $2 LIMIT $3",
+            )
+            .bind(org_uuid)
+            .bind(&pattern)
+            .bind(limit)
+            .fetch_all(pool)
+            .await
+            .map_err(map_sqlx_err)?;
+            for r in rows {
+                hits.push(oxidebooks_core::models::SearchHit {
+                    id: r.id.to_string(),
+                    display: r.invoice_number,
+                    hit_type: "invoice".into(),
+                });
+            }
+        }
+
+        if types.contains(&"products") {
+            #[derive(sqlx::FromRow)]
+            struct ProductR {
+                id: Uuid,
+                name: String,
+            }
+            let rows: Vec<ProductR> = sqlx::query_as(
+                "SELECT id, name FROM products \
+                 WHERE organization_id = $1 AND name ILIKE $2 LIMIT $3",
+            )
+            .bind(org_uuid)
+            .bind(&pattern)
+            .bind(limit)
+            .fetch_all(pool)
+            .await
+            .map_err(map_sqlx_err)?;
+            for r in rows {
+                hits.push(oxidebooks_core::models::SearchHit {
+                    id: r.id.to_string(),
+                    display: r.name,
+                    hit_type: "product".into(),
+                });
+            }
+        }
+
+        if types.contains(&"accounts") {
+            #[derive(sqlx::FromRow)]
+            struct AccountR {
+                id: Uuid,
+                code: String,
+                name: String,
+            }
+            let rows: Vec<AccountR> = sqlx::query_as(
+                "SELECT id, code, name FROM accounts \
+                 WHERE organization_id = $1 AND (name ILIKE $2 OR code ILIKE $2) LIMIT $3",
+            )
+            .bind(org_uuid)
+            .bind(&pattern)
+            .bind(limit)
+            .fetch_all(pool)
+            .await
+            .map_err(map_sqlx_err)?;
+            for r in rows {
+                hits.push(oxidebooks_core::models::SearchHit {
+                    id: r.id.to_string(),
+                    display: format!("{} – {}", r.code, r.name),
+                    hit_type: "account".into(),
+                });
+            }
+        }
+
+        Ok(hits)
+    }
 }
 
 fn parse_uuid(s: &str) -> Result<Uuid, DbError> {
