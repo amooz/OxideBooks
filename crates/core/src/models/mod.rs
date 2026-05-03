@@ -4,11 +4,13 @@ pub mod attachment;
 pub mod bank;
 pub mod bank_rule;
 pub mod batch_payment;
+pub mod bill;
 pub mod budget;
 pub mod client_portal;
 pub mod closed_period;
 pub mod consolidated;
 pub mod contact;
+pub mod credit_note;
 pub mod custom_field;
 pub mod department;
 pub mod dunning;
@@ -31,6 +33,7 @@ pub mod organization;
 pub mod payment;
 pub mod payment_link;
 pub mod payroll;
+pub mod payslip;
 pub mod price_list;
 pub mod product;
 pub mod project;
@@ -55,6 +58,10 @@ pub use bank::{
 };
 pub use bank_rule::{BankRule, CreateBankRule};
 pub use batch_payment::{BatchPayment, BatchPaymentLine, CreateBatchPayment};
+pub use bill::{
+    BillLine, BillPayment, CreateBillLine, CreateBillPayment, CreateVendorBill, UpdateVendorBill,
+    VendorBill,
+};
 pub use budget::{
     Budget, BudgetLine, BudgetVsActualLine, BudgetVsActualReport, CreateBudget, UpdateBudget,
     UpsertBudgetLine,
@@ -63,6 +70,7 @@ pub use client_portal::{ClientPortalToken, CreateClientPortalToken};
 pub use closed_period::{ClosedPeriod, CreateClosedPeriod};
 pub use consolidated::{ConsolidatedProfitLoss, OrgProfitLoss};
 pub use contact::{Contact, ContactType, CreateContact, UpdateContact};
+pub use credit_note::{ApplyCreditNote, CreateCreditNote, CreditNote, CreditNoteApplication};
 pub use custom_field::{
     CreateCustomFieldDefinition, CustomFieldDefinition, CustomFieldValue, SetCustomFieldValue,
     UpdateCustomFieldDefinition,
@@ -101,6 +109,7 @@ pub use payment_link::{CreatePaymentLink, PaymentLink};
 pub use payroll::{
     CreatePayrollEntry, CreatePayrollRun, PayrollEntry, PayrollRun, PayrollRunSummary,
 };
+pub use payslip::{CreatePayslip, Payslip};
 pub use price_list::{
     CreatePriceList, PriceList, PriceListItem, SpendAnalysisReport, SpendAnalysisRow,
     UpsertPriceListItem,
