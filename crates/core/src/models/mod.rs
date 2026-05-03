@@ -35,6 +35,7 @@ pub mod inventory;
 pub mod inventory_lot;
 pub mod invoice;
 pub mod invoice_template;
+pub mod landed_cost;
 pub mod late_fee;
 pub mod leave;
 pub mod mileage;
@@ -47,6 +48,7 @@ pub mod payment_plan;
 pub mod payment_terms;
 pub mod payroll;
 pub mod payslip;
+pub mod prepaid_expense;
 pub mod prepayment;
 pub mod price_list;
 pub mod product;
@@ -144,6 +146,7 @@ pub use invoice::{
     InvoiceType, UpdateInvoice,
 };
 pub use invoice_template::{InvoiceTemplate, UpsertInvoiceTemplate};
+pub use landed_cost::{CreateLandedCost, LandedCost, LandedCostAllocation};
 pub use late_fee::{LateFee, LateFeeRule, UpsertLateFeeRule};
 pub use leave::{
     CreateLeaveRequest, CreateLeaveType, LeaveBalance, LeaveRequest, LeaveType, UpdateLeaveType,
@@ -162,6 +165,10 @@ pub use payroll::{
     CreatePayrollEntry, CreatePayrollRun, PayrollEntry, PayrollRun, PayrollRunSummary,
 };
 pub use payslip::{CreatePayslip, Payslip};
+pub use prepaid_expense::{
+    CreatePrepaidExpenseSchedule, PrepaidExpenseEntry, PrepaidExpenseSchedule,
+    UpdatePrepaidExpenseSchedule,
+};
 pub use prepayment::{ApplyPrepayment, CreatePrepayment, Prepayment};
 pub use price_list::{
     CreatePriceList, PriceList, PriceListItem, SpendAnalysisReport, SpendAnalysisRow,
