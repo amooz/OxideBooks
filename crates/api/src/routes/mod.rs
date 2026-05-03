@@ -15,12 +15,13 @@ use tower_http::{
 
 use crate::{
     handlers::{
-        accounts, api_keys, attachments, audit, auth, auth_sso, bank, budgets, closed_periods,
-        consolidated, contacts, custom_fields, dunning, email, exchange_rates, expenses, export,
-        fixed_assets, fx, health, identity, import, inventory, invoices, mileage, notes,
-        notifications, organizations, payment_links, payments, payroll, price_lists, products,
-        projects, purchase_orders, recurring, reports, roles, scim, stripe_webhook, tags,
-        tax_rates, time_entries, totp, transactions, users, webhooks,
+        accounts, api_keys, attachments, audit, auth, auth_sso, bank, budgets, bulk, client_portal,
+        closed_periods, consolidated, contacts, custom_fields, dunning, email, exchange_rates,
+        expenses, export, fixed_assets, fx, health, identity, import, inventory, invoices,
+        late_fees, mileage, notes, notifications, organizations, payment_links, payments, payroll,
+        price_lists, products, projects, purchase_orders, recurring, reports, retainers, roles,
+        scim, sessions, stripe_webhook, tags, tax_rates, time_entries, totp, transactions, users,
+        webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -112,7 +113,13 @@ pub fn build(state: AppState) -> Router {
             get(auth_sso::saml_sp_metadata),
         )
         // Public payment link view (no JWT)
-        .route("/pay/:token", get(payment_links::view_payment_link));
+        .route("/pay/:token", get(payment_links::view_payment_link))
+        // Client portal — read-only invoice view for contacts (no JWT)
+        .route("/portal/:token", get(client_portal::portal_view))
+        .route(
+            "/portal/:token/invoices/:invoice_id",
+            get(client_portal::portal_invoice),
+        );
 
     let protected = Router::new()
         // Chart of Accounts
@@ -513,6 +520,37 @@ pub fn build(state: AppState) -> Router {
         .route("/mileage/:id", delete(mileage::delete_mileage_trip))
         // CSV import
         .route("/import/contacts", post(import::import_contacts_csv))
+        // Late fees
+        .route(
+            "/late-fee-rule",
+            get(late_fees::get_late_fee_rule).put(late_fees::upsert_late_fee_rule),
+        )
+        .route("/invoices/:id/late-fee", post(late_fees::apply_late_fee))
+        .route("/invoices/:id/late-fees", get(late_fees::list_late_fees))
+        // Retainers
+        .route(
+            "/retainers",
+            get(retainers::list_retainers).post(retainers::create_retainer),
+        )
+        .route("/retainers/:id/deposit", post(retainers::deposit_retainer))
+        .route("/retainers/:id/apply", post(retainers::apply_retainer))
+        .route(
+            "/retainers/:id/transactions",
+            get(retainers::list_retainer_transactions),
+        )
+        // Client portal token creation
+        .route("/portal-tokens", post(client_portal::create_portal_token))
+        // Bulk operations
+        .route("/invoices/bulk-void", post(bulk::bulk_void_invoices))
+        .route("/invoices/bulk-send", post(bulk::bulk_send_invoices))
+        .route("/expenses/bulk-approve", post(bulk::bulk_approve_expenses))
+        .route("/expenses/bulk-reject", post(bulk::bulk_reject_expenses))
+        // Session management
+        .route(
+            "/sessions",
+            get(sessions::list_sessions).delete(sessions::revoke_all_sessions),
+        )
+        .route("/sessions/:id", delete(sessions::revoke_session))
         // Closed accounting periods
         .route(
             "/closed-periods",

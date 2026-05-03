@@ -12,6 +12,7 @@ use oxidebooks_core::models::CreateOrganization;
 use oxidebooks_db::repos::{
     organizations::OrganizationRepo,
     permissions::PermissionRepo,
+    sessions::SessionRepo,
     users::{CreateUser, UserRepo},
 };
 use serde::{Deserialize, Serialize};
@@ -199,6 +200,17 @@ async fn mint_token(
         permissions,
         state.config.auth.token_expiry_hours,
     );
+
+    // Store session for revocation support (fire-and-forget — a failure here
+    // does not prevent login)
+    let pool2 = pool.clone();
+    let jti = claims.jti.clone();
+    let uid = user_id.to_string();
+    let oid = org_id.to_string();
+    let expires_at = claims.expires_at();
+    tokio::spawn(async move {
+        let _ = SessionRepo::create(&pool2, &uid, &oid, &jti, expires_at, None, None).await;
+    });
 
     encode(
         &Header::default(),

@@ -5,8 +5,10 @@ use axum::{
     response::Response,
 };
 use jsonwebtoken::{decode, DecodingKey, Validation};
+use oxidebooks_db::repos::SessionRepo;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
+use uuid::Uuid;
 
 use crate::{error::ApiError, state::AppState};
 
@@ -23,6 +25,15 @@ pub struct Claims {
     pub permissions: Vec<String>,
     /// Expiry as Unix timestamp.
     pub exp: usize,
+    /// JWT ID — used for session revocation. Tokens without this field (issued
+    /// before session tracking was added) get a random value so revocation
+    /// lookups simply return "not found" and allow the request.
+    #[serde(default = "gen_jti")]
+    pub jti: String,
+}
+
+fn gen_jti() -> String {
+    Uuid::new_v4().to_string()
 }
 
 impl Claims {
@@ -41,7 +52,13 @@ impl Claims {
             role: role.to_string(),
             permissions,
             exp,
+            jti: gen_jti(),
         }
+    }
+
+    pub fn expires_at(&self) -> OffsetDateTime {
+        OffsetDateTime::from_unix_timestamp(self.exp as i64)
+            .unwrap_or_else(|_| OffsetDateTime::now_utc())
     }
 
     /// Returns true if the caller holds the named permission.
@@ -84,7 +101,16 @@ pub async fn require_auth(
     )
     .map_err(|_| ApiError::Unauthorized)?;
 
-    req.extensions_mut().insert(token_data.claims);
+    let claims = token_data.claims;
+
+    // Check session revocation (fail-open: DB errors allow the request through)
+    if let Ok(revoked) = SessionRepo::is_revoked(&state.db, &claims.jti).await {
+        if revoked {
+            return Err(ApiError::Unauthorized);
+        }
+    }
+
+    req.extensions_mut().insert(claims);
     Ok(next.run(req).await)
 }
 
