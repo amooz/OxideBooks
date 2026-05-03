@@ -1,9 +1,13 @@
 pub mod account;
+pub mod bank;
 pub mod budget;
 pub mod contact;
+pub mod custom_field;
 pub mod expense;
 pub mod fixed_asset;
+pub mod fx;
 pub mod identity;
+pub mod inventory;
 pub mod invoice;
 pub mod organization;
 pub mod payment;
@@ -19,18 +23,31 @@ pub mod transaction;
 pub mod webhook;
 
 pub use account::{Account, AccountType, CreateAccount, UpdateAccount};
+pub use bank::{
+    BankAccount, BankTransaction, CreateBankAccount, ImportBankTransaction, MatchTransaction,
+    ReconciliationSummary, UpdateBankAccount,
+};
 pub use budget::{
     Budget, BudgetLine, BudgetVsActualLine, BudgetVsActualReport, CreateBudget, UpdateBudget,
     UpsertBudgetLine,
 };
 pub use contact::{Contact, ContactType, CreateContact, UpdateContact};
+pub use custom_field::{
+    CreateCustomFieldDefinition, CustomFieldDefinition, CustomFieldValue, SetCustomFieldValue,
+    UpdateCustomFieldDefinition,
+};
 pub use expense::{CreateExpense, Expense, ExpenseStatus, UpdateExpense};
 pub use fixed_asset::{
     AssetRegisterRow, CreateFixedAsset, DepreciationMethod, FixedAsset, UpdateFixedAsset,
 };
+pub use fx::{FxSummaryRow, RealizedFxEntry};
 pub use identity::{
     CreateOidcProvider, CreateSamlProvider, CreateScimToken, CreatedScimToken, IdentityProvider,
     ProviderSummary, ProviderType, ScimToken,
+};
+pub use inventory::{
+    CreateInventoryItem, InventoryAdjustment, InventoryItem, InventoryMovement, LowStockItem,
+    UpdateInventoryItem,
 };
 pub use invoice::{
     CreateInvoice, CreateInvoiceLine, Invoice, InvoiceFilters, InvoiceLine, InvoiceStatus,
