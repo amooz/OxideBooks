@@ -14,6 +14,7 @@ pub mod contact;
 pub mod contact_group;
 pub mod credit_note;
 pub mod custom_field;
+pub mod deferred_charge;
 pub mod deferred_revenue;
 pub mod department;
 pub mod doc_sequence;
@@ -94,6 +95,10 @@ pub use custom_field::{
     CreateCustomFieldDefinition, CustomFieldDefinition, CustomFieldValue, SetCustomFieldValue,
     UpdateCustomFieldDefinition,
 };
+pub use deferred_charge::{
+    CreateDeferredCharge, DeferredCharge, InvoiceDeferredCharges, ProgressInvoiceInput,
+    UpdateDeferredCharge,
+};
 pub use deferred_revenue::{
     CreateDeferredRevenueSchedule, DeferredRevenueEntry, DeferredRevenueSchedule, RecognizeRevenue,
 };
@@ -151,7 +156,10 @@ pub use price_list::{
     CreatePriceList, PriceList, PriceListItem, SpendAnalysisReport, SpendAnalysisRow,
     UpsertPriceListItem,
 };
-pub use product::{CreateProduct, Product, UpdateProduct};
+pub use product::{
+    BundleComponent, BundleComponentInput, CreateProduct, Product, SetBundleComponents,
+    UpdateProduct,
+};
 pub use product_category::{CreateProductCategory, ProductCategory, UpdateProductCategory};
 pub use project::{CreateProject, Project, ProjectSummary, UpdateProject};
 pub use purchase_order::{
