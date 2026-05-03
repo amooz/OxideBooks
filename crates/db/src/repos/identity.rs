@@ -237,6 +237,7 @@ impl IdentityProviderRepo {
         state: &str,
         provider_id: &str,
         org_id: &str,
+        nonce: &str,
         code_verifier: Option<&str>,
         post_login_uri: &str,
     ) -> Result<(), DbError> {
@@ -244,12 +245,14 @@ impl IdentityProviderRepo {
         let org_uuid = parse_uuid(org_id)?;
 
         sqlx::query(
-            "INSERT INTO oidc_states (state, provider_id, org_id, code_verifier, post_login_uri) \
-             VALUES ($1, $2, $3, $4, $5)",
+            "INSERT INTO oidc_states \
+             (state, provider_id, org_id, nonce, code_verifier, post_login_uri) \
+             VALUES ($1, $2, $3, $4, $5, $6)",
         )
         .bind(state)
         .bind(provider_uuid)
         .bind(org_uuid)
+        .bind(nonce)
         .bind(code_verifier)
         .bind(post_login_uri)
         .execute(pool)
@@ -260,14 +263,16 @@ impl IdentityProviderRepo {
     }
 
     /// Consume the OIDC state (one-time use, deletes on retrieval).
+    /// Returns (provider_id, org_id, nonce, code_verifier, post_login_uri).
     pub async fn consume_oidc_state(
         pool: &PgPool,
         state: &str,
-    ) -> Result<(String, String, Option<String>, String), DbError> {
+    ) -> Result<(String, String, String, Option<String>, String), DbError> {
         #[derive(sqlx::FromRow)]
         struct StateRow {
             provider_id: Uuid,
             org_id: Uuid,
+            nonce: String,
             code_verifier: Option<String>,
             post_login_uri: String,
             created_at: OffsetDateTime,
@@ -275,7 +280,7 @@ impl IdentityProviderRepo {
 
         let row: StateRow = sqlx::query_as(
             "DELETE FROM oidc_states WHERE state = $1 RETURNING \
-             provider_id, org_id, code_verifier, post_login_uri, created_at",
+             provider_id, org_id, nonce, code_verifier, post_login_uri, created_at",
         )
         .bind(state)
         .fetch_optional(pool)
@@ -292,6 +297,7 @@ impl IdentityProviderRepo {
         Ok((
             row.provider_id.to_string(),
             row.org_id.to_string(),
+            row.nonce,
             row.code_verifier,
             row.post_login_uri,
         ))

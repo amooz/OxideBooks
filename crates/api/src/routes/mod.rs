@@ -1,33 +1,92 @@
+use std::{sync::Arc, time::Duration};
+
 use axum::{
+    http::{HeaderValue, Method},
     middleware,
     routing::{delete, get, post},
     Router,
 };
+use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
+use tower_http::{
+    cors::CorsLayer,
+    request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
+    trace::TraceLayer,
+};
 
 use crate::{
     handlers::{
-        accounts, auth, auth_sso, contacts, identity, invoices, organizations, reports, roles,
-        scim, transactions, users,
+        accounts, auth, auth_sso, contacts, exchange_rates, identity, invoices, organizations,
+        reports, roles, scim, transactions, users,
     },
     middleware::require_auth,
     state::AppState,
 };
 
 pub fn build(state: AppState) -> Router {
+    let cors = build_cors(&state.config.app.allowed_origins);
+
+    // Rate limiters — keyed on client IP, leaky-bucket via governor.
+    // login: 10 req/min
+    let login_rl = Arc::new(
+        GovernorConfigBuilder::default()
+            .period(Duration::from_secs(6))
+            .burst_size(10)
+            .finish()
+            .expect("rate limiter config"),
+    );
+    // register: 5 req/min
+    let register_rl = Arc::new(
+        GovernorConfigBuilder::default()
+            .period(Duration::from_secs(12))
+            .burst_size(5)
+            .finish()
+            .expect("rate limiter config"),
+    );
+    // SSO initiation + callbacks: 20 req/min
+    let sso_rl = Arc::new(
+        GovernorConfigBuilder::default()
+            .period(Duration::from_secs(3))
+            .burst_size(20)
+            .finish()
+            .expect("rate limiter config"),
+    );
+
     // Public auth routes (no JWT required)
     let public = Router::new()
-        .route("/auth/register", post(auth::register))
-        .route("/auth/login", post(auth::login))
+        .route(
+            "/auth/register",
+            post(auth::register).layer(GovernorLayer {
+                config: register_rl,
+            }),
+        )
+        .route(
+            "/auth/login",
+            post(auth::login).layer(GovernorLayer { config: login_rl }),
+        )
         // SSO initiation & callbacks (public — redirect-based flows)
-        .route("/auth/oidc/{provider_id}", get(auth_sso::oidc_initiate))
+        .route(
+            "/auth/oidc/{provider_id}",
+            get(auth_sso::oidc_initiate).layer(GovernorLayer {
+                config: sso_rl.clone(),
+            }),
+        )
         .route(
             "/auth/oidc/{provider_id}/callback",
-            get(auth_sso::oidc_callback),
+            get(auth_sso::oidc_callback).layer(GovernorLayer {
+                config: sso_rl.clone(),
+            }),
         )
-        .route("/auth/saml/{provider_id}", get(auth_sso::saml_initiate))
+        .route(
+            "/auth/saml/{provider_id}",
+            get(auth_sso::saml_initiate).layer(GovernorLayer {
+                config: sso_rl.clone(),
+            }),
+        )
         .route(
             "/auth/saml/{provider_id}/callback",
-            post(auth_sso::saml_callback),
+            post(auth_sso::saml_callback).layer(GovernorLayer {
+                config: sso_rl.clone(),
+            }),
         )
         .route(
             "/auth/saml/{provider_id}/metadata",
@@ -115,6 +174,8 @@ pub fn build(state: AppState) -> Router {
             get(identity::list_scim_tokens).post(identity::create_scim_token),
         )
         .route("/scim/tokens/:id", delete(identity::revoke_scim_token))
+        // Exchange rates
+        .route("/exchange-rates", get(exchange_rates::get_rate))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     // SCIM 2.0 endpoints (separate bearer-token auth, not JWT)
@@ -138,7 +199,31 @@ pub fn build(state: AppState) -> Router {
         .nest("/api/v1", public.merge(protected))
         .merge(scim_routes)
         .route("/health", get(health_check))
+        .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
+        .layer(PropagateRequestIdLayer::x_request_id())
+        .layer(TraceLayer::new_for_http())
+        .layer(cors)
         .with_state(state)
+}
+
+fn build_cors(allowed_origins: &[String]) -> CorsLayer {
+    if allowed_origins == ["*"] {
+        return CorsLayer::permissive();
+    }
+    let origins: Vec<HeaderValue> = allowed_origins
+        .iter()
+        .filter_map(|o| o.parse().ok())
+        .collect();
+    CorsLayer::new()
+        .allow_origin(origins)
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers(tower_http::cors::Any)
 }
 
 async fn health_check() -> &'static str {
