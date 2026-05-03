@@ -1,7 +1,9 @@
 pub mod account;
+pub mod api_key;
 pub mod attachment;
 pub mod bank;
 pub mod budget;
+pub mod closed_period;
 pub mod consolidated;
 pub mod contact;
 pub mod custom_field;
@@ -21,6 +23,7 @@ pub mod organization;
 pub mod payment;
 pub mod payment_link;
 pub mod payroll;
+pub mod price_list;
 pub mod product;
 pub mod project;
 pub mod purchase_order;
@@ -34,6 +37,7 @@ pub mod transaction;
 pub mod webhook;
 
 pub use account::{Account, AccountType, CreateAccount, UpdateAccount};
+pub use api_key::{ApiKey, CreateApiKey, CreatedApiKey};
 pub use attachment::{Attachment, CreateAttachment};
 pub use bank::{
     BankAccount, BankTransaction, CreateBankAccount, ImportBankTransaction, MatchTransaction,
@@ -43,6 +47,7 @@ pub use budget::{
     Budget, BudgetLine, BudgetVsActualLine, BudgetVsActualReport, CreateBudget, UpdateBudget,
     UpsertBudgetLine,
 };
+pub use closed_period::{ClosedPeriod, CreateClosedPeriod};
 pub use consolidated::{ConsolidatedProfitLoss, OrgProfitLoss};
 pub use contact::{Contact, ContactType, CreateContact, UpdateContact};
 pub use custom_field::{
@@ -77,6 +82,10 @@ pub use payment::{CreatePayment, Payment, VALID_METHODS};
 pub use payment_link::{CreatePaymentLink, PaymentLink};
 pub use payroll::{
     CreatePayrollEntry, CreatePayrollRun, PayrollEntry, PayrollRun, PayrollRunSummary,
+};
+pub use price_list::{
+    CreatePriceList, PriceList, PriceListItem, SpendAnalysisReport, SpendAnalysisRow,
+    UpsertPriceListItem,
 };
 pub use product::{CreateProduct, Product, UpdateProduct};
 pub use project::{CreateProject, Project, ProjectSummary, UpdateProject};

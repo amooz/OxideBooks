@@ -1,0 +1,4 @@
+ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS totp_secret      TEXT,
+    ADD COLUMN IF NOT EXISTS totp_enabled     BOOL NOT NULL DEFAULT false,
+    ADD COLUMN IF NOT EXISTS totp_verified_at TIMESTAMPTZ;
