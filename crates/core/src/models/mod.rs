@@ -51,8 +51,10 @@ pub mod recurring;
 pub mod reports;
 pub mod retainer;
 pub mod role;
+pub mod sales_order;
 pub mod session;
 pub mod tag;
+pub mod tax_group;
 pub mod tax_period;
 pub mod tax_rate;
 pub mod time_entry;
@@ -161,8 +163,12 @@ pub use reports::{
 };
 pub use retainer::{ApplyRetainer, CreateRetainer, DepositRetainer, Retainer, RetainerTransaction};
 pub use role::{AssignPermission, CreateRole, Permission, Role};
+pub use sales_order::{
+    ConvertSoToInvoice, CreateSalesOrder, CreateSoLine, SalesOrder, SoLine, UpdateSalesOrder,
+};
 pub use session::Session;
 pub use tag::{CreateTag, Tag, UpdateTag};
+pub use tax_group::{CreateTaxGroup, TaxGroup, TaxGroupRate, TaxGroupRateInput, UpdateTaxGroup};
 pub use tax_period::{CreateTaxPeriod, FileTaxPeriod, TaxPeriod};
 pub use tax_rate::{CreateTaxRate, TaxRate, UpdateTaxRate};
 pub use time_entry::{
