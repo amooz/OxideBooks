@@ -66,6 +66,7 @@ async fn run_schedule_inner(
             UpdateInvoice {
                 status: Some(InvoiceStatus::Sent),
                 due_date: None,
+                expiry_date: None,
                 notes: None,
             },
         )

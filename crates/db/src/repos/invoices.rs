@@ -21,6 +21,7 @@ struct InvoiceRow {
     due_date: Date,
     currency: String,
     notes: Option<String>,
+    expiry_date: Option<Date>,
     journal_entry_id: Option<Uuid>,
     created_at: OffsetDateTime,
     updated_at: OffsetDateTime,
@@ -62,7 +63,7 @@ impl InvoiceRepo {
             let cursor_id = parse_uuid(&c.id)?;
             sqlx::query_as(
                 "SELECT id, organization_id, invoice_number, contact_id, invoice_type, status, \
-                 date, due_date, currency, notes, journal_entry_id, created_at, updated_at \
+                 date, due_date, currency, notes, expiry_date, journal_entry_id, created_at, updated_at \
                  FROM invoices \
                  WHERE organization_id = $1 \
                    AND (created_at, id) > ($2, $3) \
@@ -88,7 +89,7 @@ impl InvoiceRepo {
         } else {
             sqlx::query_as(
                 "SELECT id, organization_id, invoice_number, contact_id, invoice_type, status, \
-                 date, due_date, currency, notes, journal_entry_id, created_at, updated_at \
+                 date, due_date, currency, notes, expiry_date, journal_entry_id, created_at, updated_at \
                  FROM invoices \
                  WHERE organization_id = $1 \
                    AND ($2::text IS NULL OR status = $2) \
@@ -267,6 +268,63 @@ impl InvoiceRepo {
             .await
             .map_err(map_sqlx_err)?;
         }
+
+        if let Some(expiry_date) = input.expiry_date {
+            sqlx::query(
+                "UPDATE invoices SET expiry_date = $1, updated_at = NOW() \
+                 WHERE id = $2 AND organization_id = $3",
+            )
+            .bind(expiry_date)
+            .bind(id_uuid)
+            .bind(org_uuid)
+            .execute(pool)
+            .await
+            .map_err(map_sqlx_err)?;
+        }
+
+        Self::get_by_id(pool, org_id, id).await
+    }
+
+    /// Transition a quote to accepted/declined/expired status.
+    pub async fn update_quote_status(
+        pool: &PgPool,
+        org_id: &str,
+        id: &str,
+        new_status: &str,
+    ) -> Result<Invoice, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let id_uuid = parse_uuid(id)?;
+
+        let quote = Self::get_by_id(pool, org_id, id).await?;
+        if quote.invoice_type != InvoiceType::Quote {
+            return Err(DbError::Conflict("only quotes support this action".into()));
+        }
+        let valid_transitions: &[&str] = match new_status {
+            "accepted" | "declined" => &["draft", "sent"],
+            "expired" => &["sent"],
+            _ => {
+                return Err(DbError::Conflict(format!(
+                    "invalid quote status '{new_status}'"
+                )))
+            }
+        };
+        if !valid_transitions.contains(&quote.status.to_string().as_str()) {
+            return Err(DbError::Conflict(format!(
+                "cannot transition quote from '{}' to '{new_status}'",
+                quote.status
+            )));
+        }
+
+        sqlx::query(
+            "UPDATE invoices SET status = $1, updated_at = NOW() \
+             WHERE id = $2 AND organization_id = $3",
+        )
+        .bind(new_status)
+        .bind(id_uuid)
+        .bind(org_uuid)
+        .execute(pool)
+        .await
+        .map_err(map_sqlx_err)?;
 
         Self::get_by_id(pool, org_id, id).await
     }
@@ -484,6 +542,7 @@ fn invoice_from_row(r: InvoiceRow, lines: Vec<InvoiceLine>) -> Invoice {
         due_date: r.due_date,
         currency: r.currency,
         notes: r.notes,
+        expiry_date: r.expiry_date,
         lines,
         journal_entry_id: r.journal_entry_id.map(|u| u.to_string()),
         created_at: r.created_at,

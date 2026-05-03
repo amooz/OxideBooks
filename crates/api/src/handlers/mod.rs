@@ -33,6 +33,7 @@ pub mod inventory;
 pub mod invoice_templates;
 pub mod invoices;
 pub mod late_fees;
+pub mod leave;
 pub mod mileage;
 pub mod notes;
 pub mod notifications;

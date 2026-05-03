@@ -165,3 +165,42 @@ pub async fn apply_credit(
             .await?;
     Ok(Json(serde_json::json!({ "data": invoice })))
 }
+
+/// POST /api/v1/quotes/:id/accept
+pub async fn accept_quote(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("invoices:write") {
+        return Err(ApiError::Forbidden);
+    }
+    let invoice = InvoiceRepo::update_quote_status(&state.db, &claims.org, &id, "accepted").await?;
+    Ok(Json(serde_json::json!({ "data": invoice })))
+}
+
+/// POST /api/v1/quotes/:id/decline
+pub async fn decline_quote(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("invoices:write") {
+        return Err(ApiError::Forbidden);
+    }
+    let invoice = InvoiceRepo::update_quote_status(&state.db, &claims.org, &id, "declined").await?;
+    Ok(Json(serde_json::json!({ "data": invoice })))
+}
+
+/// POST /api/v1/quotes/:id/expire
+pub async fn expire_quote(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("invoices:write") {
+        return Err(ApiError::Forbidden);
+    }
+    let invoice = InvoiceRepo::update_quote_status(&state.db, &claims.org, &id, "expired").await?;
+    Ok(Json(serde_json::json!({ "data": invoice })))
+}

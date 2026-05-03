@@ -47,6 +47,7 @@ pub async fn bulk_void_invoices(
             UpdateInvoice {
                 status: Some(InvoiceStatus::Voided),
                 due_date: None,
+                expiry_date: None,
                 notes: None,
             },
         )
@@ -80,6 +81,7 @@ pub async fn bulk_send_invoices(
             UpdateInvoice {
                 status: Some(InvoiceStatus::Sent),
                 due_date: None,
+                expiry_date: None,
                 notes: None,
             },
         )
