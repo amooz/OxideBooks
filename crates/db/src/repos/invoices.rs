@@ -136,7 +136,7 @@ impl InvoiceRepo {
 
         let row: InvoiceRow = sqlx::query_as(
             "SELECT id, organization_id, invoice_number, contact_id, invoice_type, status, \
-             date, due_date, currency, notes, journal_entry_id, created_at, updated_at \
+             date, due_date, currency, notes, expiry_date, journal_entry_id, created_at, updated_at \
              FROM invoices WHERE organization_id = $1 AND id = $2",
         )
         .bind(org_uuid)
