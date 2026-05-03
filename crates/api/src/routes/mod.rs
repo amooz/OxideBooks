@@ -15,13 +15,14 @@ use tower_http::{
 
 use crate::{
     handlers::{
-        accounts, api_keys, attachments, audit, auth, auth_sso, bank, budgets, bulk, client_portal,
-        closed_periods, consolidated, contacts, custom_fields, dunning, email, exchange_rates,
-        expense_policies, expenses, export, fixed_assets, fx, health, identity, import, inventory,
-        invoices, late_fees, mileage, notes, notifications, organizations, payment_links, payments,
-        payroll, price_lists, products, projects, purchase_orders, recurring, reports, retainers,
-        roles, scim, sessions, stripe_webhook, tags, tax_rates, time_entries, totp, transactions,
-        users, webhooks,
+        accounts, api_keys, attachments, audit, auth, auth_sso, bank, bank_rules, batch_payments,
+        budgets, bulk, client_portal, closed_periods, consolidated, contacts, custom_fields,
+        departments, dunning, email, exchange_rates, expense_policies, expenses, export,
+        fixed_assets, fx, health, identity, import, inventory, invoice_templates, invoices,
+        late_fees, mileage, notes, notifications, organizations, payment_links, payments, payroll,
+        price_lists, products, projects, purchase_orders, recurring, reports, retainers, roles,
+        scim, sessions, stripe_webhook, tags, tax_rates, time_entries, totp, transactions, users,
+        webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -369,6 +370,16 @@ pub fn build(state: AppState) -> Router {
             "/bank-accounts",
             get(bank::list_bank_accounts).post(bank::create_bank_account),
         )
+        // Bank rules
+        .route(
+            "/bank-rules",
+            get(bank_rules::list_bank_rules).post(bank_rules::create_bank_rule),
+        )
+        .route("/bank-rules/:id", delete(bank_rules::delete_bank_rule))
+        .route(
+            "/bank-accounts/:id/apply-rules",
+            post(bank_rules::apply_bank_rules),
+        )
         .route(
             "/bank-accounts/:id",
             get(bank::get_bank_account).patch(bank::update_bank_account),
@@ -481,6 +492,32 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/payment-links/:id",
             get(payment_links::get_payment_link).delete(payment_links::cancel_payment_link),
+        )
+        // Batch payments
+        .route(
+            "/batch-payments",
+            get(batch_payments::list_batch_payments).post(batch_payments::create_batch_payment),
+        )
+        .route(
+            "/batch-payments/:id",
+            get(batch_payments::get_batch_payment),
+        )
+        // Departments / cost centres
+        .route(
+            "/departments",
+            get(departments::list_departments).post(departments::create_department),
+        )
+        .route(
+            "/departments/:id",
+            axum::routing::patch(departments::update_department)
+                .delete(departments::delete_department),
+        )
+        .route("/departments/:id/pl", get(departments::department_pl))
+        // Invoice branding template
+        .route(
+            "/invoice-template",
+            get(invoice_templates::get_invoice_template)
+                .put(invoice_templates::upsert_invoice_template),
         )
         // Payroll
         .route(
