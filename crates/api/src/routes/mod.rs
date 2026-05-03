@@ -17,14 +17,15 @@ use crate::{
     handlers::{
         accounts, api_keys, approval_rules, attachments, audit, auth, auth_sso, bank, bank_rules,
         batch_payments, bills, budgets, bulk, client_portal, closed_periods, consolidated,
-        contact_groups, contacts, credit_notes, custom_fields, departments, doc_sequences, dunning,
-        email, employees, exchange_rates, expense_categories, expense_policies, expense_reports,
-        expenses, export, fixed_assets, fx, health, identity, import, inventory, invoice_templates,
-        invoices, late_fees, leave, mileage, notes, notifications, opening_balances, organizations,
-        payment_links, payment_terms, payments, payroll, payslips, prepayments, price_lists,
-        product_categories, products, projects, purchase_orders, purchase_requisitions, recurring,
-        reports, retainers, roles, sales_orders, scim, sessions, stripe_webhook, tags, tax_groups,
-        tax_periods, tax_rates, time_entries, totp, transactions, users, vendor_credits, webhooks,
+        contact_groups, contacts, credit_notes, custom_fields, deferred_revenue, departments,
+        doc_sequences, dunning, email, employees, exchange_rates, expense_categories,
+        expense_policies, expense_reports, expenses, export, fixed_assets, fx, health, identity,
+        import, inventory, invoice_templates, invoices, late_fees, leave, mileage, notes,
+        notifications, opening_balances, organizations, payment_links, payment_plans,
+        payment_terms, payments, payroll, payslips, prepayments, price_lists, product_categories,
+        products, projects, purchase_orders, purchase_requisitions, recurring, reports, retainers,
+        roles, sales_orders, scim, sessions, stripe_webhook, tags, tax_groups, tax_periods,
+        tax_rates, time_entries, totp, transactions, users, vendor_credits, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -966,6 +967,34 @@ pub fn build(state: AppState) -> Router {
             get(tax_groups::get_tax_group)
                 .patch(tax_groups::update_tax_group)
                 .delete(tax_groups::delete_tax_group),
+        )
+        // Deferred revenue schedules
+        .route(
+            "/deferred-revenue",
+            get(deferred_revenue::list_schedules).post(deferred_revenue::create_schedule),
+        )
+        .route("/deferred-revenue/:id", get(deferred_revenue::get_schedule))
+        .route(
+            "/deferred-revenue/:id/entries/:entry_id/recognize",
+            post(deferred_revenue::recognize_entry),
+        )
+        .route(
+            "/deferred-revenue/:id/cancel",
+            post(deferred_revenue::cancel_schedule),
+        )
+        // Payment plans
+        .route(
+            "/payment-plans",
+            get(payment_plans::list_payment_plans).post(payment_plans::create_payment_plan),
+        )
+        .route("/payment-plans/:id", get(payment_plans::get_payment_plan))
+        .route(
+            "/payment-plans/:id/installments/:inst_id/pay",
+            post(payment_plans::pay_installment),
+        )
+        .route(
+            "/payment-plans/:id/cancel",
+            post(payment_plans::cancel_payment_plan),
         )
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
