@@ -20,13 +20,14 @@ use crate::{
         closed_periods, consolidated, contact_groups, contacts, credit_notes, custom_fields,
         deferred_charges, deferred_revenue, departments, doc_sequences, dunning, email, employees,
         exchange_rates, expense_categories, expense_policies, expense_reports, expenses, export,
-        fixed_assets, fx, fx_revaluations, health, identity, import, inventory, invoice_templates,
-        invoices, late_fees, leave, mileage, notes, notifications, opening_balances, organizations,
-        payment_links, payment_plans, payment_terms, payments, payroll, payslips, prepayments,
-        price_lists, product_categories, products, projects, purchase_orders,
-        purchase_requisitions, recurring, reports, retainers, roles, sales_orders, scim, sessions,
-        stripe_webhook, subscriptions, tags, tax_groups, tax_periods, tax_rates, time_entries,
-        totp, tracking_categories, transactions, users, vendor_credits, warehouses, webhooks,
+        fixed_assets, fx, fx_revaluations, grn, health, identity, import, inventory,
+        inventory_lots, invoice_templates, invoices, late_fees, leave, mileage, notes,
+        notifications, opening_balances, organizations, payment_links, payment_plans,
+        payment_terms, payments, payroll, payslips, prepayments, price_lists, product_categories,
+        products, projects, purchase_orders, purchase_requisitions, recurring, reports, retainers,
+        roles, sales_orders, scim, sessions, stripe_webhook, subscriptions, tags, tax_groups,
+        tax_periods, tax_rates, time_entries, totp, tracking_categories, transactions, users,
+        vendor_credits, warehouses, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -429,6 +430,10 @@ pub fn build(state: AppState) -> Router {
             "/purchase-orders/:id/approve",
             post(purchase_orders::approve_purchase_order),
         )
+        .route(
+            "/purchase-orders/:id/receipts",
+            get(grn::list_receipts).post(grn::create_receipt),
+        )
         // Purchase requisitions
         .route(
             "/purchase-requisitions",
@@ -620,6 +625,22 @@ pub fn build(state: AppState) -> Router {
             "/inventory/:product_id/movements",
             get(inventory::inventory_movements),
         )
+        .route(
+            "/inventory/:item_id/lots",
+            get(inventory_lots::list_lots).post(inventory_lots::create_lot),
+        )
+        // Inventory lot routes keyed on lot id (no item context needed)
+        .route(
+            "/inventory/lots/expiring",
+            get(inventory_lots::list_expiring),
+        )
+        .route(
+            "/inventory/lots/:id",
+            get(inventory_lots::get_lot).patch(inventory_lots::update_lot),
+        )
+        // Goods receipt notes
+        .route("/goods-receipts/:id", get(grn::get_receipt))
+        .route("/goods-receipts/:id/post", post(grn::post_receipt))
         // Warehouses
         .route(
             "/warehouses",
