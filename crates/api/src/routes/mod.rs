@@ -15,9 +15,9 @@ use tower_http::{
 
 use crate::{
     handlers::{
-        accounts, audit, auth, auth_sso, contacts, exchange_rates, expenses, health, identity,
-        invoices, organizations, payments, recurring, reports, roles, scim, tax_rates,
-        transactions, users,
+        accounts, audit, auth, auth_sso, budgets, contacts, exchange_rates, expenses, health,
+        identity, invoices, organizations, payments, products, recurring, reports, roles, scim,
+        tax_rates, transactions, users,
     },
     middleware::require_auth,
     state::AppState,
@@ -156,6 +156,8 @@ pub fn build(state: AppState) -> Router {
             "/invoices/:id/payments",
             post(payments::create_payment).get(payments::list_payments),
         )
+        .route("/invoices/:id/convert", post(invoices::convert_quote))
+        .route("/invoices/:id/apply-credit", post(invoices::apply_credit))
         // Organization settings
         .route(
             "/organizations/me",
@@ -175,6 +177,8 @@ pub fn build(state: AppState) -> Router {
         .route("/reports/balance-sheet", get(reports::balance_sheet))
         .route("/reports/aging", get(reports::aging))
         .route("/reports/tax-summary", get(reports::tax_summary))
+        .route("/reports/cash-flow", get(reports::cash_flow))
+        .route("/reports/budget-vs-actual", get(budgets::budget_vs_actual))
         // Dashboard
         .route("/dashboard", get(reports::dashboard))
         // Audit log
@@ -203,6 +207,32 @@ pub fn build(state: AppState) -> Router {
         .route("/expenses/:id/approve", post(expenses::approve_expense))
         .route("/expenses/:id/reject", post(expenses::reject_expense))
         .route("/expenses/:id/reimburse", post(expenses::reimburse_expense))
+        // Products / services catalog
+        .route(
+            "/products",
+            get(products::list_products).post(products::create_product),
+        )
+        .route(
+            "/products/:id",
+            get(products::get_product)
+                .patch(products::update_product)
+                .delete(products::delete_product),
+        )
+        // Budgets
+        .route(
+            "/budgets",
+            get(budgets::list_budgets).post(budgets::create_budget),
+        )
+        .route(
+            "/budgets/:id",
+            get(budgets::get_budget)
+                .patch(budgets::update_budget)
+                .delete(budgets::delete_budget),
+        )
+        .route(
+            "/budgets/:id/lines",
+            axum::routing::put(budgets::upsert_budget_lines),
+        )
         // Recurring schedules
         .route(
             "/recurring-schedules",

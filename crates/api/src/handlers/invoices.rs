@@ -122,3 +122,46 @@ pub async fn update_invoice(
     .await;
     Ok(Json(serde_json::json!({ "data": invoice })))
 }
+
+/// POST /api/v1/invoices/:id/convert
+/// Convert an accepted quote into a new invoice.
+pub async fn convert_quote(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<String>,
+) -> ApiResult<(StatusCode, Json<serde_json::Value>)> {
+    if !claims.has("invoices:write") {
+        return Err(ApiError::Forbidden);
+    }
+    let invoice = InvoiceRepo::convert_quote(&state.db, &claims.org, &id).await?;
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({ "data": invoice })),
+    ))
+}
+
+#[derive(serde::Deserialize)]
+pub struct ApplyCreditBody {
+    pub invoice_id: String,
+    pub amount: i64,
+}
+
+/// POST /api/v1/invoices/:id/apply-credit
+/// Apply a credit note against a target invoice.
+pub async fn apply_credit(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<String>,
+    Json(body): Json<ApplyCreditBody>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("invoices:write") {
+        return Err(ApiError::Forbidden);
+    }
+    if body.amount <= 0 {
+        return Err(ApiError::BadRequest("amount must be positive".into()));
+    }
+    let invoice =
+        InvoiceRepo::apply_credit(&state.db, &claims.org, &id, &body.invoice_id, body.amount)
+            .await?;
+    Ok(Json(serde_json::json!({ "data": invoice })))
+}

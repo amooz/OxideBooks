@@ -118,6 +118,26 @@ pub struct DashboardKpis {
     pub overdue_invoices: i64,
 }
 
+// ── Cash Flow ─────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CashFlowSection {
+    pub items: Vec<ReportLine>,
+    pub total: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CashFlowReport {
+    pub from: Date,
+    pub to: Date,
+    pub operating: CashFlowSection,
+    pub investing: CashFlowSection,
+    pub financing: CashFlowSection,
+    pub net_change: MinorUnits,
+    pub opening_cash: MinorUnits,
+    pub closing_cash: MinorUnits,
+}
+
 // ── Tax Summary ───────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

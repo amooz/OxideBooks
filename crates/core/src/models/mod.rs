@@ -1,10 +1,12 @@
 pub mod account;
+pub mod budget;
 pub mod contact;
 pub mod expense;
 pub mod identity;
 pub mod invoice;
 pub mod organization;
 pub mod payment;
+pub mod product;
 pub mod recurring;
 pub mod reports;
 pub mod role;
@@ -12,6 +14,10 @@ pub mod tax_rate;
 pub mod transaction;
 
 pub use account::{Account, AccountType, CreateAccount, UpdateAccount};
+pub use budget::{
+    Budget, BudgetLine, BudgetVsActualLine, BudgetVsActualReport, CreateBudget, UpdateBudget,
+    UpsertBudgetLine,
+};
 pub use contact::{Contact, ContactType, CreateContact, UpdateContact};
 pub use expense::{CreateExpense, Expense, ExpenseStatus, UpdateExpense};
 pub use identity::{
@@ -24,12 +30,14 @@ pub use invoice::{
 };
 pub use organization::{CreateOrganization, Organization, UpdateOrganization};
 pub use payment::{CreatePayment, Payment, VALID_METHODS};
+pub use product::{CreateProduct, Product, UpdateProduct};
 pub use recurring::{
     CreateRecurringSchedule, Frequency, RecurringSchedule, UpdateRecurringSchedule,
 };
 pub use reports::{
-    AccountBalance, AgingReport, AgingRow, BalanceSheetReport, DashboardKpis, ProfitLossReport,
-    ReportLine, ReportSection, TaxSummaryLine, TaxSummaryReport, TrialBalance,
+    AccountBalance, AgingReport, AgingRow, BalanceSheetReport, CashFlowReport, CashFlowSection,
+    DashboardKpis, ProfitLossReport, ReportLine, ReportSection, TaxSummaryLine, TaxSummaryReport,
+    TrialBalance,
 };
 pub use role::{AssignPermission, CreateRole, Permission, Role};
 pub use tax_rate::{CreateTaxRate, TaxRate, UpdateTaxRate};
