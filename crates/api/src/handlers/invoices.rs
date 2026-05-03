@@ -3,8 +3,9 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use oxidebooks_core::models::CreateInvoice;
+use oxidebooks_core::models::{CreateInvoice, UpdateInvoice};
 use oxidebooks_db::repos::InvoiceRepo;
+use tracing::info;
 
 use crate::{
     error::{ApiError, ApiResult},
@@ -51,4 +52,24 @@ pub async fn create_invoice(
         StatusCode::CREATED,
         Json(serde_json::json!({ "data": invoice })),
     ))
+}
+
+/// PATCH /api/v1/invoices/:id
+pub async fn update_invoice(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<String>,
+    Json(body): Json<UpdateInvoice>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("invoices:write") {
+        return Err(ApiError::Forbidden);
+    }
+    let invoice = InvoiceRepo::update(&state.db, &claims.org, &id, body).await?;
+    info!(
+        invoice_id = %id,
+        org_id = %claims.org,
+        status = %invoice.status,
+        "📋 invoice updated"
+    );
+    Ok(Json(serde_json::json!({ "data": invoice })))
 }

@@ -2,7 +2,11 @@ use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
 };
-use axum::{extract::State, Json};
+use axum::{
+    extract::{Extension, State},
+    http::StatusCode,
+    Json,
+};
 use jsonwebtoken::{encode, EncodingKey, Header};
 use oxidebooks_core::models::CreateOrganization;
 use oxidebooks_db::repos::{
@@ -12,6 +16,7 @@ use oxidebooks_db::repos::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use tracing::info;
 
 use crate::{
     error::{ApiError, ApiResult},
@@ -135,6 +140,45 @@ fn verify_password(password: &str, hash: &str) -> ApiResult<()> {
     Argon2::default()
         .verify_password(password.as_bytes(), &parsed)
         .map_err(|_| ApiError::Unauthorized)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ChangePasswordRequest {
+    pub current_password: String,
+    pub new_password: String,
+}
+
+/// POST /api/v1/auth/password
+/// Allows an authenticated user to change their own password.
+pub async fn change_password(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Json(body): Json<ChangePasswordRequest>,
+) -> ApiResult<StatusCode> {
+    if body.new_password.len() < 12 {
+        return Err(ApiError::BadRequest(
+            "new password must be at least 12 characters".into(),
+        ));
+    }
+
+    let record = UserRepo::get_by_id_with_hash(&state.db, &claims.sub)
+        .await
+        .map_err(|_| ApiError::Unauthorized)?;
+
+    if record.password_hash.is_empty() {
+        return Err(ApiError::BadRequest(
+            "account uses SSO authentication".into(),
+        ));
+    }
+
+    verify_password(&body.current_password, &record.password_hash)?;
+
+    let new_hash = hash_password(&body.new_password)?;
+    UserRepo::update_password(&state.db, &claims.sub, &new_hash).await?;
+
+    info!(user_id = %claims.sub, "🔐 password changed");
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn mint_token(

@@ -21,3 +21,10 @@ pub struct CreateOrganization {
     pub currency: String,
     pub fiscal_year_start: Option<u8>,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateOrganization {
+    pub name: Option<String>,
+    pub currency: Option<String>,
+    pub fiscal_year_start: Option<u8>,
+}

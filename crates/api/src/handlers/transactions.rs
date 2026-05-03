@@ -5,6 +5,8 @@ use axum::{
 };
 use oxidebooks_core::models::CreateJournalEntry;
 use oxidebooks_db::repos::TransactionRepo;
+use serde::Deserialize;
+use tracing::info;
 
 use crate::{
     error::{ApiError, ApiResult},
@@ -51,4 +53,33 @@ pub async fn create_transaction(
         StatusCode::CREATED,
         Json(serde_json::json!({ "data": entry })),
     ))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct VoidRequest {
+    pub status: String,
+}
+
+/// PATCH /api/v1/transactions/:id
+pub async fn void_transaction(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<String>,
+    Json(body): Json<VoidRequest>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("transactions:write") {
+        return Err(ApiError::Forbidden);
+    }
+    if body.status != "voided" {
+        return Err(ApiError::BadRequest(
+            "only status 'voided' is accepted".into(),
+        ));
+    }
+    let entry = TransactionRepo::void(&state.db, &claims.org, &id).await?;
+    info!(
+        entry_id = %id,
+        org_id = %claims.org,
+        "💸 journal entry voided"
+    );
+    Ok(Json(serde_json::json!({ "data": entry })))
 }

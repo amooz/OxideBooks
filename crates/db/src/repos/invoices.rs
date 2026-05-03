@@ -1,4 +1,6 @@
-use oxidebooks_core::models::{CreateInvoice, Invoice, InvoiceLine, InvoiceStatus, InvoiceType};
+use oxidebooks_core::models::{
+    CreateInvoice, Invoice, InvoiceLine, InvoiceStatus, InvoiceType, UpdateInvoice,
+};
 use sqlx::PgPool;
 use std::str::FromStr;
 use time::{Date, OffsetDateTime};
@@ -89,11 +91,12 @@ impl InvoiceRepo {
         let org_uuid = parse_uuid(org_id)?;
         let contact_uuid = parse_uuid(&input.contact_id)?;
         let id = Uuid::new_v4();
-        let invoice_number = generate_invoice_number(pool, org_uuid, &input.invoice_type).await?;
         let invoice_type = input.invoice_type.to_string();
         let currency = input.currency.unwrap_or_else(|| "USD".to_string());
 
         let mut tx = pool.begin().await.map_err(map_sqlx_err)?;
+        let invoice_number =
+            generate_invoice_number(&mut tx, org_uuid, &input.invoice_type).await?;
 
         sqlx::query(
             "INSERT INTO invoices \
@@ -141,6 +144,65 @@ impl InvoiceRepo {
         Self::get_by_id(pool, org_id, &id.to_string()).await
     }
 
+    pub async fn update(
+        pool: &PgPool,
+        org_id: &str,
+        id: &str,
+        input: UpdateInvoice,
+    ) -> Result<Invoice, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let id_uuid = parse_uuid(id)?;
+
+        // Validate the status transition before writing anything.
+        if let Some(ref new_status) = input.status {
+            let current = Self::get_by_id(pool, org_id, id).await?;
+            if !current.status.can_transition_to(new_status) {
+                return Err(DbError::Conflict(format!(
+                    "cannot transition invoice from '{}' to '{}'",
+                    current.status, new_status
+                )));
+            }
+            sqlx::query(
+                "UPDATE invoices SET status = $1, updated_at = NOW() \
+                 WHERE id = $2 AND organization_id = $3",
+            )
+            .bind(new_status.to_string())
+            .bind(id_uuid)
+            .bind(org_uuid)
+            .execute(pool)
+            .await
+            .map_err(map_sqlx_err)?;
+        }
+
+        if let Some(due_date) = input.due_date {
+            sqlx::query(
+                "UPDATE invoices SET due_date = $1, updated_at = NOW() \
+                 WHERE id = $2 AND organization_id = $3",
+            )
+            .bind(due_date)
+            .bind(id_uuid)
+            .bind(org_uuid)
+            .execute(pool)
+            .await
+            .map_err(map_sqlx_err)?;
+        }
+
+        if let Some(ref notes) = input.notes {
+            sqlx::query(
+                "UPDATE invoices SET notes = $1, updated_at = NOW() \
+                 WHERE id = $2 AND organization_id = $3",
+            )
+            .bind(notes)
+            .bind(id_uuid)
+            .bind(org_uuid)
+            .execute(pool)
+            .await
+            .map_err(map_sqlx_err)?;
+        }
+
+        Self::get_by_id(pool, org_id, id).await
+    }
+
     async fn fetch_lines(pool: &PgPool, invoice_id: Uuid) -> Result<Vec<InvoiceLine>, DbError> {
         let rows: Vec<InvoiceLineRow> = sqlx::query_as(
             "SELECT id, invoice_id, description, account_id, quantity, unit_price, tax_rate, sort_order \
@@ -168,7 +230,7 @@ impl InvoiceRepo {
 }
 
 async fn generate_invoice_number(
-    pool: &PgPool,
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     org_id: Uuid,
     invoice_type: &InvoiceType,
 ) -> Result<String, DbError> {
@@ -178,16 +240,22 @@ async fn generate_invoice_number(
     };
     let type_str = invoice_type.to_string();
 
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM invoices WHERE organization_id = $1 AND invoice_type = $2",
+    // Atomically increment (or insert) the counter for this org+type and return
+    // the value just claimed.  ON CONFLICT ensures this is safe under concurrency.
+    let next_val: i64 = sqlx::query_scalar(
+        "INSERT INTO invoice_counters (organization_id, invoice_type, next_val)
+         VALUES ($1, $2, 2)
+         ON CONFLICT (organization_id, invoice_type)
+         DO UPDATE SET next_val = invoice_counters.next_val + 1
+         RETURNING next_val - 1",
     )
     .bind(org_id)
     .bind(&type_str)
-    .fetch_one(pool)
+    .fetch_one(&mut **tx)
     .await
     .map_err(map_sqlx_err)?;
 
-    Ok(format!("{}-{:05}", prefix, count + 1))
+    Ok(format!("{}-{:05}", prefix, next_val))
 }
 
 fn invoice_from_row(r: InvoiceRow, lines: Vec<InvoiceLine>) -> Invoice {

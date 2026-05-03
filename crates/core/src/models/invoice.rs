@@ -127,6 +127,40 @@ impl InvoiceLine {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct UpdateInvoice {
+    pub status: Option<InvoiceStatus>,
+    #[serde(default, with = "crate::models::opt_date_serde")]
+    pub due_date: Option<Date>,
+    pub notes: Option<String>,
+}
+
+impl InvoiceStatus {
+    /// Returns the set of valid next states from the current status.
+    pub fn allowed_transitions(&self) -> &'static [InvoiceStatus] {
+        match self {
+            InvoiceStatus::Draft => &[InvoiceStatus::Sent, InvoiceStatus::Voided],
+            InvoiceStatus::Sent => &[
+                InvoiceStatus::Partial,
+                InvoiceStatus::Paid,
+                InvoiceStatus::Overdue,
+                InvoiceStatus::Voided,
+            ],
+            InvoiceStatus::Partial => &[
+                InvoiceStatus::Paid,
+                InvoiceStatus::Overdue,
+                InvoiceStatus::Voided,
+            ],
+            InvoiceStatus::Overdue => &[InvoiceStatus::Paid, InvoiceStatus::Voided],
+            InvoiceStatus::Paid | InvoiceStatus::Voided => &[],
+        }
+    }
+
+    pub fn can_transition_to(&self, next: &InvoiceStatus) -> bool {
+        self.allowed_transitions().contains(next)
+    }
+}
+
+#[derive(Debug, Deserialize)]
 pub struct CreateInvoice {
     pub contact_id: String,
     pub invoice_type: InvoiceType,

@@ -6,7 +6,8 @@ use axum::{
 
 use crate::{
     handlers::{
-        accounts, auth, auth_sso, contacts, identity, invoices, reports, roles, scim, transactions,
+        accounts, auth, auth_sso, contacts, identity, invoices, organizations, reports, roles,
+        scim, transactions, users,
     },
     middleware::require_auth,
     state::AppState,
@@ -45,12 +46,17 @@ pub fn build(state: AppState) -> Router {
                 .patch(accounts::update_account)
                 .delete(accounts::delete_account),
         )
+        // Auth (authenticated)
+        .route("/auth/password", post(auth::change_password))
         // Journal entries
         .route(
             "/transactions",
             get(transactions::list_transactions).post(transactions::create_transaction),
         )
-        .route("/transactions/:id", get(transactions::get_transaction))
+        .route(
+            "/transactions/:id",
+            get(transactions::get_transaction).patch(transactions::void_transaction),
+        )
         // Contacts
         .route(
             "/contacts",
@@ -65,7 +71,23 @@ pub fn build(state: AppState) -> Router {
             "/invoices",
             get(invoices::list_invoices).post(invoices::create_invoice),
         )
-        .route("/invoices/:id", get(invoices::get_invoice))
+        .route(
+            "/invoices/:id",
+            get(invoices::get_invoice).patch(invoices::update_invoice),
+        )
+        // Organization settings
+        .route(
+            "/organizations/me",
+            get(organizations::get_org).patch(organizations::update_org),
+        )
+        // User management
+        .route("/users", get(users::list_users).post(users::invite_user))
+        .route(
+            "/users/:id",
+            get(users::get_user)
+                .patch(users::update_user)
+                .delete(users::delete_user),
+        )
         // Reports
         .route("/reports/trial-balance", get(reports::trial_balance))
         // RBAC: permissions & roles

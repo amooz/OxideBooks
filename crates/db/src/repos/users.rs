@@ -60,6 +60,11 @@ struct UserRowWithHash {
     updated_at: OffsetDateTime,
 }
 
+pub struct UpdateUser {
+    pub role: Option<String>,
+    pub is_active: Option<bool>,
+}
+
 pub struct UserRepo;
 
 impl UserRepo {
@@ -108,6 +113,141 @@ impl UserRepo {
         .ok_or(DbError::NotFound)?;
 
         Ok(row.into())
+    }
+
+    pub async fn list(pool: &PgPool, org_id: &str) -> Result<Vec<User>, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        let rows: Vec<UserRow> = sqlx::query_as(
+            "SELECT u.id, u.organization_id, u.email, u.name, r.name AS role_name, \
+                    u.is_active, u.created_at, u.updated_at \
+             FROM users u \
+             JOIN roles r ON r.id = u.role_id \
+             WHERE u.organization_id = $1 \
+             ORDER BY u.created_at ASC",
+        )
+        .bind(org_uuid)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        Ok(rows.into_iter().map(User::from).collect())
+    }
+
+    pub async fn get_by_id_with_hash(pool: &PgPool, id: &str) -> Result<UserWithHash, DbError> {
+        let id_uuid = parse_uuid(id)?;
+
+        let row: UserRowWithHash = sqlx::query_as(
+            "SELECT u.id, u.organization_id, u.email, u.password_hash, u.name, \
+                    r.name AS role_name, u.is_active, u.created_at, u.updated_at \
+             FROM users u \
+             JOIN roles r ON r.id = u.role_id \
+             WHERE u.id = $1",
+        )
+        .bind(id_uuid)
+        .fetch_optional(pool)
+        .await
+        .map_err(map_sqlx_err)?
+        .ok_or(DbError::NotFound)?;
+
+        Ok(UserWithHash {
+            password_hash: row.password_hash,
+            user: User {
+                id: row.id.to_string(),
+                organization_id: row.organization_id.to_string(),
+                email: row.email,
+                name: row.name,
+                role: row.role_name,
+                is_active: row.is_active,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+            },
+        })
+    }
+
+    pub async fn update_password(
+        pool: &PgPool,
+        user_id: &str,
+        new_hash: &str,
+    ) -> Result<(), DbError> {
+        let id_uuid = parse_uuid(user_id)?;
+
+        let rows_affected =
+            sqlx::query("UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2")
+                .bind(new_hash)
+                .bind(id_uuid)
+                .execute(pool)
+                .await
+                .map_err(map_sqlx_err)?
+                .rows_affected();
+
+        if rows_affected == 0 {
+            return Err(DbError::NotFound);
+        }
+        Ok(())
+    }
+
+    pub async fn update(
+        pool: &PgPool,
+        org_id: &str,
+        user_id: &str,
+        input: UpdateUser,
+    ) -> Result<User, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let id_uuid = parse_uuid(user_id)?;
+
+        if let Some(ref role_name) = input.role {
+            let role_id_str = super::roles::system_role_id(role_name)
+                .map(String::from)
+                .ok_or_else(|| DbError::Conflict(format!("unknown role: {role_name}")))?;
+            let role_uuid = parse_uuid(&role_id_str)?;
+            sqlx::query(
+                "UPDATE users SET role_id = $1, updated_at = NOW() \
+                 WHERE id = $2 AND organization_id = $3",
+            )
+            .bind(role_uuid)
+            .bind(id_uuid)
+            .bind(org_uuid)
+            .execute(pool)
+            .await
+            .map_err(map_sqlx_err)?;
+        }
+
+        if let Some(is_active) = input.is_active {
+            sqlx::query(
+                "UPDATE users SET is_active = $1, updated_at = NOW() \
+                 WHERE id = $2 AND organization_id = $3",
+            )
+            .bind(is_active)
+            .bind(id_uuid)
+            .bind(org_uuid)
+            .execute(pool)
+            .await
+            .map_err(map_sqlx_err)?;
+        }
+
+        Self::get_by_id(pool, &id_uuid.to_string()).await
+    }
+
+    pub async fn deactivate(pool: &PgPool, org_id: &str, user_id: &str) -> Result<(), DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let id_uuid = parse_uuid(user_id)?;
+
+        let rows_affected = sqlx::query(
+            "UPDATE users SET is_active = FALSE, updated_at = NOW() \
+             WHERE id = $1 AND organization_id = $2",
+        )
+        .bind(id_uuid)
+        .bind(org_uuid)
+        .execute(pool)
+        .await
+        .map_err(map_sqlx_err)?
+        .rows_affected();
+
+        if rows_affected == 0 {
+            return Err(DbError::NotFound);
+        }
+        Ok(())
     }
 
     pub async fn get_by_email(

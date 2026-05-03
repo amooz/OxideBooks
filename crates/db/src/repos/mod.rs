@@ -18,4 +18,4 @@ pub use permissions::PermissionRepo;
 pub use reports::ReportRepo;
 pub use roles::{RoleRepo, ROLE_ACCOUNTANT_ID, ROLE_ADMIN_ID, ROLE_OWNER_ID, ROLE_VIEWER_ID};
 pub use transactions::TransactionRepo;
-pub use users::UserRepo;
+pub use users::{UpdateUser, UserRepo};

@@ -16,23 +16,19 @@ async fn main() -> anyhow::Result<()> {
 
     let settings = Settings::load()?;
 
-    info!(
-        version = env!("CARGO_PKG_VERSION"),
-        db = %settings.database.url,
-        "starting OxideBooks"
-    );
+    info!(version = env!("CARGO_PKG_VERSION"), "🚀 OxideBooks started");
 
     let pool = oxidebooks_db::connect(&settings.database.url).await?;
     oxidebooks_db::run_migrations(&pool).await?;
 
-    info!("database migrations applied");
+    info!("🗄️ migrations applied");
 
     let app_state = AppState::new(pool, settings.clone());
     let app = routes::build(app_state);
 
     let addr: SocketAddr = format!("{}:{}", settings.server.host, settings.server.port).parse()?;
 
-    info!(%addr, "listening");
+    info!(%addr, "🔌 listening");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
