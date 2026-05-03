@@ -4,7 +4,7 @@ use axum::{
     response::Response,
 };
 use oxidebooks_core::pagination::PageParams;
-use oxidebooks_db::repos::{ExpenseRepo, InvoiceRepo, ReportRepo, TransactionRepo};
+use oxidebooks_db::repos::{AccountRepo, ExpenseRepo, InvoiceRepo, ReportRepo, TransactionRepo};
 use serde::Deserialize;
 
 use crate::{
@@ -223,4 +223,29 @@ pub async fn export_trial_balance(
     ])
     .map_err(csv_err)?;
     Ok(csv_response("trial_balance.csv", finish(wtr)?))
+}
+
+/// GET /api/v1/export/accounts
+pub async fn export_accounts(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+) -> ApiResult<Response> {
+    if !claims.has("invoices:read") {
+        return Err(ApiError::Forbidden);
+    }
+    let (accounts, _) = AccountRepo::list(&state.db, &claims.org, &BIG_PAGE).await?;
+    let mut wtr = csv::Writer::from_writer(vec![]);
+    wtr.write_record(["code", "name", "account_type", "description", "is_active"])
+        .map_err(csv_err)?;
+    for acct in &accounts {
+        wtr.write_record([
+            &acct.code,
+            &acct.name,
+            &acct.account_type.to_string(),
+            acct.description.as_deref().unwrap_or(""),
+            &acct.is_active.to_string(),
+        ])
+        .map_err(csv_err)?;
+    }
+    Ok(csv_response("accounts.csv", finish(wtr)?))
 }

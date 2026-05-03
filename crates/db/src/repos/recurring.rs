@@ -19,6 +19,8 @@ struct ScheduleRow {
     end_date: Option<Date>,
     auto_send: bool,
     is_active: bool,
+    max_occurrences: Option<i32>,
+    occurrences_count: i32,
     created_at: OffsetDateTime,
     updated_at: OffsetDateTime,
 }
@@ -34,13 +36,16 @@ fn from_row(r: ScheduleRow) -> RecurringSchedule {
         end_date: r.end_date,
         auto_send: r.auto_send,
         is_active: r.is_active,
+        max_occurrences: r.max_occurrences,
+        occurrences_count: r.occurrences_count,
         created_at: r.created_at,
         updated_at: r.updated_at,
     }
 }
 
 const COLS: &str = "id, organization_id, template, frequency, interval_count, next_due_date, \
-                    end_date, auto_send, is_active, created_at, updated_at";
+                    end_date, auto_send, is_active, max_occurrences, occurrences_count, \
+                    created_at, updated_at";
 
 pub struct RecurringRepo;
 
@@ -115,17 +120,19 @@ impl RecurringRepo {
 
         sqlx::query(
             "UPDATE recurring_schedules SET \
-             next_due_date = COALESCE($1, next_due_date), \
-             end_date      = COALESCE($2, end_date), \
-             auto_send     = COALESCE($3, auto_send), \
-             is_active     = COALESCE($4, is_active), \
-             updated_at    = NOW() \
-             WHERE id = $5 AND organization_id = $6",
+             next_due_date   = COALESCE($1, next_due_date), \
+             end_date        = COALESCE($2, end_date), \
+             auto_send       = COALESCE($3, auto_send), \
+             is_active       = COALESCE($4, is_active), \
+             max_occurrences = COALESCE($5, max_occurrences), \
+             updated_at      = NOW() \
+             WHERE id = $6 AND organization_id = $7",
         )
         .bind(input.next_due_date)
         .bind(input.end_date)
         .bind(input.auto_send)
         .bind(input.is_active)
+        .bind(input.max_occurrences)
         .bind(id_uuid)
         .bind(org_uuid)
         .execute(pool)
@@ -180,6 +187,22 @@ impl RecurringRepo {
         .await
         .map_err(map_sqlx_err)?;
         Ok(())
+    }
+
+    /// Increment `occurrences_count` and return the new value.
+    pub async fn increment_occurrences(pool: &PgPool, id: &str) -> Result<i32, DbError> {
+        let id_uuid = parse_uuid(id)?;
+        let new_count: i32 = sqlx::query_scalar(
+            "UPDATE recurring_schedules \
+             SET occurrences_count = occurrences_count + 1, updated_at = NOW() \
+             WHERE id = $1 \
+             RETURNING occurrences_count",
+        )
+        .bind(id_uuid)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+        Ok(new_count)
     }
 }
 

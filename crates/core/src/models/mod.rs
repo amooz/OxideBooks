@@ -114,8 +114,8 @@ pub use recurring::{
 };
 pub use reports::{
     AccountBalance, AgingReport, AgingRow, BalanceSheetReport, CashFlowReport, CashFlowSection,
-    DashboardKpis, ProfitLossReport, ReportLine, ReportSection, TaxSummaryLine, TaxSummaryReport,
-    TrialBalance,
+    DashboardKpis, ProfitLossReport, ReportLine, ReportSection, SearchHit, Summary1099,
+    TaxSummaryLine, TaxSummaryReport, TrialBalance, Vendor1099Row,
 };
 pub use retainer::{ApplyRetainer, CreateRetainer, DepositRetainer, Retainer, RetainerTransaction};
 pub use role::{AssignPermission, CreateRole, Permission, Role};

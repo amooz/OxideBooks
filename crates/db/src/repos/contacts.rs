@@ -16,8 +16,10 @@ struct ContactRow {
     phone: Option<String>,
     address: Option<String>,
     tax_number: Option<String>,
+    tax_id: Option<String>,
     currency: Option<String>,
     is_active: bool,
+    is_1099_vendor: bool,
     created_at: OffsetDateTime,
     updated_at: OffsetDateTime,
 }
@@ -37,8 +39,10 @@ impl From<ContactRow> for Contact {
             phone: r.phone,
             address: r.address,
             tax_number: r.tax_number,
+            tax_id: r.tax_id,
             currency: r.currency,
             is_active: r.is_active,
+            is_1099_vendor: r.is_1099_vendor,
             created_at: r.created_at,
             updated_at: r.updated_at,
         }
@@ -66,7 +70,7 @@ impl ContactRepo {
             let cursor_id = parse_uuid(&c.id)?;
             sqlx::query_as(
                 "SELECT id, organization_id, name, contact_type, email, phone, \
-                 address, tax_number, currency, is_active, created_at, updated_at \
+                 address, tax_number, tax_id, currency, is_active, is_1099_vendor, created_at, updated_at \
                  FROM contacts \
                  WHERE organization_id = $1 AND (created_at, id) > ($2, $3) \
                  ORDER BY created_at ASC, id ASC LIMIT $4",
@@ -81,7 +85,7 @@ impl ContactRepo {
         } else {
             sqlx::query_as(
                 "SELECT id, organization_id, name, contact_type, email, phone, \
-                 address, tax_number, currency, is_active, created_at, updated_at \
+                 address, tax_number, tax_id, currency, is_active, is_1099_vendor, created_at, updated_at \
                  FROM contacts WHERE organization_id = $1 \
                  ORDER BY created_at ASC, id ASC LIMIT $2",
             )
@@ -213,14 +217,16 @@ impl ContactRepo {
 
         sqlx::query(
             "UPDATE contacts SET \
-             name       = COALESCE($3, name), \
-             email      = COALESCE($4, email), \
-             phone      = COALESCE($5, phone), \
-             address    = COALESCE($6, address), \
-             tax_number = COALESCE($7, tax_number), \
-             currency   = COALESCE($8, currency), \
-             is_active  = COALESCE($9, is_active), \
-             updated_at = NOW() \
+             name            = COALESCE($3, name), \
+             email           = COALESCE($4, email), \
+             phone           = COALESCE($5, phone), \
+             address         = COALESCE($6, address), \
+             tax_number      = COALESCE($7, tax_number), \
+             currency        = COALESCE($8, currency), \
+             is_active       = COALESCE($9, is_active), \
+             tax_id          = COALESCE($10, tax_id), \
+             is_1099_vendor  = COALESCE($11, is_1099_vendor), \
+             updated_at      = NOW() \
              WHERE organization_id = $1 AND id = $2",
         )
         .bind(org_uuid)
@@ -232,6 +238,8 @@ impl ContactRepo {
         .bind(&input.tax_number)
         .bind(&input.currency)
         .bind(input.is_active)
+        .bind(&input.tax_id)
+        .bind(input.is_1099_vendor)
         .execute(pool)
         .await
         .map_err(map_sqlx_err)?;

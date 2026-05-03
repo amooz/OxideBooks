@@ -192,8 +192,11 @@ pub fn build(state: AppState) -> Router {
         .route("/reports/tax-summary", get(reports::tax_summary))
         .route("/reports/cash-flow", get(reports::cash_flow))
         .route("/reports/budget-vs-actual", get(budgets::budget_vs_actual))
+        .route("/reports/1099-summary", get(reports::summary_1099))
         // Dashboard
         .route("/dashboard", get(reports::dashboard))
+        // Global search
+        .route("/search", get(reports::global_search))
         // Audit log
         .route("/audit-log", get(audit::list_audit_log))
         // Tax rates
@@ -540,6 +543,7 @@ pub fn build(state: AppState) -> Router {
         .route("/export/transactions", get(export::export_transactions))
         .route("/export/profit-loss", get(export::export_profit_loss))
         .route("/export/trial-balance", get(export::export_trial_balance))
+        .route("/export/accounts", get(export::export_accounts))
         // Consolidated (multi-entity) reports
         .route(
             "/reports/consolidated",

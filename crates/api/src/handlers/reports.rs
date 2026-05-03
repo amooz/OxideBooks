@@ -172,3 +172,58 @@ pub async fn dashboard(
     let kpis = ReportRepo::dashboard(&state.db, &claims.org).await?;
     Ok(Json(serde_json::json!({ "data": kpis })))
 }
+
+#[derive(Deserialize)]
+pub struct Year1099Query {
+    pub year: Option<i32>,
+}
+
+/// GET /api/v1/reports/1099-summary?year=YYYY
+pub async fn summary_1099(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<Year1099Query>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("reports:read") {
+        return Err(ApiError::Forbidden);
+    }
+    let year = q
+        .year
+        .unwrap_or_else(|| time::OffsetDateTime::now_utc().year());
+    let report = ReportRepo::summary_1099(&state.db, &claims.org, year).await?;
+    Ok(Json(serde_json::json!({ "data": report })))
+}
+
+#[derive(Deserialize)]
+pub struct SearchQuery {
+    pub q: String,
+    pub types: Option<String>,
+    pub limit: Option<i64>,
+}
+
+/// GET /api/v1/search?q=&types=contacts,invoices,products,accounts&limit=10
+pub async fn global_search(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<SearchQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("contacts:read") {
+        return Err(ApiError::Forbidden);
+    }
+    if q.q.trim().is_empty() {
+        return Err(ApiError::BadRequest("q must not be empty".into()));
+    }
+    let limit = q.limit.unwrap_or(10).clamp(1, 20);
+    let all_types = ["contacts", "invoices", "products", "accounts"];
+    let type_strs: Vec<String> = match &q.types {
+        None => all_types.iter().map(|s| s.to_string()).collect(),
+        Some(s) => s
+            .split(',')
+            .map(|t| t.trim().to_string())
+            .filter(|t| all_types.contains(&t.as_str()))
+            .collect(),
+    };
+    let type_filter: Vec<&str> = type_strs.iter().map(String::as_str).collect();
+    let hits = ReportRepo::search(&state.db, &claims.org, &q.q, &type_filter, limit).await?;
+    Ok(Json(serde_json::json!({ "data": hits })))
+}
