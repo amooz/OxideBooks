@@ -2,12 +2,15 @@ pub mod account;
 pub mod api_key;
 pub mod attachment;
 pub mod bank;
+pub mod bank_rule;
+pub mod batch_payment;
 pub mod budget;
 pub mod client_portal;
 pub mod closed_period;
 pub mod consolidated;
 pub mod contact;
 pub mod custom_field;
+pub mod department;
 pub mod dunning;
 pub mod email;
 pub mod expense;
@@ -18,6 +21,7 @@ pub mod identity;
 pub mod import;
 pub mod inventory;
 pub mod invoice;
+pub mod invoice_template;
 pub mod late_fee;
 pub mod mileage;
 pub mod note;
@@ -48,6 +52,8 @@ pub use bank::{
     BankAccount, BankTransaction, CreateBankAccount, ImportBankTransaction, MatchTransaction,
     ReconciliationSummary, UpdateBankAccount,
 };
+pub use bank_rule::{BankRule, CreateBankRule};
+pub use batch_payment::{BatchPayment, BatchPaymentLine, CreateBatchPayment};
 pub use budget::{
     Budget, BudgetLine, BudgetVsActualLine, BudgetVsActualReport, CreateBudget, UpdateBudget,
     UpsertBudgetLine,
@@ -60,6 +66,7 @@ pub use custom_field::{
     CreateCustomFieldDefinition, CustomFieldDefinition, CustomFieldValue, SetCustomFieldValue,
     UpdateCustomFieldDefinition,
 };
+pub use department::{CreateDepartment, Department, DepartmentPlReport, UpdateDepartment};
 pub use dunning::{CreateDunningRule, DunningRule, InvoiceReminder, OverdueInvoice};
 pub use email::{EmailLog, EmailSettings, SendEmailRequest, UpsertEmailSettings};
 pub use expense::{CreateExpense, Expense, ExpenseStatus, UpdateExpense};
@@ -81,6 +88,7 @@ pub use invoice::{
     CreateInvoice, CreateInvoiceLine, Invoice, InvoiceFilters, InvoiceLine, InvoiceStatus,
     InvoiceType, UpdateInvoice,
 };
+pub use invoice_template::{InvoiceTemplate, UpsertInvoiceTemplate};
 pub use late_fee::{LateFee, LateFeeRule, UpsertLateFeeRule};
 pub use mileage::{CreateMileageTrip, MileageSummary, MileageTrip};
 pub use note::{CreateNote, Note};
