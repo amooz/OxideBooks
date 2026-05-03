@@ -1,4 +1,5 @@
 use oxidebooks_core::models::{Account, AccountType, CreateAccount, UpdateAccount};
+use oxidebooks_core::pagination::{encode_cursor, PageParams};
 use sqlx::PgPool;
 use std::str::FromStr;
 use time::OffsetDateTime;
@@ -40,19 +41,63 @@ impl AccountRow {
 pub struct AccountRepo;
 
 impl AccountRepo {
-    pub async fn list(pool: &PgPool, org_id: &str) -> Result<Vec<Account>, DbError> {
+    pub async fn list(
+        pool: &PgPool,
+        org_id: &str,
+        page: &PageParams,
+    ) -> Result<(Vec<Account>, Option<String>), DbError> {
         let org_uuid = parse_uuid(org_id)?;
-        let rows: Vec<AccountRow> = sqlx::query_as(
-            "SELECT id, organization_id, code, name, account_type, parent_id, description, \
-             is_active, created_at, updated_at \
-             FROM accounts WHERE organization_id = $1 ORDER BY code",
-        )
-        .bind(org_uuid)
-        .fetch_all(pool)
-        .await
-        .map_err(map_sqlx_err)?;
+        let limit = page.limit_clamped();
+        let cursor = page.decode_cursor();
 
-        rows.into_iter().map(|r| r.into_account()).collect()
+        let rows: Vec<AccountRow> = if let Some(c) = cursor {
+            let cursor_ts = time::OffsetDateTime::parse(
+                &c.created_at,
+                &time::format_description::well_known::Rfc3339,
+            )
+            .map_err(|_| DbError::Conflict("invalid cursor".into()))?;
+            let cursor_id = parse_uuid(&c.id)?;
+            sqlx::query_as(
+                "SELECT id, organization_id, code, name, account_type, parent_id, description, \
+                 is_active, created_at, updated_at \
+                 FROM accounts \
+                 WHERE organization_id = $1 AND (created_at, id) > ($2, $3) \
+                 ORDER BY created_at ASC, id ASC LIMIT $4",
+            )
+            .bind(org_uuid)
+            .bind(cursor_ts)
+            .bind(cursor_id)
+            .bind(limit + 1)
+            .fetch_all(pool)
+            .await
+            .map_err(map_sqlx_err)?
+        } else {
+            sqlx::query_as(
+                "SELECT id, organization_id, code, name, account_type, parent_id, description, \
+                 is_active, created_at, updated_at \
+                 FROM accounts WHERE organization_id = $1 \
+                 ORDER BY created_at ASC, id ASC LIMIT $2",
+            )
+            .bind(org_uuid)
+            .bind(limit + 1)
+            .fetch_all(pool)
+            .await
+            .map_err(map_sqlx_err)?
+        };
+
+        let has_next = rows.len() as i64 > limit;
+        let mut rows = rows;
+        if has_next {
+            rows.pop();
+        }
+        let next_cursor = if has_next {
+            rows.last()
+                .map(|r| encode_cursor(r.created_at, &r.id.to_string()))
+        } else {
+            None
+        };
+        let accounts: Result<Vec<_>, _> = rows.into_iter().map(|r| r.into_account()).collect();
+        Ok((accounts?, next_cursor))
     }
 
     pub async fn get_by_id(pool: &PgPool, org_id: &str, id: &str) -> Result<Account, DbError> {

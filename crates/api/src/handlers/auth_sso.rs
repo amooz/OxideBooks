@@ -36,6 +36,47 @@ use oxidebooks_db::repos::{IdentityProviderRepo, PermissionRepo, UserRepo};
 
 use crate::{error::ApiError, middleware::Claims, state::AppState};
 
+// ── Provider discovery ────────────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct ProviderDiscoveryQuery {
+    pub org_id: Option<String>,
+    pub domain: Option<String>,
+}
+
+/// GET /api/v1/auth/providers?org_id=uuid  OR  ?domain=acme.com
+///
+/// Public (no auth). Returns safe provider metadata only — no secrets.
+/// Returns an empty list if the org/domain does not exist (avoids enumeration).
+pub async fn list_providers(
+    State(state): State<AppState>,
+    Query(q): Query<ProviderDiscoveryQuery>,
+) -> Result<axum::Json<serde_json::Value>, ApiError> {
+    let entries = match (q.org_id.as_deref(), q.domain.as_deref()) {
+        (Some(org_id), _) => IdentityProviderRepo::list_public_by_org(&state.db, org_id)
+            .await
+            .unwrap_or_default(),
+        (None, Some(domain)) => IdentityProviderRepo::list_public_by_domain(&state.db, domain)
+            .await
+            .unwrap_or_default(),
+        (None, None) => vec![],
+    };
+
+    let providers: Vec<serde_json::Value> = entries
+        .into_iter()
+        .map(|(id, protocol, display_name, org_id)| {
+            serde_json::json!({
+                "id": id,
+                "protocol": protocol,
+                "display_name": display_name,
+                "org_id": org_id,
+            })
+        })
+        .collect();
+
+    Ok(axum::Json(serde_json::json!({ "data": providers })))
+}
+
 // ── OIDC initiation ───────────────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]

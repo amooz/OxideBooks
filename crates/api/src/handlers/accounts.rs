@@ -1,9 +1,10 @@
 use axum::{
-    extract::{Extension, Path, State},
+    extract::{Extension, Path, Query, State},
     http::StatusCode,
     Json,
 };
 use oxidebooks_core::models::{CreateAccount, UpdateAccount};
+use oxidebooks_core::pagination::PageParams;
 use oxidebooks_db::repos::AccountRepo;
 
 use crate::{
@@ -16,12 +17,16 @@ use crate::{
 pub async fn list_accounts(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
+    Query(page): Query<PageParams>,
 ) -> ApiResult<Json<serde_json::Value>> {
     if !claims.has("accounts:read") {
         return Err(ApiError::Forbidden);
     }
-    let accounts = AccountRepo::list(&state.db, &claims.org).await?;
-    Ok(Json(serde_json::json!({ "data": accounts })))
+    let (accounts, next_cursor) = AccountRepo::list(&state.db, &claims.org, &page).await?;
+    Ok(Json(serde_json::json!({
+        "data": accounts,
+        "pagination": { "has_next": next_cursor.is_some(), "next_cursor": next_cursor }
+    })))
 }
 
 /// GET /api/v1/accounts/:id

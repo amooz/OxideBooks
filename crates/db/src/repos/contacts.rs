@@ -1,4 +1,5 @@
 use oxidebooks_core::models::{Contact, ContactType, CreateContact, UpdateContact};
+use oxidebooks_core::pagination::{encode_cursor, PageParams};
 use sqlx::PgPool;
 use time::OffsetDateTime;
 use uuid::Uuid;
@@ -47,19 +48,62 @@ impl From<ContactRow> for Contact {
 pub struct ContactRepo;
 
 impl ContactRepo {
-    pub async fn list(pool: &PgPool, org_id: &str) -> Result<Vec<Contact>, DbError> {
+    pub async fn list(
+        pool: &PgPool,
+        org_id: &str,
+        page: &PageParams,
+    ) -> Result<(Vec<Contact>, Option<String>), DbError> {
         let org_uuid = parse_uuid(org_id)?;
-        let rows: Vec<ContactRow> = sqlx::query_as(
-            "SELECT id, organization_id, name, contact_type, email, phone, \
-             address, tax_number, currency, is_active, created_at, updated_at \
-             FROM contacts WHERE organization_id = $1 ORDER BY name",
-        )
-        .bind(org_uuid)
-        .fetch_all(pool)
-        .await
-        .map_err(map_sqlx_err)?;
+        let limit = page.limit_clamped();
+        let cursor = page.decode_cursor();
 
-        Ok(rows.into_iter().map(Contact::from).collect())
+        let rows: Vec<ContactRow> = if let Some(c) = cursor {
+            let cursor_ts = time::OffsetDateTime::parse(
+                &c.created_at,
+                &time::format_description::well_known::Rfc3339,
+            )
+            .map_err(|_| DbError::Conflict("invalid cursor".into()))?;
+            let cursor_id = parse_uuid(&c.id)?;
+            sqlx::query_as(
+                "SELECT id, organization_id, name, contact_type, email, phone, \
+                 address, tax_number, currency, is_active, created_at, updated_at \
+                 FROM contacts \
+                 WHERE organization_id = $1 AND (created_at, id) > ($2, $3) \
+                 ORDER BY created_at ASC, id ASC LIMIT $4",
+            )
+            .bind(org_uuid)
+            .bind(cursor_ts)
+            .bind(cursor_id)
+            .bind(limit + 1)
+            .fetch_all(pool)
+            .await
+            .map_err(map_sqlx_err)?
+        } else {
+            sqlx::query_as(
+                "SELECT id, organization_id, name, contact_type, email, phone, \
+                 address, tax_number, currency, is_active, created_at, updated_at \
+                 FROM contacts WHERE organization_id = $1 \
+                 ORDER BY created_at ASC, id ASC LIMIT $2",
+            )
+            .bind(org_uuid)
+            .bind(limit + 1)
+            .fetch_all(pool)
+            .await
+            .map_err(map_sqlx_err)?
+        };
+
+        let has_next = rows.len() as i64 > limit;
+        let mut rows = rows;
+        if has_next {
+            rows.pop();
+        }
+        let next_cursor = if has_next {
+            rows.last()
+                .map(|r| encode_cursor(r.created_at, &r.id.to_string()))
+        } else {
+            None
+        };
+        Ok((rows.into_iter().map(Contact::from).collect(), next_cursor))
     }
 
     pub async fn get_by_id(pool: &PgPool, org_id: &str, id: &str) -> Result<Contact, DbError> {
@@ -109,6 +153,53 @@ impl ContactRepo {
         .map_err(map_sqlx_err)?;
 
         Self::get_by_id(pool, org_id, &id.to_string()).await
+    }
+
+    /// Delete a contact. Returns `DbError::Conflict` if the contact has live invoices.
+    pub async fn delete(pool: &PgPool, org_id: &str, id: &str) -> Result<(), DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let id_uuid = parse_uuid(id)?;
+
+        // Verify the contact exists first.
+        let exists: Option<(Uuid,)> =
+            sqlx::query_as("SELECT id FROM contacts WHERE organization_id = $1 AND id = $2")
+                .bind(org_uuid)
+                .bind(id_uuid)
+                .fetch_optional(pool)
+                .await
+                .map_err(map_sqlx_err)?;
+
+        if exists.is_none() {
+            return Err(DbError::NotFound);
+        }
+
+        // Block deletion if linked to any non-voided invoice.
+        let linked: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM invoices \
+             WHERE organization_id = $1 AND contact_id = $2 AND status != 'voided'",
+        )
+        .bind(org_uuid)
+        .bind(id_uuid)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        if linked.0 > 0 {
+            return Err(DbError::Conflict(
+                "contact has linked invoices and cannot be deleted; \
+                 void all invoices first or archive the contact instead"
+                    .into(),
+            ));
+        }
+
+        sqlx::query("DELETE FROM contacts WHERE organization_id = $1 AND id = $2")
+            .bind(org_uuid)
+            .bind(id_uuid)
+            .execute(pool)
+            .await
+            .map_err(map_sqlx_err)?;
+
+        Ok(())
     }
 
     pub async fn update(

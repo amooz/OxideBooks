@@ -1,9 +1,10 @@
 use axum::{
-    extract::{Extension, Path, State},
+    extract::{Extension, Path, Query, State},
     http::StatusCode,
     Json,
 };
 use oxidebooks_core::models::CreateJournalEntry;
+use oxidebooks_core::pagination::PageParams;
 use oxidebooks_db::repos::TransactionRepo;
 use serde::Deserialize;
 use tracing::info;
@@ -18,12 +19,16 @@ use crate::{
 pub async fn list_transactions(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
+    Query(page): Query<PageParams>,
 ) -> ApiResult<Json<serde_json::Value>> {
     if !claims.has("transactions:read") {
         return Err(ApiError::Forbidden);
     }
-    let entries = TransactionRepo::list(&state.db, &claims.org).await?;
-    Ok(Json(serde_json::json!({ "data": entries })))
+    let (entries, next_cursor) = TransactionRepo::list(&state.db, &claims.org, &page).await?;
+    Ok(Json(serde_json::json!({
+        "data": entries,
+        "pagination": { "has_next": next_cursor.is_some(), "next_cursor": next_cursor }
+    })))
 }
 
 /// GET /api/v1/transactions/:id

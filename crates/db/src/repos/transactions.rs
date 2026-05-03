@@ -1,4 +1,5 @@
 use oxidebooks_core::models::{CreateJournalEntry, JournalEntry, JournalEntryStatus, JournalLine};
+use oxidebooks_core::pagination::{encode_cursor, PageParams};
 use sqlx::PgPool;
 use time::{Date, OffsetDateTime};
 use uuid::Uuid;
@@ -31,26 +32,67 @@ struct LineRow {
 pub struct TransactionRepo;
 
 impl TransactionRepo {
-    pub async fn list(pool: &PgPool, org_id: &str) -> Result<Vec<JournalEntry>, DbError> {
+    pub async fn list(
+        pool: &PgPool,
+        org_id: &str,
+        page: &PageParams,
+    ) -> Result<(Vec<JournalEntry>, Option<String>), DbError> {
         let org_uuid = parse_uuid(org_id)?;
+        let limit = page.limit_clamped();
+        let cursor = page.decode_cursor();
 
-        let rows: Vec<EntryRow> = sqlx::query_as(
-            "SELECT id, organization_id, date, reference, description, status, \
-             created_by, created_at, updated_at \
-             FROM journal_entries WHERE organization_id = $1 \
-             ORDER BY date DESC, created_at DESC",
-        )
-        .bind(org_uuid)
-        .fetch_all(pool)
-        .await
-        .map_err(map_sqlx_err)?;
+        let rows: Vec<EntryRow> = if let Some(c) = cursor {
+            let cursor_ts = time::OffsetDateTime::parse(
+                &c.created_at,
+                &time::format_description::well_known::Rfc3339,
+            )
+            .map_err(|_| DbError::Conflict("invalid cursor".into()))?;
+            let cursor_id = parse_uuid(&c.id)?;
+            sqlx::query_as(
+                "SELECT id, organization_id, date, reference, description, status, \
+                 created_by, created_at, updated_at \
+                 FROM journal_entries \
+                 WHERE organization_id = $1 AND (created_at, id) > ($2, $3) \
+                 ORDER BY created_at ASC, id ASC LIMIT $4",
+            )
+            .bind(org_uuid)
+            .bind(cursor_ts)
+            .bind(cursor_id)
+            .bind(limit + 1)
+            .fetch_all(pool)
+            .await
+            .map_err(map_sqlx_err)?
+        } else {
+            sqlx::query_as(
+                "SELECT id, organization_id, date, reference, description, status, \
+                 created_by, created_at, updated_at \
+                 FROM journal_entries WHERE organization_id = $1 \
+                 ORDER BY created_at ASC, id ASC LIMIT $2",
+            )
+            .bind(org_uuid)
+            .bind(limit + 1)
+            .fetch_all(pool)
+            .await
+            .map_err(map_sqlx_err)?
+        };
 
+        let has_next = rows.len() as i64 > limit;
+        let mut rows = rows;
+        if has_next {
+            rows.pop();
+        }
+        let next_cursor = if has_next {
+            rows.last()
+                .map(|r| encode_cursor(r.created_at, &r.id.to_string()))
+        } else {
+            None
+        };
         let mut entries = Vec::with_capacity(rows.len());
         for r in rows {
             let lines = Self::fetch_lines(pool, r.id).await?;
             entries.push(entry_from_row(r, lines));
         }
-        Ok(entries)
+        Ok((entries, next_cursor))
     }
 
     pub async fn get_by_id(pool: &PgPool, org_id: &str, id: &str) -> Result<JournalEntry, DbError> {

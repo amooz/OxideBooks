@@ -15,8 +15,8 @@ use tower_http::{
 
 use crate::{
     handlers::{
-        accounts, auth, auth_sso, contacts, exchange_rates, identity, invoices, organizations,
-        reports, roles, scim, transactions, users,
+        accounts, auth, auth_sso, contacts, exchange_rates, health, identity, invoices,
+        organizations, reports, roles, scim, transactions, users,
     },
     middleware::require_auth,
     state::AppState,
@@ -51,6 +51,15 @@ pub fn build(state: AppState) -> Router {
             .expect("rate limiter config"),
     );
 
+    // Rate limiter for provider discovery (20 req/min — same as SSO)
+    let discovery_rl = Arc::new(
+        GovernorConfigBuilder::default()
+            .period(Duration::from_secs(3))
+            .burst_size(20)
+            .finish()
+            .expect("rate limiter config"),
+    );
+
     // Public auth routes (no JWT required)
     let public = Router::new()
         .route(
@@ -62,6 +71,12 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/auth/login",
             post(auth::login).layer(GovernorLayer { config: login_rl }),
+        )
+        .route(
+            "/auth/providers",
+            get(auth_sso::list_providers).layer(GovernorLayer {
+                config: discovery_rl,
+            }),
         )
         // SSO initiation & callbacks (public — redirect-based flows)
         .route(
@@ -123,7 +138,9 @@ pub fn build(state: AppState) -> Router {
         )
         .route(
             "/contacts/:id",
-            get(contacts::get_contact).patch(contacts::update_contact),
+            get(contacts::get_contact)
+                .patch(contacts::update_contact)
+                .delete(contacts::delete_contact),
         )
         // Invoices & bills
         .route(
@@ -198,7 +215,9 @@ pub fn build(state: AppState) -> Router {
     Router::new()
         .nest("/api/v1", public.merge(protected))
         .merge(scim_routes)
-        .route("/health", get(health_check))
+        .route("/health", get(health::readiness))
+        .route("/health/live", get(health::liveness))
+        .route("/health/ready", get(health::readiness))
         .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
         .layer(PropagateRequestIdLayer::x_request_id())
         .layer(TraceLayer::new_for_http())
@@ -224,8 +243,4 @@ fn build_cors(allowed_origins: &[String]) -> CorsLayer {
             Method::OPTIONS,
         ])
         .allow_headers(tower_http::cors::Any)
-}
-
-async fn health_check() -> &'static str {
-    "ok"
 }
