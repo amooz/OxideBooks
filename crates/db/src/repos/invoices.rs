@@ -271,6 +271,145 @@ impl InvoiceRepo {
         Self::get_by_id(pool, org_id, id).await
     }
 
+    /// Convert an accepted quote into a new invoice. Marks the quote as `invoiced`.
+    pub async fn convert_quote(
+        pool: &PgPool,
+        org_id: &str,
+        quote_id: &str,
+    ) -> Result<Invoice, DbError> {
+        let quote = Self::get_by_id(pool, org_id, quote_id).await?;
+
+        if quote.invoice_type != InvoiceType::Quote {
+            return Err(DbError::Conflict("only quotes can be converted".into()));
+        }
+        if quote.status != InvoiceStatus::Accepted {
+            return Err(DbError::Conflict(
+                "quote must be in 'accepted' status to convert".into(),
+            ));
+        }
+
+        let org_uuid = parse_uuid(org_id)?;
+        let quote_uuid = parse_uuid(quote_id)?;
+        let mut tx = pool.begin().await.map_err(map_sqlx_err)?;
+
+        // Mark quote as invoiced
+        sqlx::query(
+            "UPDATE invoices SET status = 'invoiced', updated_at = NOW() \
+             WHERE id = $1 AND organization_id = $2",
+        )
+        .bind(quote_uuid)
+        .bind(org_uuid)
+        .execute(&mut *tx)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        // Create new invoice from quote data
+        let invoice_number =
+            generate_invoice_number(&mut tx, org_uuid, &InvoiceType::Invoice).await?;
+        let new_id = Uuid::new_v4();
+
+        sqlx::query(
+            "INSERT INTO invoices \
+             (id, organization_id, invoice_number, contact_id, invoice_type, \
+              date, due_date, currency, notes) \
+             VALUES ($1,$2,$3,$4,'invoice',$5,$6,$7,$8)",
+        )
+        .bind(new_id)
+        .bind(org_uuid)
+        .bind(&invoice_number)
+        .bind(parse_uuid(&quote.contact_id)?)
+        .bind(quote.date)
+        .bind(quote.due_date)
+        .bind(&quote.currency)
+        .bind(&quote.notes)
+        .execute(&mut *tx)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        for (i, line) in quote.lines.iter().enumerate() {
+            let line_id = Uuid::new_v4();
+            let acct_uuid = line.account_id.as_deref().map(parse_uuid).transpose()?;
+            sqlx::query(
+                "INSERT INTO invoice_lines \
+                 (id, invoice_id, description, account_id, quantity, unit_price, tax_rate, sort_order) \
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
+            )
+            .bind(line_id)
+            .bind(new_id)
+            .bind(&line.description)
+            .bind(acct_uuid)
+            .bind(line.quantity)
+            .bind(line.unit_price)
+            .bind(line.tax_rate)
+            .bind(i as i32)
+            .execute(&mut *tx)
+            .await
+            .map_err(map_sqlx_err)?;
+        }
+
+        tx.commit().await.map_err(map_sqlx_err)?;
+        Self::get_by_id(pool, org_id, &new_id.to_string()).await
+    }
+
+    /// Apply a credit note against an invoice. Creates a payment of type 'credit_note'.
+    pub async fn apply_credit(
+        pool: &PgPool,
+        org_id: &str,
+        credit_note_id: &str,
+        target_invoice_id: &str,
+        amount: i64,
+    ) -> Result<Invoice, DbError> {
+        use time::OffsetDateTime;
+
+        let cn = Self::get_by_id(pool, org_id, credit_note_id).await?;
+        if cn.invoice_type != InvoiceType::CreditNote {
+            return Err(DbError::Conflict("source must be a credit note".into()));
+        }
+        if cn.status != InvoiceStatus::Sent {
+            return Err(DbError::Conflict(
+                "credit note must be in 'sent' status to apply".into(),
+            ));
+        }
+
+        let org_uuid = parse_uuid(org_id)?;
+        let cn_uuid = parse_uuid(credit_note_id)?;
+        let inv_uuid = parse_uuid(target_invoice_id)?;
+        let today = OffsetDateTime::now_utc().date();
+
+        let mut tx = pool.begin().await.map_err(map_sqlx_err)?;
+
+        // Record payment on the target invoice
+        sqlx::query(
+            "INSERT INTO payments \
+             (organization_id, invoice_id, amount, payment_date, method, notes) \
+             VALUES ($1,$2,$3,$4,'credit_note','Applied from credit note')",
+        )
+        .bind(org_uuid)
+        .bind(inv_uuid)
+        .bind(amount)
+        .bind(today)
+        .execute(&mut *tx)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        // Mark credit note as applied
+        sqlx::query(
+            "UPDATE invoices SET status = 'applied', updated_at = NOW() \
+             WHERE id = $1 AND organization_id = $2",
+        )
+        .bind(cn_uuid)
+        .bind(org_uuid)
+        .execute(&mut *tx)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        tx.commit().await.map_err(map_sqlx_err)?;
+
+        // Sync the target invoice status
+        crate::repos::payments::PaymentRepo::sync_invoice_status(pool, org_uuid, inv_uuid).await?;
+        Self::get_by_id(pool, org_id, target_invoice_id).await
+    }
+
     async fn fetch_lines(pool: &PgPool, invoice_id: Uuid) -> Result<Vec<InvoiceLine>, DbError> {
         let rows: Vec<InvoiceLineRow> = sqlx::query_as(
             "SELECT id, invoice_id, description, account_id, quantity, unit_price, tax_rate, sort_order \
@@ -305,6 +444,8 @@ async fn generate_invoice_number(
     let prefix = match invoice_type {
         InvoiceType::Invoice => "INV",
         InvoiceType::Bill => "BILL",
+        InvoiceType::Quote => "QUO",
+        InvoiceType::CreditNote => "CN",
     };
     let type_str = invoice_type.to_string();
 
@@ -334,6 +475,8 @@ fn invoice_from_row(r: InvoiceRow, lines: Vec<InvoiceLine>) -> Invoice {
         contact_id: r.contact_id.to_string(),
         invoice_type: match r.invoice_type.as_str() {
             "bill" => InvoiceType::Bill,
+            "quote" => InvoiceType::Quote,
+            "credit_note" => InvoiceType::CreditNote,
             _ => InvoiceType::Invoice,
         },
         status: InvoiceStatus::from_str(&r.status).unwrap_or(InvoiceStatus::Draft),

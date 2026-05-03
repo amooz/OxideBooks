@@ -10,6 +10,10 @@ pub enum InvoiceType {
     Invoice,
     /// Money we owe to a vendor
     Bill,
+    /// Pre-sales estimate that can be converted to an invoice
+    Quote,
+    /// Negative invoice to reduce AR/AP
+    CreditNote,
 }
 
 impl std::fmt::Display for InvoiceType {
@@ -17,6 +21,8 @@ impl std::fmt::Display for InvoiceType {
         f.write_str(match self {
             InvoiceType::Invoice => "invoice",
             InvoiceType::Bill => "bill",
+            InvoiceType::Quote => "quote",
+            InvoiceType::CreditNote => "credit_note",
         })
     }
 }
@@ -24,12 +30,19 @@ impl std::fmt::Display for InvoiceType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum InvoiceStatus {
+    // Invoice / Bill statuses
     Draft,
     Sent,
     Partial,
     Paid,
     Overdue,
     Voided,
+    // Quote-specific statuses
+    Accepted,
+    Declined,
+    Invoiced,
+    // Credit note statuses
+    Applied,
 }
 
 impl std::fmt::Display for InvoiceStatus {
@@ -41,6 +54,10 @@ impl std::fmt::Display for InvoiceStatus {
             InvoiceStatus::Paid => "paid",
             InvoiceStatus::Overdue => "overdue",
             InvoiceStatus::Voided => "voided",
+            InvoiceStatus::Accepted => "accepted",
+            InvoiceStatus::Declined => "declined",
+            InvoiceStatus::Invoiced => "invoiced",
+            InvoiceStatus::Applied => "applied",
         };
         f.write_str(s)
     }
@@ -57,6 +74,10 @@ impl std::str::FromStr for InvoiceStatus {
             "paid" => Ok(InvoiceStatus::Paid),
             "overdue" => Ok(InvoiceStatus::Overdue),
             "voided" => Ok(InvoiceStatus::Voided),
+            "accepted" => Ok(InvoiceStatus::Accepted),
+            "declined" => Ok(InvoiceStatus::Declined),
+            "invoiced" => Ok(InvoiceStatus::Invoiced),
+            "applied" => Ok(InvoiceStatus::Applied),
             _ => Err(CoreError::UnknownInvoiceStatus(s.to_string())),
         }
     }
@@ -148,12 +169,18 @@ impl InvoiceStatus {
     /// Returns the set of valid next states from the current status.
     pub fn allowed_transitions(&self) -> &'static [InvoiceStatus] {
         match self {
+            // Invoice / Bill flow
             InvoiceStatus::Draft => &[InvoiceStatus::Sent, InvoiceStatus::Voided],
             InvoiceStatus::Sent => &[
                 InvoiceStatus::Partial,
                 InvoiceStatus::Paid,
                 InvoiceStatus::Overdue,
                 InvoiceStatus::Voided,
+                // Quote: sent → accepted | declined
+                InvoiceStatus::Accepted,
+                InvoiceStatus::Declined,
+                // Credit note: sent → applied | voided
+                InvoiceStatus::Applied,
             ],
             InvoiceStatus::Partial => &[
                 InvoiceStatus::Paid,
@@ -161,6 +188,12 @@ impl InvoiceStatus {
                 InvoiceStatus::Voided,
             ],
             InvoiceStatus::Overdue => &[InvoiceStatus::Paid, InvoiceStatus::Voided],
+            // Quote flow
+            InvoiceStatus::Accepted => &[InvoiceStatus::Invoiced, InvoiceStatus::Voided],
+            InvoiceStatus::Declined => &[InvoiceStatus::Draft],
+            InvoiceStatus::Invoiced => &[],
+            // Credit note flow
+            InvoiceStatus::Applied => &[],
             InvoiceStatus::Paid | InvoiceStatus::Voided => &[],
         }
     }

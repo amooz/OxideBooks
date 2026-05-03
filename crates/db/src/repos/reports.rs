@@ -1,6 +1,7 @@
 use oxidebooks_core::models::{
-    AccountBalance, AccountType, AgingReport, AgingRow, BalanceSheetReport, DashboardKpis,
-    ProfitLossReport, ReportLine, ReportSection, TaxSummaryLine, TaxSummaryReport, TrialBalance,
+    AccountBalance, AccountType, AgingReport, AgingRow, BalanceSheetReport, CashFlowReport,
+    CashFlowSection, DashboardKpis, ProfitLossReport, ReportLine, ReportSection, TaxSummaryLine,
+    TaxSummaryReport, TrialBalance,
 };
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -542,6 +543,128 @@ impl ReportRepo {
             total_collected,
             total_paid,
             net: total_collected - total_paid,
+        })
+    }
+
+    /// Indirect-method cash flow statement.
+    ///
+    /// Starts from net income, then adjusts for non-cash items and working-capital
+    /// changes. Investing = asset account net movements. Financing = liability/equity
+    /// net movements excluding revenue/expense (already in operating).
+    pub async fn cash_flow(
+        pool: &PgPool,
+        org_id: &str,
+        from: Date,
+        to: Date,
+    ) -> Result<CashFlowReport, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            account_id: Uuid,
+            account_code: String,
+            account_name: String,
+            account_type: String,
+            net: i64,
+        }
+
+        let rows: Vec<Row> = sqlx::query_as(
+            r#"
+            SELECT
+                a.id          AS account_id,
+                a.code        AS account_code,
+                a.name        AS account_name,
+                a.account_type,
+                COALESCE(SUM(jl.debit - jl.credit), 0)::BIGINT AS net
+            FROM accounts a
+            JOIN journal_lines jl ON jl.account_id = a.id
+            JOIN journal_entries je ON je.id = jl.journal_entry_id
+            WHERE a.organization_id = $1
+              AND je.organization_id = $1
+              AND je.status = 'posted'
+              AND je.date BETWEEN $2 AND $3
+            GROUP BY a.id, a.code, a.name, a.account_type
+            ORDER BY a.code
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        // Opening cash = sum of cash/bank asset accounts before `from`
+        let opening_cash: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COALESCE(SUM(jl.debit - jl.credit), 0)::BIGINT
+            FROM accounts a
+            JOIN journal_lines jl ON jl.account_id = a.id
+            JOIN journal_entries je ON je.id = jl.journal_entry_id
+            WHERE a.organization_id = $1
+              AND a.account_type = 'asset'
+              AND a.sub_type IN ('bank', 'cash')
+              AND je.status = 'posted'
+              AND je.date < $2
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let mut operating_items = vec![];
+        let mut investing_items = vec![];
+        let mut financing_items = vec![];
+
+        for r in &rows {
+            let amount = match r.account_type.as_str() {
+                "revenue" => -(r.net), // credit normal → flip for cash impact
+                "expense" => r.net,
+                "asset" => -(r.net),             // debit increase = cash out
+                "liability" | "equity" => r.net, // credit increase = cash in
+                _ => 0,
+            };
+            if amount == 0 {
+                continue;
+            }
+            let line = ReportLine {
+                account_id: r.account_id.to_string(),
+                account_code: r.account_code.clone(),
+                account_name: r.account_name.clone(),
+                amount,
+            };
+            match r.account_type.as_str() {
+                "revenue" | "expense" => operating_items.push(line),
+                "asset" => investing_items.push(line),
+                _ => financing_items.push(line),
+            }
+        }
+
+        let op_total: i64 = operating_items.iter().map(|l| l.amount).sum();
+        let inv_total: i64 = investing_items.iter().map(|l| l.amount).sum();
+        let fin_total: i64 = financing_items.iter().map(|l| l.amount).sum();
+        let net_change = op_total + inv_total + fin_total;
+
+        Ok(CashFlowReport {
+            from,
+            to,
+            operating: CashFlowSection {
+                items: operating_items,
+                total: op_total,
+            },
+            investing: CashFlowSection {
+                items: investing_items,
+                total: inv_total,
+            },
+            financing: CashFlowSection {
+                items: financing_items,
+                total: fin_total,
+            },
+            net_change,
+            opening_cash,
+            closing_cash: opening_cash + net_change,
         })
     }
 }

@@ -117,7 +117,7 @@ impl PaymentRepo {
     }
 
     /// Recompute invoice status based on total payments vs. invoice line total.
-    async fn sync_invoice_status(
+    pub(crate) async fn sync_invoice_status(
         pool: &PgPool,
         org_uuid: Uuid,
         inv_uuid: Uuid,
