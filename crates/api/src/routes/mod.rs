@@ -15,9 +15,10 @@ use tower_http::{
 
 use crate::{
     handlers::{
-        accounts, audit, auth, auth_sso, budgets, contacts, exchange_rates, expenses, fixed_assets,
-        health, identity, invoices, organizations, payments, products, projects, purchase_orders,
-        recurring, reports, roles, scim, tax_rates, time_entries, transactions, users, webhooks,
+        accounts, audit, auth, auth_sso, bank, budgets, contacts, custom_fields, exchange_rates,
+        expenses, fixed_assets, fx, health, identity, inventory, invoices, organizations, payments,
+        products, projects, purchase_orders, recurring, reports, roles, scim, tax_rates,
+        time_entries, transactions, users, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -344,6 +345,67 @@ pub fn build(state: AppState) -> Router {
         )
         // Exchange rates
         .route("/exchange-rates", get(exchange_rates::get_rate))
+        // Bank accounts & reconciliation
+        .route(
+            "/bank-accounts",
+            get(bank::list_bank_accounts).post(bank::create_bank_account),
+        )
+        .route(
+            "/bank-accounts/:id",
+            get(bank::get_bank_account).patch(bank::update_bank_account),
+        )
+        .route(
+            "/bank-accounts/:id/transactions",
+            get(bank::list_bank_transactions).post(bank::import_bank_transactions),
+        )
+        .route(
+            "/bank-accounts/:id/reconciliation",
+            get(bank::reconciliation_summary),
+        )
+        .route(
+            "/bank-transactions/:id/match",
+            post(bank::match_bank_transaction),
+        )
+        .route(
+            "/bank-transactions/:id/exclude",
+            post(bank::exclude_bank_transaction),
+        )
+        // Inventory
+        .route(
+            "/inventory",
+            get(inventory::list_inventory).post(inventory::create_inventory_item),
+        )
+        .route("/inventory/low-stock", get(inventory::low_stock))
+        .route(
+            "/inventory/:product_id",
+            get(inventory::get_inventory_item).patch(inventory::update_inventory_item),
+        )
+        .route(
+            "/inventory/:product_id/adjust",
+            post(inventory::adjust_inventory),
+        )
+        .route(
+            "/inventory/:product_id/movements",
+            get(inventory::inventory_movements),
+        )
+        // Custom fields
+        .route(
+            "/custom-fields",
+            get(custom_fields::list_custom_fields).post(custom_fields::create_custom_field),
+        )
+        .route(
+            "/custom-fields/:id",
+            get(custom_fields::get_custom_field)
+                .patch(custom_fields::update_custom_field)
+                .delete(custom_fields::delete_custom_field),
+        )
+        .route(
+            "/custom-fields/values/:entity_type/:entity_id",
+            get(custom_fields::get_entity_custom_fields)
+                .put(custom_fields::set_entity_custom_fields),
+        )
+        // FX gain/loss report
+        .route("/reports/fx-summary", get(fx::fx_summary))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     // SCIM 2.0 endpoints (separate bearer-token auth, not JWT)
