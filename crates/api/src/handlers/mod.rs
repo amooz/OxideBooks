@@ -1,4 +1,5 @@
 pub mod accounts;
+pub mod audit;
 pub mod auth;
 pub mod auth_sso;
 pub mod contacts;
@@ -7,6 +8,7 @@ pub mod health;
 pub mod identity;
 pub mod invoices;
 pub mod organizations;
+pub mod payments;
 pub mod reports;
 pub mod roles;
 pub mod scim;

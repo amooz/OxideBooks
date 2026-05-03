@@ -15,8 +15,8 @@ use tower_http::{
 
 use crate::{
     handlers::{
-        accounts, auth, auth_sso, contacts, exchange_rates, health, identity, invoices,
-        organizations, reports, roles, scim, transactions, users,
+        accounts, audit, auth, auth_sso, contacts, exchange_rates, health, identity, invoices,
+        organizations, payments, reports, roles, scim, transactions, users,
     },
     middleware::require_auth,
     state::AppState,
@@ -151,6 +151,10 @@ pub fn build(state: AppState) -> Router {
             "/invoices/:id",
             get(invoices::get_invoice).patch(invoices::update_invoice),
         )
+        .route(
+            "/invoices/:id/payments",
+            post(payments::create_payment).get(payments::list_payments),
+        )
         // Organization settings
         .route(
             "/organizations/me",
@@ -166,6 +170,10 @@ pub fn build(state: AppState) -> Router {
         )
         // Reports
         .route("/reports/trial-balance", get(reports::trial_balance))
+        .route("/reports/profit-loss", get(reports::profit_loss))
+        .route("/reports/balance-sheet", get(reports::balance_sheet))
+        // Audit log
+        .route("/audit-log", get(audit::list_audit_log))
         // RBAC: permissions & roles
         .route("/permissions", get(roles::list_permissions))
         .route("/roles", get(roles::list_roles).post(roles::create_role))
