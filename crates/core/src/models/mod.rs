@@ -37,6 +37,7 @@ pub mod payroll;
 pub mod payslip;
 pub mod price_list;
 pub mod product;
+pub mod product_category;
 pub mod project;
 pub mod purchase_order;
 pub mod recurring;
@@ -120,6 +121,7 @@ pub use price_list::{
     UpsertPriceListItem,
 };
 pub use product::{CreateProduct, Product, UpdateProduct};
+pub use product_category::{CreateProductCategory, ProductCategory, UpdateProductCategory};
 pub use project::{CreateProject, Project, ProjectSummary, UpdateProject};
 pub use purchase_order::{
     CreatePoLine, CreatePurchaseOrder, PoStatus, PurchaseOrder, PurchaseOrderLine, ReceivePoLine,

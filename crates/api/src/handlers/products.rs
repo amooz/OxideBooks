@@ -1,10 +1,11 @@
 use axum::{
-    extract::{Extension, Path, State},
+    extract::{Extension, Path, Query, State},
     http::StatusCode,
     Json,
 };
 use oxidebooks_core::models::{CreateProduct, UpdateProduct};
 use oxidebooks_db::repos::ProductRepo;
+use serde::Deserialize;
 
 use crate::{
     error::{ApiError, ApiResult},
@@ -12,15 +13,21 @@ use crate::{
     state::AppState,
 };
 
+#[derive(Deserialize)]
+pub struct ProductQuery {
+    pub category_id: Option<String>,
+}
+
 /// GET /api/v1/products
 pub async fn list_products(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
+    Query(q): Query<ProductQuery>,
 ) -> ApiResult<Json<serde_json::Value>> {
     if !claims.has("settings:read") {
         return Err(ApiError::Forbidden);
     }
-    let products = ProductRepo::list(&state.db, &claims.org).await?;
+    let products = ProductRepo::list(&state.db, &claims.org, q.category_id.as_deref()).await?;
     Ok(Json(serde_json::json!({ "data": products })))
 }
 

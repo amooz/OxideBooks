@@ -43,6 +43,7 @@ pub mod payments;
 pub mod payroll;
 pub mod payslips;
 pub mod price_lists;
+pub mod product_categories;
 pub mod products;
 pub mod projects;
 pub mod purchase_orders;

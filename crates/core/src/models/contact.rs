@@ -32,6 +32,7 @@ pub struct Contact {
     pub tax_number: Option<String>,
     pub tax_id: Option<String>,
     pub currency: Option<String>,
+    pub credit_limit: Option<i64>,
     pub is_active: bool,
     pub is_1099_vendor: bool,
     #[serde(with = "time::serde::rfc3339")]
@@ -60,6 +61,7 @@ pub struct UpdateContact {
     pub tax_number: Option<String>,
     pub tax_id: Option<String>,
     pub currency: Option<String>,
+    pub credit_limit: Option<i64>,
     pub is_active: Option<bool>,
     pub is_1099_vendor: Option<bool>,
 }
