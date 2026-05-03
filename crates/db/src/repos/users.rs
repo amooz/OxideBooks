@@ -293,6 +293,56 @@ impl UserRepo {
         Ok(())
     }
 
+    pub async fn get_totp_secret(pool: &PgPool, user_id: &str) -> Result<Option<String>, DbError> {
+        let id_uuid = parse_uuid(user_id)?;
+        let secret: Option<String> =
+            sqlx::query_scalar("SELECT totp_secret FROM users WHERE id = $1")
+                .bind(id_uuid)
+                .fetch_optional(pool)
+                .await
+                .map_err(map_sqlx_err)?
+                .flatten();
+        Ok(secret)
+    }
+
+    pub async fn set_totp_secret(
+        pool: &PgPool,
+        user_id: &str,
+        secret: &str,
+    ) -> Result<(), DbError> {
+        let id_uuid = parse_uuid(user_id)?;
+        sqlx::query("UPDATE users SET totp_secret = $1, totp_enabled = false WHERE id = $2")
+            .bind(secret)
+            .bind(id_uuid)
+            .execute(pool)
+            .await
+            .map_err(map_sqlx_err)?;
+        Ok(())
+    }
+
+    pub async fn enable_totp(pool: &PgPool, user_id: &str) -> Result<(), DbError> {
+        let id_uuid = parse_uuid(user_id)?;
+        sqlx::query("UPDATE users SET totp_enabled = true, totp_verified_at = NOW() WHERE id = $1")
+            .bind(id_uuid)
+            .execute(pool)
+            .await
+            .map_err(map_sqlx_err)?;
+        Ok(())
+    }
+
+    pub async fn disable_totp(pool: &PgPool, user_id: &str) -> Result<(), DbError> {
+        let id_uuid = parse_uuid(user_id)?;
+        sqlx::query(
+            "UPDATE users SET totp_secret = NULL, totp_enabled = false, totp_verified_at = NULL \
+             WHERE id = $1",
+        )
+        .bind(id_uuid)
+        .execute(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+        Ok(())
+    }
+
     pub async fn get_by_email(
         pool: &PgPool,
         org_id: &str,

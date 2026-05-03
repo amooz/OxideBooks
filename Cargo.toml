@@ -102,3 +102,6 @@ tower_governor = "0.4"
 
 # CSV serialization (export endpoints)
 csv = "1"
+
+# TOTP two-factor authentication
+totp-rs = { version = "5", features = ["gen_secret", "qr"] }

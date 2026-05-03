@@ -15,11 +15,12 @@ use tower_http::{
 
 use crate::{
     handlers::{
-        accounts, attachments, audit, auth, auth_sso, bank, budgets, consolidated, contacts,
-        custom_fields, dunning, email, exchange_rates, expenses, export, fixed_assets, fx, health,
-        identity, import, inventory, invoices, mileage, notes, notifications, organizations,
-        payment_links, payments, payroll, products, projects, purchase_orders, recurring, reports,
-        roles, scim, stripe_webhook, tags, tax_rates, time_entries, transactions, users, webhooks,
+        accounts, api_keys, attachments, audit, auth, auth_sso, bank, budgets, closed_periods,
+        consolidated, contacts, custom_fields, dunning, email, exchange_rates, expenses, export,
+        fixed_assets, fx, health, identity, import, inventory, invoices, mileage, notes,
+        notifications, organizations, payment_links, payments, payroll, price_lists, products,
+        projects, purchase_orders, recurring, reports, roles, scim, stripe_webhook, tags,
+        tax_rates, time_entries, totp, transactions, users, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -512,6 +513,34 @@ pub fn build(state: AppState) -> Router {
         .route("/mileage/:id", delete(mileage::delete_mileage_trip))
         // CSV import
         .route("/import/contacts", post(import::import_contacts_csv))
+        // Closed accounting periods
+        .route(
+            "/closed-periods",
+            get(closed_periods::list_closed_periods).post(closed_periods::close_period),
+        )
+        .route("/closed-periods/:id", delete(closed_periods::reopen_period))
+        // API key management
+        .route(
+            "/api-keys",
+            get(api_keys::list_api_keys).post(api_keys::create_api_key),
+        )
+        .route("/api-keys/:id/revoke", post(api_keys::revoke_api_key))
+        // Price lists
+        .route(
+            "/price-lists",
+            get(price_lists::list_price_lists).post(price_lists::create_price_list),
+        )
+        .route("/price-lists/:id", delete(price_lists::delete_price_list))
+        .route(
+            "/price-lists/:id/items",
+            get(price_lists::list_price_list_items).put(price_lists::upsert_price_list_item),
+        )
+        // Spend analysis
+        .route("/reports/spend-analysis", get(price_lists::spend_analysis))
+        // TOTP 2FA
+        .route("/auth/totp/setup", post(totp::setup_totp))
+        .route("/auth/totp/verify", post(totp::verify_totp))
+        .route("/auth/totp", delete(totp::disable_totp))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     // SCIM 2.0 endpoints (separate bearer-token auth, not JWT)

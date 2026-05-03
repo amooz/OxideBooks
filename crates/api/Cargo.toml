@@ -49,6 +49,7 @@ hmac = { workspace = true }
 x509-cert = { workspace = true }
 tower_governor = { workspace = true }
 csv = { workspace = true }
+totp-rs = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
