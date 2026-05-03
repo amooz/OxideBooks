@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use oxidebooks_db::PgPool;
+use reqwest::Client;
 
 use crate::config::Settings;
 
@@ -8,6 +9,7 @@ use crate::config::Settings;
 pub struct AppState {
     pub db: PgPool,
     pub config: Arc<Settings>,
+    pub http: Client,
 }
 
 impl AppState {
@@ -15,6 +17,7 @@ impl AppState {
         Self {
             db,
             config: Arc::new(config),
+            http: Client::new(),
         }
     }
 }

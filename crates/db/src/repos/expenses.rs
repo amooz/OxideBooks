@@ -18,6 +18,7 @@ struct ExpenseRow {
     category: String,
     description: String,
     account_id: Option<Uuid>,
+    project_id: Option<Uuid>,
     status: String,
     receipt_url: Option<String>,
     notes: Option<String>,
@@ -36,6 +37,7 @@ fn from_row(r: ExpenseRow) -> Expense {
         category: r.category,
         description: r.description,
         account_id: r.account_id.map(|u| u.to_string()),
+        project_id: r.project_id.map(|u| u.to_string()),
         status: ExpenseStatus::from_str(&r.status).unwrap_or(ExpenseStatus::Draft),
         receipt_url: r.receipt_url,
         notes: r.notes,
@@ -45,7 +47,8 @@ fn from_row(r: ExpenseRow) -> Expense {
 }
 
 const COLS: &str = "id, organization_id, user_id, expense_date, amount, currency, category, \
-                    description, account_id, status, receipt_url, notes, created_at, updated_at";
+                    description, account_id, project_id, status, receipt_url, notes, \
+                    created_at, updated_at";
 
 pub struct ExpenseRepo;
 
@@ -144,12 +147,13 @@ impl ExpenseRepo {
         let org_uuid = parse_uuid(org_id)?;
         let user_uuid = parse_uuid(user_id)?;
         let acct_uuid = input.account_id.as_deref().map(parse_uuid).transpose()?;
+        let proj_uuid = input.project_id.as_deref().map(parse_uuid).transpose()?;
 
         let id: Uuid = sqlx::query_scalar(
             "INSERT INTO expenses \
              (organization_id, user_id, expense_date, amount, currency, category, description, \
-              account_id, receipt_url, notes) \
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id",
+              account_id, project_id, receipt_url, notes) \
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id",
         )
         .bind(org_uuid)
         .bind(user_uuid)
@@ -159,6 +163,7 @@ impl ExpenseRepo {
         .bind(&input.category)
         .bind(&input.description)
         .bind(acct_uuid)
+        .bind(proj_uuid)
         .bind(&input.receipt_url)
         .bind(&input.notes)
         .fetch_one(pool)

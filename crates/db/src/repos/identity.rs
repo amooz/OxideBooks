@@ -147,6 +147,7 @@ impl IdentityProviderRepo {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_oidc(
         pool: &PgPool,
         org_id: &str,
@@ -182,6 +183,7 @@ impl IdentityProviderRepo {
         row.try_into()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_saml(
         pool: &PgPool,
         org_id: &str,
@@ -397,7 +399,7 @@ impl ScimTokenRepo {
         let id = Uuid::new_v4();
 
         let raw_token = generate_raw_token();
-        let token_hash = hash_token(&raw_token).map_err(|e| DbError::Internal(e))?;
+        let token_hash = hash_token(&raw_token).map_err(DbError::Internal)?;
 
         let row: ScimTokenRow = sqlx::query_as(
             "INSERT INTO scim_tokens (id, org_id, name, token_hash) \

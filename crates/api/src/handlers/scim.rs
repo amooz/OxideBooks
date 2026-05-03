@@ -322,40 +322,36 @@ pub async fn patch_user(
     };
 
     for op in &patch.operations {
-        match op.op.to_lowercase().as_str() {
-            "replace" => {
-                // active flag
-                let active = match op.path.as_deref() {
-                    Some("active") => op.value.as_ref().and_then(|v| v.as_bool()),
-                    _ => op
-                        .value
-                        .as_ref()
-                        .and_then(|v| v.get("active"))
-                        .and_then(|v| v.as_bool()),
-                };
-                if let Some(is_active) = active {
-                    let _ = sqlx::query("UPDATE users SET is_active = $1 WHERE id = $2")
-                        .bind(is_active)
-                        .bind(user_uuid)
-                        .execute(&state.db)
-                        .await;
-                }
+        if op.op.to_lowercase() == "replace" {
+            // active flag
+            let active = match op.path.as_deref() {
+                Some("active") => op.value.as_ref().and_then(|v| v.as_bool()),
+                _ => op
+                    .value
+                    .as_ref()
+                    .and_then(|v| v.get("active"))
+                    .and_then(|v| v.as_bool()),
+            };
+            if let Some(is_active) = active {
+                let _ = sqlx::query("UPDATE users SET is_active = $1 WHERE id = $2")
+                    .bind(is_active)
+                    .bind(user_uuid)
+                    .execute(&state.db)
+                    .await;
+            }
 
-                // password
-                if op.path.as_deref() == Some("password") {
-                    if let Some(pw) = op.value.as_ref().and_then(|v| v.as_str()) {
-                        if let Some(hash) = hash_password_scim(pw) {
-                            let _ =
-                                sqlx::query("UPDATE users SET password_hash = $1 WHERE id = $2")
-                                    .bind(&hash)
-                                    .bind(user_uuid)
-                                    .execute(&state.db)
-                                    .await;
-                        }
+            // password
+            if op.path.as_deref() == Some("password") {
+                if let Some(pw) = op.value.as_ref().and_then(|v| v.as_str()) {
+                    if let Some(hash) = hash_password_scim(pw) {
+                        let _ = sqlx::query("UPDATE users SET password_hash = $1 WHERE id = $2")
+                            .bind(&hash)
+                            .bind(user_uuid)
+                            .execute(&state.db)
+                            .await;
                     }
                 }
             }
-            _ => {}
         }
     }
 

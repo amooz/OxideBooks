@@ -45,6 +45,7 @@ base64 = { workspace = true }
 urlencoding = { workspace = true }
 rsa = { workspace = true }
 sha2 = { workspace = true }
+hmac = { workspace = true }
 x509-cert = { workspace = true }
 tower_governor = { workspace = true }
 

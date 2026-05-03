@@ -15,9 +15,9 @@ use tower_http::{
 
 use crate::{
     handlers::{
-        accounts, audit, auth, auth_sso, budgets, contacts, exchange_rates, expenses, health,
-        identity, invoices, organizations, payments, products, recurring, reports, roles, scim,
-        tax_rates, transactions, users,
+        accounts, audit, auth, auth_sso, budgets, contacts, exchange_rates, expenses, fixed_assets,
+        health, identity, invoices, organizations, payments, products, projects, purchase_orders,
+        recurring, reports, roles, scim, tax_rates, time_entries, transactions, users, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -269,6 +269,79 @@ pub fn build(state: AppState) -> Router {
             get(identity::list_scim_tokens).post(identity::create_scim_token),
         )
         .route("/scim/tokens/:id", delete(identity::revoke_scim_token))
+        // Purchase orders
+        .route(
+            "/purchase-orders",
+            get(purchase_orders::list_purchase_orders).post(purchase_orders::create_purchase_order),
+        )
+        .route(
+            "/purchase-orders/:id",
+            get(purchase_orders::get_purchase_order)
+                .patch(purchase_orders::update_purchase_order)
+                .delete(purchase_orders::delete_purchase_order),
+        )
+        .route(
+            "/purchase-orders/:id/receive",
+            post(purchase_orders::receive_purchase_order),
+        )
+        .route(
+            "/purchase-orders/:id/lines",
+            post(purchase_orders::add_po_line),
+        )
+        // Fixed assets
+        .route(
+            "/fixed-assets",
+            get(fixed_assets::list_fixed_assets).post(fixed_assets::create_fixed_asset),
+        )
+        .route(
+            "/fixed-assets/:id",
+            get(fixed_assets::get_fixed_asset).patch(fixed_assets::update_fixed_asset),
+        )
+        .route(
+            "/fixed-assets/:id/depreciate",
+            post(fixed_assets::depreciate_asset),
+        )
+        .route(
+            "/fixed-assets/:id/dispose",
+            post(fixed_assets::dispose_asset),
+        )
+        .route("/fixed-assets/register", get(fixed_assets::asset_register))
+        // Projects
+        .route(
+            "/projects",
+            get(projects::list_projects).post(projects::create_project),
+        )
+        .route(
+            "/projects/:id",
+            get(projects::get_project)
+                .patch(projects::update_project)
+                .delete(projects::delete_project),
+        )
+        .route("/projects/:id/summary", get(projects::project_summary))
+        // Time entries
+        .route(
+            "/time-entries",
+            get(time_entries::list_time_entries).post(time_entries::create_time_entry),
+        )
+        .route(
+            "/time-entries/:id",
+            get(time_entries::get_time_entry)
+                .patch(time_entries::update_time_entry)
+                .delete(time_entries::delete_time_entry),
+        )
+        .route("/time-entries/bill", post(time_entries::bill_time_entries))
+        .route("/time-entries/summary", get(time_entries::time_summary))
+        // Webhooks
+        .route(
+            "/webhooks",
+            get(webhooks::list_webhooks).post(webhooks::create_webhook),
+        )
+        .route(
+            "/webhooks/:id",
+            get(webhooks::get_webhook)
+                .patch(webhooks::update_webhook)
+                .delete(webhooks::delete_webhook),
+        )
         // Exchange rates
         .route("/exchange-rates", get(exchange_rates::get_rate))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
