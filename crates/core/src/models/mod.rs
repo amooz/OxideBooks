@@ -3,12 +3,15 @@ pub mod bank;
 pub mod budget;
 pub mod contact;
 pub mod custom_field;
+pub mod email;
 pub mod expense;
 pub mod fixed_asset;
 pub mod fx;
 pub mod identity;
 pub mod inventory;
 pub mod invoice;
+pub mod note;
+pub mod notification;
 pub mod organization;
 pub mod payment;
 pub mod product;
@@ -17,6 +20,7 @@ pub mod purchase_order;
 pub mod recurring;
 pub mod reports;
 pub mod role;
+pub mod tag;
 pub mod tax_rate;
 pub mod time_entry;
 pub mod transaction;
@@ -36,6 +40,7 @@ pub use custom_field::{
     CreateCustomFieldDefinition, CustomFieldDefinition, CustomFieldValue, SetCustomFieldValue,
     UpdateCustomFieldDefinition,
 };
+pub use email::{EmailLog, EmailSettings, SendEmailRequest, UpsertEmailSettings};
 pub use expense::{CreateExpense, Expense, ExpenseStatus, UpdateExpense};
 pub use fixed_asset::{
     AssetRegisterRow, CreateFixedAsset, DepreciationMethod, FixedAsset, UpdateFixedAsset,
@@ -53,6 +58,8 @@ pub use invoice::{
     CreateInvoice, CreateInvoiceLine, Invoice, InvoiceFilters, InvoiceLine, InvoiceStatus,
     InvoiceType, UpdateInvoice,
 };
+pub use note::{CreateNote, Note};
+pub use notification::{CreateNotification, Notification};
 pub use organization::{CreateOrganization, Organization, UpdateOrganization};
 pub use payment::{CreatePayment, Payment, VALID_METHODS};
 pub use product::{CreateProduct, Product, UpdateProduct};
@@ -70,6 +77,7 @@ pub use reports::{
     TrialBalance,
 };
 pub use role::{AssignPermission, CreateRole, Permission, Role};
+pub use tag::{CreateTag, Tag, UpdateTag};
 pub use tax_rate::{CreateTaxRate, TaxRate, UpdateTaxRate};
 pub use time_entry::{
     BillTimeEntries, CreateTimeEntry, TimeEntry, TimeSummaryRow, UpdateTimeEntry,
