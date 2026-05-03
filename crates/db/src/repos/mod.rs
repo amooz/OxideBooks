@@ -1,5 +1,6 @@
 pub mod accounts;
 pub mod api_keys;
+pub mod approval_rules;
 pub mod attachments;
 pub mod audit;
 pub mod bank;
@@ -59,10 +60,12 @@ pub mod tax_rates;
 pub mod time_entries;
 pub mod transactions;
 pub mod users;
+pub mod vendor_credits;
 pub mod webhooks;
 
 pub use accounts::AccountRepo;
 pub use api_keys::ApiKeyRepo;
+pub use approval_rules::ApprovalRuleRepo;
 pub use attachments::AttachmentRepo;
 pub use audit::{AuditEvent, AuditRepo};
 pub use bank::BankRepo;
@@ -122,4 +125,5 @@ pub use tax_rates::TaxRateRepo;
 pub use time_entries::TimeEntryRepo;
 pub use transactions::TransactionRepo;
 pub use users::{UpdateUser, UserRepo};
+pub use vendor_credits::VendorCreditRepo;
 pub use webhooks::WebhookRepo;

@@ -1,5 +1,6 @@
 pub mod accounts;
 pub mod api_keys;
+pub mod approval_rules;
 pub mod attachments;
 pub mod audit;
 pub mod auth;
@@ -69,4 +70,5 @@ pub mod time_entries;
 pub mod totp;
 pub mod transactions;
 pub mod users;
+pub mod vendor_credits;
 pub mod webhooks;

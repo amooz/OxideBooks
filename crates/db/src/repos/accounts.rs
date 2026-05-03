@@ -15,6 +15,7 @@ struct AccountRow {
     name: String,
     account_type: String,
     parent_id: Option<Uuid>,
+    sub_type: Option<String>,
     description: Option<String>,
     is_active: bool,
     created_at: OffsetDateTime,
@@ -30,6 +31,7 @@ impl AccountRow {
             name: self.name,
             account_type: AccountType::from_str(&self.account_type)?,
             parent_id: self.parent_id.map(|u| u.to_string()),
+            sub_type: self.sub_type,
             description: self.description,
             is_active: self.is_active,
             created_at: self.created_at,
@@ -58,8 +60,8 @@ impl AccountRepo {
             .map_err(|_| DbError::Conflict("invalid cursor".into()))?;
             let cursor_id = parse_uuid(&c.id)?;
             sqlx::query_as(
-                "SELECT id, organization_id, code, name, account_type, parent_id, description, \
-                 is_active, created_at, updated_at \
+                "SELECT id, organization_id, code, name, account_type, parent_id, sub_type, \
+                 description, is_active, created_at, updated_at \
                  FROM accounts \
                  WHERE organization_id = $1 AND (created_at, id) > ($2, $3) \
                  ORDER BY created_at ASC, id ASC LIMIT $4",
@@ -73,8 +75,8 @@ impl AccountRepo {
             .map_err(map_sqlx_err)?
         } else {
             sqlx::query_as(
-                "SELECT id, organization_id, code, name, account_type, parent_id, description, \
-                 is_active, created_at, updated_at \
+                "SELECT id, organization_id, code, name, account_type, parent_id, sub_type, \
+                 description, is_active, created_at, updated_at \
                  FROM accounts WHERE organization_id = $1 \
                  ORDER BY created_at ASC, id ASC LIMIT $2",
             )
@@ -105,8 +107,8 @@ impl AccountRepo {
         let id_uuid = parse_uuid(id)?;
 
         let row: AccountRow = sqlx::query_as(
-            "SELECT id, organization_id, code, name, account_type, parent_id, description, \
-             is_active, created_at, updated_at \
+            "SELECT id, organization_id, code, name, account_type, parent_id, sub_type, \
+             description, is_active, created_at, updated_at \
              FROM accounts WHERE organization_id = $1 AND id = $2",
         )
         .bind(org_uuid)
@@ -131,8 +133,8 @@ impl AccountRepo {
 
         sqlx::query(
             "INSERT INTO accounts \
-             (id, organization_id, code, name, account_type, parent_id, description) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7)",
+             (id, organization_id, code, name, account_type, parent_id, sub_type, description) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
         )
         .bind(id)
         .bind(org_uuid)
@@ -140,6 +142,7 @@ impl AccountRepo {
         .bind(&input.name)
         .bind(&account_type)
         .bind(parent_uuid)
+        .bind(&input.sub_type)
         .bind(&input.description)
         .execute(pool)
         .await
@@ -161,8 +164,9 @@ impl AccountRepo {
             "UPDATE accounts SET \
              code        = COALESCE($3, code), \
              name        = COALESCE($4, name), \
-             description = COALESCE($5, description), \
-             is_active   = COALESCE($6, is_active), \
+             sub_type    = COALESCE($5, sub_type), \
+             description = COALESCE($6, description), \
+             is_active   = COALESCE($7, is_active), \
              updated_at  = NOW() \
              WHERE organization_id = $1 AND id = $2",
         )
@@ -170,6 +174,7 @@ impl AccountRepo {
         .bind(id_uuid)
         .bind(&input.code)
         .bind(&input.name)
+        .bind(&input.sub_type)
         .bind(&input.description)
         .bind(input.is_active)
         .execute(pool)

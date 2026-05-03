@@ -1,5 +1,6 @@
 pub mod account;
 pub mod api_key;
+pub mod approval_rule;
 pub mod attachment;
 pub mod bank;
 pub mod bank_rule;
@@ -56,10 +57,12 @@ pub mod tax_period;
 pub mod tax_rate;
 pub mod time_entry;
 pub mod transaction;
+pub mod vendor_credit;
 pub mod webhook;
 
 pub use account::{Account, AccountType, CreateAccount, UpdateAccount};
 pub use api_key::{ApiKey, CreateApiKey, CreatedApiKey};
+pub use approval_rule::{ApprovalRule, CreateApprovalRule, UpdateApprovalRule};
 pub use attachment::{Attachment, CreateAttachment};
 pub use bank::{
     BankAccount, BankTransaction, CreateBankAccount, ImportBankTransaction, MatchTransaction,
@@ -167,6 +170,10 @@ pub use time_entry::{
 };
 pub use transaction::{
     CreateJournalEntry, CreateJournalLine, JournalEntry, JournalEntryStatus, JournalLine,
+};
+pub use vendor_credit::{
+    ApplyVendorCredit, CreateVendorCredit, CreateVendorCreditLine, VendorCredit,
+    VendorCreditApplication, VendorCreditLine,
 };
 pub use webhook::{
     CreateWebhookEndpoint, UpdateWebhookEndpoint, WebhookEndpoint, WebhookPayload, ALL_EVENT_TYPES,
