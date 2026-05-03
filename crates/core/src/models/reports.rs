@@ -84,6 +84,62 @@ pub struct BalanceSheetReport {
     pub is_balanced: bool,
 }
 
+// ── AR/AP Aging ───────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgingRow {
+    pub contact_id: String,
+    pub contact_name: String,
+    pub current: MinorUnits,
+    pub days_1_30: MinorUnits,
+    pub days_31_60: MinorUnits,
+    pub days_61_90: MinorUnits,
+    pub days_over_90: MinorUnits,
+    pub total: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgingReport {
+    pub as_of: Date,
+    pub aging_type: String,
+    pub rows: Vec<AgingRow>,
+    pub totals: AgingRow,
+}
+
+// ── Dashboard KPIs ────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DashboardKpis {
+    pub cash_balance: MinorUnits,
+    pub accounts_receivable: MinorUnits,
+    pub accounts_payable: MinorUnits,
+    pub revenue_mtd: MinorUnits,
+    pub expenses_mtd: MinorUnits,
+    pub overdue_invoices: i64,
+}
+
+// ── Tax Summary ───────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaxSummaryLine {
+    pub tax_rate_id: String,
+    pub tax_rate_name: String,
+    pub rate_bps: i32,
+    pub tax_collected: MinorUnits,
+    pub tax_paid: MinorUnits,
+    pub net: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaxSummaryReport {
+    pub from: Date,
+    pub to: Date,
+    pub lines: Vec<TaxSummaryLine>,
+    pub total_collected: MinorUnits,
+    pub total_paid: MinorUnits,
+    pub net: MinorUnits,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

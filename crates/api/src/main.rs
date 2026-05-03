@@ -23,7 +23,8 @@ async fn main() -> anyhow::Result<()> {
 
     info!("🗄️ migrations applied");
 
-    let app_state = AppState::new(pool, settings.clone());
+    let app_state = AppState::new(pool.clone(), settings.clone());
+    oxidebooks_api::scheduler::spawn(pool);
     let app = routes::build(app_state);
 
     let addr: SocketAddr = format!("{}:{}", settings.server.host, settings.server.port).parse()?;

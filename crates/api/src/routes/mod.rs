@@ -15,8 +15,9 @@ use tower_http::{
 
 use crate::{
     handlers::{
-        accounts, audit, auth, auth_sso, contacts, exchange_rates, health, identity, invoices,
-        organizations, payments, reports, roles, scim, transactions, users,
+        accounts, audit, auth, auth_sso, contacts, exchange_rates, expenses, health, identity,
+        invoices, organizations, payments, recurring, reports, roles, scim, tax_rates,
+        transactions, users,
     },
     middleware::require_auth,
     state::AppState,
@@ -172,8 +173,47 @@ pub fn build(state: AppState) -> Router {
         .route("/reports/trial-balance", get(reports::trial_balance))
         .route("/reports/profit-loss", get(reports::profit_loss))
         .route("/reports/balance-sheet", get(reports::balance_sheet))
+        .route("/reports/aging", get(reports::aging))
+        .route("/reports/tax-summary", get(reports::tax_summary))
+        // Dashboard
+        .route("/dashboard", get(reports::dashboard))
         // Audit log
         .route("/audit-log", get(audit::list_audit_log))
+        // Tax rates
+        .route(
+            "/tax-rates",
+            get(tax_rates::list_tax_rates).post(tax_rates::create_tax_rate),
+        )
+        .route(
+            "/tax-rates/:id",
+            get(tax_rates::get_tax_rate)
+                .patch(tax_rates::update_tax_rate)
+                .delete(tax_rates::delete_tax_rate),
+        )
+        // Expenses
+        .route(
+            "/expenses",
+            get(expenses::list_expenses).post(expenses::create_expense),
+        )
+        .route(
+            "/expenses/:id",
+            get(expenses::get_expense).patch(expenses::update_expense),
+        )
+        .route("/expenses/:id/submit", post(expenses::submit_expense))
+        .route("/expenses/:id/approve", post(expenses::approve_expense))
+        .route("/expenses/:id/reject", post(expenses::reject_expense))
+        .route("/expenses/:id/reimburse", post(expenses::reimburse_expense))
+        // Recurring schedules
+        .route(
+            "/recurring-schedules",
+            get(recurring::list_schedules).post(recurring::create_schedule),
+        )
+        .route(
+            "/recurring-schedules/:id",
+            get(recurring::get_schedule)
+                .patch(recurring::update_schedule)
+                .delete(recurring::delete_schedule),
+        )
         // RBAC: permissions & roles
         .route("/permissions", get(roles::list_permissions))
         .route("/roles", get(roles::list_roles).post(roles::create_role))
