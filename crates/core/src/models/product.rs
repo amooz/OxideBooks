@@ -12,6 +12,7 @@ pub struct Product {
     pub currency: String,
     pub account_id: Option<String>,
     pub tax_rate_id: Option<String>,
+    pub category_id: Option<String>,
     pub is_active: bool,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
@@ -30,6 +31,7 @@ pub struct CreateProduct {
     pub currency: String,
     pub account_id: Option<String>,
     pub tax_rate_id: Option<String>,
+    pub category_id: Option<String>,
 }
 
 fn default_currency() -> String {
@@ -44,5 +46,6 @@ pub struct UpdateProduct {
     pub unit_price: Option<i64>,
     pub account_id: Option<String>,
     pub tax_rate_id: Option<String>,
+    pub category_id: Option<String>,
     pub is_active: Option<bool>,
 }

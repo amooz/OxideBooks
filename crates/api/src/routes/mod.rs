@@ -20,9 +20,9 @@ use crate::{
         custom_fields, departments, dunning, email, employees, exchange_rates, expense_policies,
         expenses, export, fixed_assets, fx, health, identity, import, inventory, invoice_templates,
         invoices, late_fees, leave, mileage, notes, notifications, organizations, payment_links,
-        payments, payroll, payslips, price_lists, products, projects, purchase_orders, recurring,
-        reports, retainers, roles, scim, sessions, stripe_webhook, tags, tax_periods, tax_rates,
-        time_entries, totp, transactions, users, webhooks,
+        payments, payroll, payslips, price_lists, product_categories, products, projects,
+        purchase_orders, recurring, reports, retainers, roles, scim, sessions, stripe_webhook,
+        tags, tax_periods, tax_rates, time_entries, totp, transactions, users, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -260,6 +260,18 @@ pub fn build(state: AppState) -> Router {
                 .patch(products::update_product)
                 .delete(products::delete_product),
         )
+        // Product categories
+        .route(
+            "/product-categories",
+            get(product_categories::list_product_categories)
+                .post(product_categories::create_product_category),
+        )
+        .route(
+            "/product-categories/:id",
+            get(product_categories::get_product_category)
+                .patch(product_categories::update_product_category)
+                .delete(product_categories::delete_product_category),
+        )
         // Budgets
         .route(
             "/budgets",
@@ -337,6 +349,10 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/purchase-orders/:id/lines",
             post(purchase_orders::add_po_line),
+        )
+        .route(
+            "/purchase-orders/:id/create-bill",
+            post(purchase_orders::po_create_bill),
         )
         // Fixed assets
         .route(
