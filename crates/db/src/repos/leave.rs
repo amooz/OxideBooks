@@ -1,5 +1,5 @@
 use oxidebooks_core::models::{
-    CreateLeaveRequest, CreateLeaveType, LeaveRequest, LeaveType, UpdateLeaveType,
+    CreateLeaveRequest, CreateLeaveType, LeaveBalance, LeaveRequest, LeaveType, UpdateLeaveType,
 };
 use sqlx::PgPool;
 use time::{Date, OffsetDateTime};
@@ -331,6 +331,56 @@ impl LeaveRepo {
         .await
         .map_err(map_sqlx_err)?;
         Ok(row.into())
+    }
+
+    pub async fn employee_balance(
+        pool: &PgPool,
+        org_id: &str,
+        employee_id: &str,
+    ) -> Result<Vec<LeaveBalance>, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let emp_uuid = parse_uuid(employee_id)?;
+
+        #[derive(sqlx::FromRow)]
+        struct BalanceRow {
+            leave_type_id: Uuid,
+            leave_type_name: String,
+            days_per_year: f64,
+            days_taken: f64,
+            days_pending: f64,
+        }
+
+        let rows: Vec<BalanceRow> = sqlx::query_as(
+            "SELECT lt.id AS leave_type_id, lt.name AS leave_type_name, \
+             lt.days_per_year, \
+             COALESCE(SUM(lr.days) FILTER (WHERE lr.status = 'approved'), 0.0) AS days_taken, \
+             COALESCE(SUM(lr.days) FILTER (WHERE lr.status = 'pending'),  0.0) AS days_pending \
+             FROM leave_types lt \
+             LEFT JOIN leave_requests lr \
+               ON lr.leave_type_id = lt.id \
+               AND lr.employee_id = $2 \
+               AND lr.organization_id = $1 \
+             WHERE lt.organization_id = $1 \
+             GROUP BY lt.id, lt.name, lt.days_per_year \
+             ORDER BY lt.name ASC",
+        )
+        .bind(org_uuid)
+        .bind(emp_uuid)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| LeaveBalance {
+                leave_type_id: r.leave_type_id.to_string(),
+                leave_type_name: r.leave_type_name,
+                days_per_year: r.days_per_year,
+                days_taken: r.days_taken,
+                days_pending: r.days_pending,
+                days_remaining: (r.days_per_year - r.days_taken - r.days_pending).max(0.0),
+            })
+            .collect())
     }
 }
 

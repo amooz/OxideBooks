@@ -45,6 +45,7 @@ pub mod retainer;
 pub mod role;
 pub mod session;
 pub mod tag;
+pub mod tax_period;
 pub mod tax_rate;
 pub mod time_entry;
 pub mod transaction;
@@ -92,8 +93,8 @@ pub use identity::{
 };
 pub use import::{AccountCsvRow, ContactCsvRow, ImportError, ImportResult};
 pub use inventory::{
-    CreateInventoryItem, InventoryAdjustment, InventoryItem, InventoryMovement, LowStockItem,
-    UpdateInventoryItem,
+    CreateInventoryItem, InventoryAdjustment, InventoryItem, InventoryMovement,
+    InventoryValuationReport, InventoryValuationRow, LowStockItem, UpdateInventoryItem,
 };
 pub use invoice::{
     CreateInvoice, CreateInvoiceLine, Invoice, InvoiceFilters, InvoiceLine, InvoiceStatus,
@@ -101,7 +102,9 @@ pub use invoice::{
 };
 pub use invoice_template::{InvoiceTemplate, UpsertInvoiceTemplate};
 pub use late_fee::{LateFee, LateFeeRule, UpsertLateFeeRule};
-pub use leave::{CreateLeaveRequest, CreateLeaveType, LeaveRequest, LeaveType, UpdateLeaveType};
+pub use leave::{
+    CreateLeaveRequest, CreateLeaveType, LeaveBalance, LeaveRequest, LeaveType, UpdateLeaveType,
+};
 pub use mileage::{CreateMileageTrip, MileageSummary, MileageTrip};
 pub use note::{CreateNote, Note};
 pub use notification::{CreateNotification, Notification};
@@ -134,6 +137,7 @@ pub use retainer::{ApplyRetainer, CreateRetainer, DepositRetainer, Retainer, Ret
 pub use role::{AssignPermission, CreateRole, Permission, Role};
 pub use session::Session;
 pub use tag::{CreateTag, Tag, UpdateTag};
+pub use tax_period::{CreateTaxPeriod, FileTaxPeriod, TaxPeriod};
 pub use tax_rate::{CreateTaxRate, TaxRate, UpdateTaxRate};
 pub use time_entry::{
     BillTimeEntries, CreateTimeEntry, TimeEntry, TimeSummaryRow, UpdateTimeEntry,

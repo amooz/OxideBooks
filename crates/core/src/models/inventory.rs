@@ -65,3 +65,20 @@ pub struct LowStockItem {
     pub quantity_on_hand: i64,
     pub reorder_point: i64,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InventoryValuationRow {
+    pub product_id: String,
+    pub product_name: String,
+    pub sku: Option<String>,
+    pub quantity_on_hand: i64,
+    pub cost_per_unit: i64,
+    pub total_value: i64,
+    pub valuation_method: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InventoryValuationReport {
+    pub rows: Vec<InventoryValuationRow>,
+    pub total_value: i64,
+}

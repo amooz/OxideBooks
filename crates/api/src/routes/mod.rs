@@ -21,8 +21,8 @@ use crate::{
         expenses, export, fixed_assets, fx, health, identity, import, inventory, invoice_templates,
         invoices, late_fees, leave, mileage, notes, notifications, organizations, payment_links,
         payments, payroll, payslips, price_lists, products, projects, purchase_orders, recurring,
-        reports, retainers, roles, scim, sessions, stripe_webhook, tags, tax_rates, time_entries,
-        totp, transactions, users, webhooks,
+        reports, retainers, roles, scim, sessions, stripe_webhook, tags, tax_periods, tax_rates,
+        time_entries, totp, transactions, users, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -225,6 +225,17 @@ pub fn build(state: AppState) -> Router {
                 .patch(tax_rates::update_tax_rate)
                 .delete(tax_rates::delete_tax_rate),
         )
+        // Tax filing periods
+        .route(
+            "/tax-periods",
+            get(tax_periods::list_tax_periods).post(tax_periods::create_tax_period),
+        )
+        .route(
+            "/tax-periods/:id",
+            get(tax_periods::get_tax_period).delete(tax_periods::delete_tax_period),
+        )
+        .route("/tax-periods/:id/file", post(tax_periods::file_tax_period))
+        .route("/tax-periods/:id/lock", post(tax_periods::lock_tax_period))
         // Expenses
         .route(
             "/expenses",
@@ -424,6 +435,10 @@ pub fn build(state: AppState) -> Router {
             get(inventory::list_inventory).post(inventory::create_inventory_item),
         )
         .route("/inventory/low-stock", get(inventory::low_stock))
+        .route(
+            "/reports/inventory-valuation",
+            get(inventory::inventory_valuation),
+        )
         .route(
             "/inventory/:product_id",
             get(inventory::get_inventory_item).patch(inventory::update_inventory_item),
@@ -662,6 +677,10 @@ pub fn build(state: AppState) -> Router {
             get(employees::get_employee)
                 .patch(employees::update_employee)
                 .delete(employees::delete_employee),
+        )
+        .route(
+            "/employees/:id/leave-balance",
+            get(leave::employee_leave_balance),
         )
         // Vendor bills (AP)
         .route("/bills", get(bills::list_bills).post(bills::create_bill))

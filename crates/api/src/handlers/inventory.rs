@@ -95,3 +95,15 @@ pub async fn low_stock(
     let items = InventoryRepo::low_stock(&state.db, &claims.org).await?;
     Ok(Json(serde_json::json!({ "data": items })))
 }
+
+/// GET /api/v1/reports/inventory-valuation
+pub async fn inventory_valuation(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("inventory:read") {
+        return Err(ApiError::Forbidden);
+    }
+    let report = InventoryRepo::valuation_report(&state.db, &claims.org).await?;
+    Ok(Json(serde_json::json!({ "data": report })))
+}
