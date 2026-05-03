@@ -21,13 +21,13 @@ use crate::{
         deferred_charges, deferred_revenue, departments, doc_sequences, dunning, email, employees,
         exchange_rates, expense_categories, expense_policies, expense_reports, expenses, export,
         fixed_assets, fx, fx_revaluations, grn, health, identity, import, inventory,
-        inventory_lots, invoice_templates, invoices, late_fees, leave, mileage, notes,
-        notifications, opening_balances, organizations, payment_links, payment_plans,
-        payment_terms, payments, payroll, payslips, prepayments, price_lists, product_categories,
-        products, projects, purchase_orders, purchase_requisitions, recurring, reports, retainers,
-        roles, sales_orders, scim, sessions, stripe_webhook, subscriptions, tags, tax_groups,
-        tax_periods, tax_rates, time_entries, totp, tracking_categories, transactions, users,
-        vendor_credits, warehouses, webhooks,
+        inventory_lots, invoice_templates, invoices, landed_costs, late_fees, leave, mileage,
+        notes, notifications, opening_balances, organizations, payment_links, payment_plans,
+        payment_terms, payments, payroll, payslips, prepaid_expenses, prepayments, price_lists,
+        product_categories, products, projects, purchase_orders, purchase_requisitions, recurring,
+        reports, retainers, roles, sales_orders, scim, sessions, stripe_webhook, subscriptions,
+        tags, tax_groups, tax_periods, tax_rates, time_entries, totp, tracking_categories,
+        transactions, users, vendor_credits, warehouses, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -641,6 +641,10 @@ pub fn build(state: AppState) -> Router {
         // Goods receipt notes
         .route("/goods-receipts/:id", get(grn::get_receipt))
         .route("/goods-receipts/:id/post", post(grn::post_receipt))
+        .route(
+            "/goods-receipts/:id/landed-costs",
+            get(landed_costs::list_landed_costs).post(landed_costs::create_landed_cost),
+        )
         // Warehouses
         .route(
             "/warehouses",
@@ -894,6 +898,19 @@ pub fn build(state: AppState) -> Router {
             post(prepayments::apply_prepayment),
         )
         .route("/prepayments/:id/void", post(prepayments::void_prepayment))
+        // Prepaid expense amortization schedules
+        .route(
+            "/prepaid-expenses",
+            get(prepaid_expenses::list_schedules).post(prepaid_expenses::create_schedule),
+        )
+        .route(
+            "/prepaid-expenses/:id",
+            get(prepaid_expenses::get_schedule).patch(prepaid_expenses::update_schedule),
+        )
+        .route(
+            "/prepaid-expenses/entries/:id/recognize",
+            post(prepaid_expenses::recognize_entry),
+        )
         // Price lists
         .route(
             "/price-lists",
