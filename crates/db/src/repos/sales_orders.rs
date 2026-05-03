@@ -375,6 +375,7 @@ impl SalesOrderRepo {
             currency: Some(so_row.currency.clone()),
             exchange_rate: None,
             notes: so_row.notes.clone(),
+            global_discount_pct: 0,
             lines: invoice_lines,
         };
 

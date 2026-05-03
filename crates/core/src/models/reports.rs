@@ -248,6 +248,25 @@ pub struct SalesByProductReport {
     pub total_tax: MinorUnits,
 }
 
+// ── Cash Flow Forecast ────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CashFlowForecastBucket {
+    pub period_start: Date,
+    pub period_end: Date,
+    pub inflows: i64,
+    pub outflows: i64,
+    pub net: i64,
+    pub running_balance: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CashFlowForecast {
+    pub opening_balance: i64,
+    pub buckets: Vec<CashFlowForecastBucket>,
+    pub closing_balance: i64,
+}
+
 // ── Global Search ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

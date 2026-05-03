@@ -252,6 +252,7 @@ impl DeferredChargeRepo {
             currency: None,
             exchange_rate: None,
             notes: None,
+            global_discount_pct: 0,
             lines,
         };
 

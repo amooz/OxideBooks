@@ -6,6 +6,7 @@ use oxidebooks_db::repos::ReportRepo;
 use serde::Deserialize;
 use time::macros::format_description;
 use time::Date;
+use time::OffsetDateTime;
 
 use crate::{
     error::{ApiError, ApiResult},
@@ -191,6 +192,30 @@ pub async fn summary_1099(
         .year
         .unwrap_or_else(|| time::OffsetDateTime::now_utc().year());
     let report = ReportRepo::summary_1099(&state.db, &claims.org, year).await?;
+    Ok(Json(serde_json::json!({ "data": report })))
+}
+
+#[derive(Deserialize)]
+pub struct ForecastQuery {
+    pub from: Option<String>,
+    pub days: Option<i64>,
+}
+
+/// GET /api/v1/reports/cash-flow-forecast?from=YYYY-MM-DD&days=90
+pub async fn cash_flow_forecast(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<ForecastQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("reports:read") {
+        return Err(ApiError::Forbidden);
+    }
+    let from = match q.from.as_deref() {
+        Some(s) => parse_date(s)?,
+        None => OffsetDateTime::now_utc().date(),
+    };
+    let days = q.days.unwrap_or(90).clamp(1, 365);
+    let report = ReportRepo::cash_flow_forecast(&state.db, &claims.org, from, days).await?;
     Ok(Json(serde_json::json!({ "data": report })))
 }
 

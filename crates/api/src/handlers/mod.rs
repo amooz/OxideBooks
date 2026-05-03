@@ -80,4 +80,5 @@ pub mod tracking_categories;
 pub mod transactions;
 pub mod users;
 pub mod vendor_credits;
+pub mod warehouses;
 pub mod webhooks;

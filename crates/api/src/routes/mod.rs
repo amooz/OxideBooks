@@ -26,7 +26,7 @@ use crate::{
         price_lists, product_categories, products, projects, purchase_orders,
         purchase_requisitions, recurring, reports, retainers, roles, sales_orders, scim, sessions,
         stripe_webhook, subscriptions, tags, tax_groups, tax_periods, tax_rates, time_entries,
-        totp, tracking_categories, transactions, users, vendor_credits, webhooks,
+        totp, tracking_categories, transactions, users, vendor_credits, warehouses, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -240,6 +240,10 @@ pub fn build(state: AppState) -> Router {
         .route("/reports/aging", get(reports::aging))
         .route("/reports/tax-summary", get(reports::tax_summary))
         .route("/reports/cash-flow", get(reports::cash_flow))
+        .route(
+            "/reports/cash-flow-forecast",
+            get(reports::cash_flow_forecast),
+        )
         .route("/reports/budget-vs-actual", get(budgets::budget_vs_actual))
         .route("/reports/1099-summary", get(reports::summary_1099))
         .route("/reports/account-ledger", get(reports::account_ledger))
@@ -615,6 +619,22 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/inventory/:product_id/movements",
             get(inventory::inventory_movements),
+        )
+        // Warehouses
+        .route(
+            "/warehouses",
+            get(warehouses::list_warehouses).post(warehouses::create_warehouse),
+        )
+        .route("/warehouses/transfer", post(warehouses::transfer_stock))
+        .route(
+            "/warehouses/:id",
+            get(warehouses::get_warehouse)
+                .patch(warehouses::update_warehouse)
+                .delete(warehouses::delete_warehouse),
+        )
+        .route(
+            "/warehouses/:id/stock",
+            get(warehouses::get_warehouse_stock),
         )
         // Custom fields
         .route(
