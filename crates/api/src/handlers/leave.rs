@@ -151,3 +151,16 @@ pub async fn cancel_leave_request(
         LeaveRepo::update_request_status(&state.db, &claims.org, &id, "cancelled", None).await?;
     Ok(Json(serde_json::json!({ "data": req })))
 }
+
+/// GET /api/v1/employees/:id/leave-balance
+pub async fn employee_leave_balance(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let balances = LeaveRepo::employee_balance(&state.db, &claims.org, &id).await?;
+    Ok(Json(serde_json::json!({ "data": balances })))
+}

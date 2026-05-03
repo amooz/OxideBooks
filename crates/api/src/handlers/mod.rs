@@ -54,6 +54,7 @@ pub mod scim;
 pub mod sessions;
 pub mod stripe_webhook;
 pub mod tags;
+pub mod tax_periods;
 pub mod tax_rates;
 pub mod time_entries;
 pub mod totp;

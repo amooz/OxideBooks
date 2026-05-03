@@ -67,3 +67,13 @@ pub struct CreateLeaveRequest {
 fn default_true() -> bool {
     true
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LeaveBalance {
+    pub leave_type_id: String,
+    pub leave_type_name: String,
+    pub days_per_year: f64,
+    pub days_taken: f64,
+    pub days_pending: f64,
+    pub days_remaining: f64,
+}

@@ -1,6 +1,6 @@
 use oxidebooks_core::models::{
-    CreateInventoryItem, InventoryAdjustment, InventoryItem, InventoryMovement, LowStockItem,
-    UpdateInventoryItem,
+    CreateInventoryItem, InventoryAdjustment, InventoryItem, InventoryMovement,
+    InventoryValuationReport, InventoryValuationRow, LowStockItem, UpdateInventoryItem,
 };
 use sqlx::PgPool;
 use time::OffsetDateTime;
@@ -276,5 +276,58 @@ impl InventoryRepo {
                 reorder_point: r.reorder_point,
             })
             .collect())
+    }
+
+    pub async fn valuation_report(
+        pool: &PgPool,
+        org_id: &str,
+    ) -> Result<InventoryValuationReport, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        #[derive(sqlx::FromRow)]
+        struct ValRow {
+            product_id: Uuid,
+            product_name: String,
+            sku: Option<String>,
+            quantity_on_hand: i64,
+            cost_per_unit: i64,
+            valuation_method: String,
+        }
+
+        let rows: Vec<ValRow> = sqlx::query_as(
+            "SELECT i.product_id, p.name AS product_name, p.sku, \
+             i.quantity_on_hand, i.cost_per_unit, i.valuation_method \
+             FROM inventory_items i \
+             JOIN products p ON p.id = i.product_id \
+             WHERE i.organization_id = $1 \
+             ORDER BY p.name ASC",
+        )
+        .bind(org_uuid)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let mut total_value: i64 = 0;
+        let valuation_rows: Vec<InventoryValuationRow> = rows
+            .into_iter()
+            .map(|r| {
+                let tv = r.quantity_on_hand * r.cost_per_unit;
+                total_value += tv;
+                InventoryValuationRow {
+                    product_id: r.product_id.to_string(),
+                    product_name: r.product_name,
+                    sku: r.sku,
+                    quantity_on_hand: r.quantity_on_hand,
+                    cost_per_unit: r.cost_per_unit,
+                    total_value: tv,
+                    valuation_method: r.valuation_method,
+                }
+            })
+            .collect();
+
+        Ok(InventoryValuationReport {
+            rows: valuation_rows,
+            total_value,
+        })
     }
 }
