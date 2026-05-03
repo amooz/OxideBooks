@@ -201,6 +201,28 @@ pub struct AccountLedger {
     pub closing_balance: MinorUnits,
 }
 
+// ── Project Profitability ────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectProfitabilityRow {
+    pub project_id: String,
+    pub project_name: String,
+    pub invoiced_amount: MinorUnits,
+    pub expense_amount: MinorUnits,
+    pub time_cost: MinorUnits,
+    pub gross_profit: MinorUnits,
+    pub margin_bps: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectProfitabilityReport {
+    pub rows: Vec<ProjectProfitabilityRow>,
+    pub total_invoiced: MinorUnits,
+    pub total_expenses: MinorUnits,
+    pub total_time_cost: MinorUnits,
+    pub total_profit: MinorUnits,
+}
+
 // ── Sales by Product ─────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

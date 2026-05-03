@@ -1,8 +1,9 @@
 use oxidebooks_core::models::{
     AccountBalance, AccountLedger, AccountType, AgingReport, AgingRow, BalanceSheetReport,
     CashFlowReport, CashFlowSection, ConsolidatedProfitLoss, ContactStatement, DashboardKpis,
-    LedgerLine, OrgProfitLoss, ProfitLossReport, ReportLine, ReportSection, SalesByProductReport,
-    SalesByProductRow, StatementLine, TaxSummaryLine, TaxSummaryReport, TrialBalance,
+    LedgerLine, OrgProfitLoss, ProfitLossReport, ProjectProfitabilityReport,
+    ProjectProfitabilityRow, ReportLine, ReportSection, SalesByProductReport, SalesByProductRow,
+    StatementLine, TaxSummaryLine, TaxSummaryReport, TrialBalance,
 };
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -1251,6 +1252,103 @@ impl ReportRepo {
             total_discount,
             total_net,
             total_tax,
+        })
+    }
+
+    pub async fn project_profitability(
+        pool: &PgPool,
+        org_id: &str,
+    ) -> Result<ProjectProfitabilityReport, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            project_id: Uuid,
+            project_name: String,
+            invoiced_amount: i64,
+            expense_amount: i64,
+            time_cost: i64,
+        }
+
+        let rows: Vec<Row> = sqlx::query_as(
+            r#"
+            SELECT
+                p.id                                                   AS project_id,
+                p.name                                                 AS project_name,
+                COALESCE(inv.invoiced_amount, 0)                       AS invoiced_amount,
+                COALESCE(exp.expense_amount, 0)                        AS expense_amount,
+                COALESCE(te.time_cost, 0)                              AS time_cost
+            FROM projects p
+            LEFT JOIN LATERAL (
+                SELECT COALESCE(SUM(
+                    il.quantity * il.unit_price / 100
+                    - il.quantity * il.unit_price / 100 * il.discount_pct / 10000
+                ), 0)::BIGINT AS invoiced_amount
+                FROM invoices i
+                JOIN invoice_lines il ON il.invoice_id = i.id
+                WHERE i.organization_id = $1
+                  AND i.project_id = p.id
+                  AND i.invoice_type = 'invoice'
+                  AND i.status NOT IN ('draft', 'voided')
+            ) inv ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT COALESCE(SUM(e.amount), 0)::BIGINT AS expense_amount
+                FROM expenses e
+                WHERE e.organization_id = $1
+                  AND e.project_id = p.id
+                  AND e.status NOT IN ('draft', 'rejected')
+            ) exp ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT COALESCE(SUM(te.duration_minutes * te.hourly_rate / 60), 0)::BIGINT AS time_cost
+                FROM time_entries te
+                WHERE te.organization_id = $1
+                  AND te.project_id = p.id
+                  AND te.billed = TRUE
+            ) te ON TRUE
+            WHERE p.organization_id = $1
+              AND p.status = 'active'
+            ORDER BY (COALESCE(inv.invoiced_amount, 0) - COALESCE(exp.expense_amount, 0) - COALESCE(te.time_cost, 0)) DESC
+            "#,
+        )
+        .bind(org_uuid)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let mut result_rows = Vec::with_capacity(rows.len());
+        let mut total_invoiced = 0i64;
+        let mut total_expenses = 0i64;
+        let mut total_time = 0i64;
+
+        for r in rows {
+            let gross_profit = r.invoiced_amount - r.expense_amount - r.time_cost;
+            let margin_bps = if r.invoiced_amount > 0 {
+                gross_profit * 10_000 / r.invoiced_amount
+            } else {
+                0
+            };
+            total_invoiced += r.invoiced_amount;
+            total_expenses += r.expense_amount;
+            total_time += r.time_cost;
+            result_rows.push(ProjectProfitabilityRow {
+                project_id: r.project_id.to_string(),
+                project_name: r.project_name,
+                invoiced_amount: r.invoiced_amount,
+                expense_amount: r.expense_amount,
+                time_cost: r.time_cost,
+                gross_profit,
+                margin_bps,
+            });
+        }
+
+        let total_profit = total_invoiced - total_expenses - total_time;
+
+        Ok(ProjectProfitabilityReport {
+            rows: result_rows,
+            total_invoiced,
+            total_expenses,
+            total_time_cost: total_time,
+            total_profit,
         })
     }
 }

@@ -5,6 +5,7 @@ use time::{Date, OffsetDateTime};
 #[serde(rename_all = "snake_case")]
 pub enum PoStatus {
     Draft,
+    Approved,
     Sent,
     PartiallyReceived,
     Received,
@@ -16,6 +17,7 @@ impl std::fmt::Display for PoStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             PoStatus::Draft => "draft",
+            PoStatus::Approved => "approved",
             PoStatus::Sent => "sent",
             PoStatus::PartiallyReceived => "partially_received",
             PoStatus::Received => "received",
@@ -30,6 +32,7 @@ impl std::str::FromStr for PoStatus {
     fn from_str(s: &str) -> Result<Self, ()> {
         match s {
             "draft" => Ok(Self::Draft),
+            "approved" => Ok(Self::Approved),
             "sent" => Ok(Self::Sent),
             "partially_received" => Ok(Self::PartiallyReceived),
             "received" => Ok(Self::Received),
@@ -44,8 +47,10 @@ impl PoStatus {
     pub fn can_transition_to(&self, next: &PoStatus) -> bool {
         matches!(
             (self, next),
-            (Self::Draft, Self::Sent)
+            (Self::Draft, Self::Approved)
                 | (Self::Draft, Self::Voided)
+                | (Self::Approved, Self::Sent)
+                | (Self::Approved, Self::Voided)
                 | (Self::Sent, Self::PartiallyReceived)
                 | (Self::Sent, Self::Received)
                 | (Self::Sent, Self::Voided)

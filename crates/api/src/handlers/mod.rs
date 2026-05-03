@@ -24,6 +24,7 @@ pub mod employees;
 pub mod exchange_rates;
 pub mod expense_categories;
 pub mod expense_policies;
+pub mod expense_reports;
 pub mod expenses;
 pub mod export;
 pub mod fixed_assets;
