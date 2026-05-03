@@ -19,6 +19,7 @@ struct ContactRow {
     tax_id: Option<String>,
     currency: Option<String>,
     credit_limit: Option<i64>,
+    credit_limit_behaviour: String,
     is_active: bool,
     is_1099_vendor: bool,
     created_at: OffsetDateTime,
@@ -43,6 +44,7 @@ impl From<ContactRow> for Contact {
             tax_id: r.tax_id,
             currency: r.currency,
             credit_limit: r.credit_limit,
+            credit_limit_behaviour: r.credit_limit_behaviour,
             is_active: r.is_active,
             is_1099_vendor: r.is_1099_vendor,
             created_at: r.created_at,
@@ -72,7 +74,7 @@ impl ContactRepo {
             let cursor_id = parse_uuid(&c.id)?;
             sqlx::query_as(
                 "SELECT id, organization_id, name, contact_type, email, phone, \
-                 address, tax_number, tax_id, currency, credit_limit, is_active, is_1099_vendor, \
+                 address, tax_number, tax_id, currency, credit_limit, credit_limit_behaviour, is_active, is_1099_vendor, \
                  created_at, updated_at \
                  FROM contacts \
                  WHERE organization_id = $1 AND (created_at, id) > ($2, $3) \
@@ -88,7 +90,7 @@ impl ContactRepo {
         } else {
             sqlx::query_as(
                 "SELECT id, organization_id, name, contact_type, email, phone, \
-                 address, tax_number, tax_id, currency, credit_limit, is_active, is_1099_vendor, \
+                 address, tax_number, tax_id, currency, credit_limit, credit_limit_behaviour, is_active, is_1099_vendor, \
                  created_at, updated_at \
                  FROM contacts WHERE organization_id = $1 \
                  ORDER BY created_at ASC, id ASC LIMIT $2",
@@ -120,7 +122,7 @@ impl ContactRepo {
 
         let row: ContactRow = sqlx::query_as(
             "SELECT id, organization_id, name, contact_type, email, phone, \
-             address, tax_number, tax_id, currency, credit_limit, is_active, is_1099_vendor, \
+             address, tax_number, tax_id, currency, credit_limit, credit_limit_behaviour, is_active, is_1099_vendor, \
              created_at, updated_at \
              FROM contacts WHERE organization_id = $1 AND id = $2",
         )
@@ -231,8 +233,9 @@ impl ContactRepo {
              is_active       = COALESCE($9, is_active), \
              tax_id          = COALESCE($10, tax_id), \
              is_1099_vendor  = COALESCE($11, is_1099_vendor), \
-             credit_limit    = COALESCE($12, credit_limit), \
-             updated_at      = NOW() \
+             credit_limit              = COALESCE($12, credit_limit), \
+             credit_limit_behaviour    = COALESCE($13, credit_limit_behaviour), \
+             updated_at                = NOW() \
              WHERE organization_id = $1 AND id = $2",
         )
         .bind(org_uuid)
@@ -247,6 +250,7 @@ impl ContactRepo {
         .bind(&input.tax_id)
         .bind(input.is_1099_vendor)
         .bind(input.credit_limit)
+        .bind(&input.credit_limit_behaviour)
         .execute(pool)
         .await
         .map_err(map_sqlx_err)?;
