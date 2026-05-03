@@ -90,3 +90,11 @@ base64 = "0.22"
 
 # URL percent-encoding (SAML HTTP-Redirect binding)
 urlencoding = "2"
+
+# SAML xmldsig signature verification (pure Rust, no C FFI)
+rsa = { version = "0.9", features = ["sha2"] }
+sha2 = "0.10"
+x509-cert = { version = "0.2", features = ["pem"] }
+
+# Per-IP rate limiting for auth endpoints
+tower_governor = "0.4"

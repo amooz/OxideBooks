@@ -1,5 +1,6 @@
 pub mod accounts;
 pub mod contacts;
+pub mod exchange_rates;
 pub mod identity;
 pub mod invoices;
 pub mod organizations;
@@ -11,6 +12,7 @@ pub mod users;
 
 pub use accounts::AccountRepo;
 pub use contacts::ContactRepo;
+pub use exchange_rates::ExchangeRateRepo;
 pub use identity::{IdentityProviderRepo, ScimTokenRepo};
 pub use invoices::InvoiceRepo;
 pub use organizations::OrganizationRepo;

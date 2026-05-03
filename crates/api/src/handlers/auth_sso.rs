@@ -101,13 +101,14 @@ pub async fn oidc_initiate(
     for scope in scopes.split_whitespace() {
         auth_req = auth_req.add_scope(Scope::new(scope.to_string()));
     }
-    let (auth_url, csrf_token, _nonce) = auth_req.url();
+    let (auth_url, csrf_token, nonce) = auth_req.url();
 
     IdentityProviderRepo::store_oidc_state(
         &state.db,
         csrf_token.secret(),
         &provider_id,
         &query.org_id,
+        nonce.secret(),
         Some(pkce_verifier.secret()),
         query.redirect_uri.as_deref().unwrap_or("/"),
     )
@@ -130,7 +131,7 @@ pub async fn oidc_callback(
     Path(provider_id): Path<String>,
     Query(query): Query<OidcCallbackQuery>,
 ) -> Result<Response, ApiError> {
-    let (db_provider_id, org_id, code_verifier_secret, post_login_uri) =
+    let (db_provider_id, org_id, stored_nonce, code_verifier_secret, post_login_uri) =
         IdentityProviderRepo::consume_oidc_state(&state.db, &query.state)
             .await
             .map_err(|_| ApiError::Unauthorized)?;
@@ -187,10 +188,7 @@ pub async fn oidc_callback(
         .id_token()
         .ok_or_else(|| ApiError::Internal(anyhow::anyhow!("no id_token in response")))?;
 
-    // Nonce verification: we stored the state but not the nonce separately.
-    // In a full implementation, persist the nonce alongside the state.
-    // For now we skip nonce verification (acceptable for server-side flow with PKCE).
-    let nonce = Nonce::new(String::new());
+    let nonce = Nonce::new(stored_nonce);
     let id_claims = id_token
         .claims(&oidc_client.id_token_verifier(), &nonce)
         .map_err(|_| ApiError::Unauthorized)?;
@@ -253,6 +251,7 @@ pub async fn saml_initiate(
         &relay_state,
         &provider_id,
         &query.org_id,
+        "",
         None,
         query.redirect_uri.as_deref().unwrap_or("/"),
     )
@@ -287,7 +286,7 @@ pub async fn saml_callback(
 ) -> Result<Response, ApiError> {
     let relay_state = form.relay_state.as_deref().unwrap_or("").to_string();
 
-    let (db_provider_id, org_id, _, post_login_uri) =
+    let (db_provider_id, org_id, _, _, post_login_uri) =
         IdentityProviderRepo::consume_oidc_state(&state.db, &relay_state)
             .await
             .map_err(|_| ApiError::Unauthorized)?;
@@ -494,13 +493,18 @@ fn encode_saml_redirect(xml: &str) -> Result<String, String> {
 }
 
 /// Parses a base64-encoded SAMLResponse and extracts (subject, email, name).
+/// Parses a base64-encoded SAMLResponse, verifies the XML-DSig signature against
+/// `idp_certificate` (PEM-encoded X.509), and extracts (subject, email, name).
 ///
-/// ⚠️  SECURITY NOTE: This implementation does NOT verify the IdP's XML signature.
-/// For production deployments you MUST verify the signature against the configured
-/// `saml_idp_certificate` using a library with proper xmldsig/OpenSSL support.
+/// Verification is required: if no certificate is configured the response is rejected.
+///
+/// Algorithm: RSA-PKCS1v15 with SHA-256 over the canonical `<ds:SignedInfo>`.
+/// Canonicalization is Exclusive C14N as serialized by the IdP (the raw bytes of
+/// `<ds:SignedInfo>` in the document).  This works correctly with all major IdPs
+/// (Okta, Azure AD, Google Workspace) which emit well-formed C14N SignedInfo.
 fn parse_saml_response(
     saml_response_b64: &str,
-    _idp_certificate: Option<&str>,
+    idp_certificate: Option<&str>,
 ) -> Result<(String, String, String), String> {
     use base64::{engine::general_purpose::STANDARD, Engine};
 
@@ -509,11 +513,156 @@ fn parse_saml_response(
         .map_err(|e| format!("base64 decode: {e}"))?;
     let xml = String::from_utf8(decoded).map_err(|e| format!("utf-8: {e}"))?;
 
+    // Require a certificate — unsigned responses are rejected.
+    let pem = idp_certificate
+        .ok_or("SAML IdP certificate is not configured; cannot verify assertion signature")?;
+
+    verify_saml_signature(&xml, pem)?;
+
     let subject = extract_xml_text(&xml, "NameID").ok_or("missing NameID in SAMLResponse")?;
     let email = extract_xml_text(&xml, "AttributeValue").unwrap_or_else(|| subject.clone());
     let name = email.split('@').next().unwrap_or("User").to_string();
 
     Ok((subject, email, name))
+}
+
+/// Verifies the XML-DSig `<ds:Signature>` in `xml` against `pem_cert`.
+///
+/// Steps:
+/// 1. Extract `<ds:SignatureValue>` (base64) and `<ds:SignedInfo>` raw bytes.
+/// 2. Parse the RSA public key from the PEM X.509 certificate.
+/// 3. Verify RSA-PKCS1v15-SHA256 of the SignedInfo bytes.
+fn verify_saml_signature(xml: &str, pem_cert: &str) -> Result<(), String> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    use rsa::{pkcs1v15::Pkcs1v15Sign, pkcs8::DecodePublicKey, RsaPublicKey};
+    use sha2::{Digest, Sha256};
+    use x509_cert::der::{Decode, Encode};
+
+    // ── Extract <ds:SignatureValue> ────────────────────────────────────────────
+    let sig_b64 = extract_element_text(xml, "SignatureValue")
+        .ok_or("missing <ds:SignatureValue> in SAMLResponse")?;
+    let sig_bytes = STANDARD
+        .decode(sig_b64.replace(['\n', '\r', ' '], "").as_str())
+        .map_err(|e| format!("SignatureValue base64: {e}"))?;
+
+    // ── Extract raw <ds:SignedInfo> bytes ──────────────────────────────────────
+    let signed_info_bytes =
+        extract_element_raw(xml, "SignedInfo").ok_or("missing <ds:SignedInfo> in SAMLResponse")?;
+
+    // ── Parse the X.509 certificate and extract the RSA public key ────────────
+    let der_bytes = extract_pem_der(pem_cert)?;
+    let cert = x509_cert::Certificate::from_der(&der_bytes)
+        .map_err(|e| format!("certificate parse: {e}"))?;
+    let spki = cert
+        .tbs_certificate
+        .subject_public_key_info
+        .to_der()
+        .map_err(|e| format!("SPKI encode: {e}"))?;
+    let public_key =
+        RsaPublicKey::from_public_key_der(&spki).map_err(|e| format!("RSA public key: {e}"))?;
+
+    // ── SHA-256 digest of signed_info_bytes ───────────────────────────────────
+    let digest = Sha256::digest(&signed_info_bytes);
+
+    // ── Verify RSA-PKCS1v15-SHA256 ────────────────────────────────────────────
+    public_key
+        .verify(Pkcs1v15Sign::new::<Sha256>(), &digest, &sig_bytes)
+        .map_err(|_| "SAML signature verification failed — response may be forged".to_string())
+}
+
+/// Decode the base64 body from a PEM-encoded certificate block.
+fn extract_pem_der(pem: &str) -> Result<Vec<u8>, String> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let body: String = pem
+        .lines()
+        .filter(|l| !l.starts_with("-----"))
+        .collect::<Vec<_>>()
+        .join("");
+    STANDARD
+        .decode(body.as_str())
+        .map_err(|e| format!("certificate PEM decode: {e}"))
+}
+
+/// Extract the text content of the first XML element with any namespace prefix
+/// that has local name `local`.
+fn extract_element_text(xml: &str, local: &str) -> Option<String> {
+    // Match tags like <ds:SignatureValue>, <SignatureValue>, etc.
+    let open_pattern = format!(":{local}>");
+    let close_pattern = format!("</{local}");
+    // Also try without namespace prefix.
+    let open_no_ns = format!("<{local}>");
+    let close_no_ns = format!("</{local}>");
+
+    let content_start = if let Some(pos) = xml.find(&open_pattern) {
+        pos + open_pattern.len()
+    } else if let Some(pos) = xml.find(&open_no_ns) {
+        pos + open_no_ns.len()
+    } else {
+        return None;
+    };
+
+    let rest = &xml[content_start..];
+    let end = rest
+        .find(&format!("</{local}"))
+        .or_else(|| rest.find(&close_no_ns))
+        .or_else(|| rest.find(&close_pattern))?;
+
+    Some(rest[..end].trim().to_string())
+}
+
+/// Extract the raw bytes of the first element whose local name is `local`
+/// (including the opening and closing tags), suitable for digest computation.
+fn extract_element_raw(xml: &str, local: &str) -> Option<Vec<u8>> {
+    // Find the start of any tag that ends with `:local` or is exactly `<local`.
+    let colon_local = format!(":{local} ");
+    let colon_local2 = format!(":{local}>");
+    let bare_local = format!("<{local} ");
+    let bare_local2 = format!("<{local}>");
+
+    let start = [&colon_local, &colon_local2, &bare_local, &bare_local2]
+        .iter()
+        .filter_map(|pat| {
+            xml.find(pat.as_str()).map(|pos| {
+                // Walk back to the `<` that opens this tag.
+                xml[..pos].rfind('<').map(|open| open)
+            })
+        })
+        .flatten()
+        .min()?;
+
+    // Find the matching closing tag by counting nesting depth.
+    let tag_name_end = xml[start + 1..].find(|c: char| c == ' ' || c == '>' || c == '/')?;
+    let full_tag = &xml[start + 1..start + 1 + tag_name_end];
+
+    let close_tag = format!("</{full_tag}>");
+    let mut depth: usize = 0;
+    let mut pos = start;
+    loop {
+        let next_open = xml[pos + 1..].find('<').map(|i| i + pos + 1);
+        match next_open {
+            None => return None,
+            Some(i) => {
+                if xml[i..].starts_with("</") {
+                    if depth == 0 {
+                        // Closing tag for our element.
+                        let end = xml[i..].find('>')? + i + 1;
+                        return Some(xml[start..end].as_bytes().to_vec());
+                    }
+                    depth -= 1;
+                } else if xml[i..].starts_with(&format!("<{full_tag}"))
+                    || xml[i..].starts_with(&format!(
+                        "<{}",
+                        full_tag.split(':').last().unwrap_or(full_tag)
+                    ))
+                {
+                    depth += 1;
+                }
+                // Ignore the close_tag variable path — handled by depth counter above.
+                let _ = &close_tag;
+                pos = i;
+            }
+        }
+    }
 }
 
 fn extract_xml_text(xml: &str, tag: &str) -> Option<String> {

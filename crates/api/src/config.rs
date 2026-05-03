@@ -33,6 +33,11 @@ pub struct AppSettings {
     /// Public base URL of this API, used for OAuth2 redirect URIs and SAML ACS URLs.
     /// E.g. "https://api.example.com"
     pub base_url: String,
+    /// CORS allowed origins. Use ["*"] for development, explicit list for production.
+    /// E.g. ["https://app.example.com"]
+    pub allowed_origins: Vec<String>,
+    /// Base URL for the exchange rate provider (Frankfurter-compatible API).
+    pub exchange_rate_url: String,
 }
 
 impl Settings {
@@ -51,6 +56,8 @@ impl Settings {
             .set_default("app.registration_open", true)?
             .set_default("app.default_currency", "USD")?
             .set_default("app.base_url", "http://localhost:3000")?
+            .set_default("app.allowed_origins", vec!["*"])?
+            .set_default("app.exchange_rate_url", "https://api.frankfurter.app")?
             .build()?;
 
         let settings: Self = cfg.try_deserialize()?;
