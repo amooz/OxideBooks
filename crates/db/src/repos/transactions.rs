@@ -6,6 +6,9 @@ use uuid::Uuid;
 
 use crate::error::{map_sqlx_err, DbError};
 
+const ENTRY_COLS: &str = "id, organization_id, date, reference, description, status, \
+                          created_by, reversal_of, created_at, updated_at";
+
 #[derive(sqlx::FromRow)]
 struct EntryRow {
     id: Uuid,
@@ -15,6 +18,7 @@ struct EntryRow {
     description: String,
     status: String,
     created_by: Uuid,
+    reversal_of: Option<Uuid>,
     created_at: OffsetDateTime,
     updated_at: OffsetDateTime,
 }
@@ -48,13 +52,11 @@ impl TransactionRepo {
             )
             .map_err(|_| DbError::Conflict("invalid cursor".into()))?;
             let cursor_id = parse_uuid(&c.id)?;
-            sqlx::query_as(
-                "SELECT id, organization_id, date, reference, description, status, \
-                 created_by, created_at, updated_at \
-                 FROM journal_entries \
+            sqlx::query_as(&format!(
+                "SELECT {ENTRY_COLS} FROM journal_entries \
                  WHERE organization_id = $1 AND (created_at, id) > ($2, $3) \
-                 ORDER BY created_at ASC, id ASC LIMIT $4",
-            )
+                 ORDER BY created_at ASC, id ASC LIMIT $4"
+            ))
             .bind(org_uuid)
             .bind(cursor_ts)
             .bind(cursor_id)
@@ -63,12 +65,11 @@ impl TransactionRepo {
             .await
             .map_err(map_sqlx_err)?
         } else {
-            sqlx::query_as(
-                "SELECT id, organization_id, date, reference, description, status, \
-                 created_by, created_at, updated_at \
-                 FROM journal_entries WHERE organization_id = $1 \
-                 ORDER BY created_at ASC, id ASC LIMIT $2",
-            )
+            sqlx::query_as(&format!(
+                "SELECT {ENTRY_COLS} FROM journal_entries \
+                 WHERE organization_id = $1 \
+                 ORDER BY created_at ASC, id ASC LIMIT $2"
+            ))
             .bind(org_uuid)
             .bind(limit + 1)
             .fetch_all(pool)
@@ -99,11 +100,10 @@ impl TransactionRepo {
         let org_uuid = parse_uuid(org_id)?;
         let id_uuid = parse_uuid(id)?;
 
-        let row: EntryRow = sqlx::query_as(
-            "SELECT id, organization_id, date, reference, description, status, \
-             created_by, created_at, updated_at \
-             FROM journal_entries WHERE organization_id = $1 AND id = $2",
-        )
+        let row: EntryRow = sqlx::query_as(&format!(
+            "SELECT {ENTRY_COLS} FROM journal_entries \
+             WHERE organization_id = $1 AND id = $2"
+        ))
         .bind(org_uuid)
         .bind(id_uuid)
         .fetch_optional(pool)
@@ -208,6 +208,98 @@ impl TransactionRepo {
         Self::get_by_id(pool, org_id, id).await
     }
 
+    /// Create a reversing journal entry (debits↔credits swapped) for a posted entry.
+    pub async fn reverse(
+        pool: &PgPool,
+        org_id: &str,
+        user_id: &str,
+        id: &str,
+        reversal_date: Option<Date>,
+    ) -> Result<JournalEntry, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let user_uuid = parse_uuid(user_id)?;
+        let id_uuid = parse_uuid(id)?;
+
+        let original: EntryRow = sqlx::query_as(&format!(
+            "SELECT {ENTRY_COLS} FROM journal_entries \
+             WHERE organization_id = $1 AND id = $2"
+        ))
+        .bind(org_uuid)
+        .bind(id_uuid)
+        .fetch_optional(pool)
+        .await
+        .map_err(map_sqlx_err)?
+        .ok_or(DbError::NotFound)?;
+
+        if original.status != "posted" {
+            return Err(DbError::Conflict(format!(
+                "cannot reverse a journal entry with status '{}'",
+                original.status
+            )));
+        }
+
+        // Prevent double-reversal: check if a reversal already exists.
+        let already_reversed: Option<(Uuid,)> =
+            sqlx::query_as("SELECT id FROM journal_entries WHERE reversal_of = $1 LIMIT 1")
+                .bind(id_uuid)
+                .fetch_optional(pool)
+                .await
+                .map_err(map_sqlx_err)?;
+
+        if already_reversed.is_some() {
+            return Err(DbError::Conflict(
+                "this journal entry has already been reversed".into(),
+            ));
+        }
+
+        let original_lines = Self::fetch_lines(pool, original.id).await?;
+        let effective_date = reversal_date.unwrap_or(original.date);
+        let reversal_id = Uuid::new_v4();
+        let description = format!("Reversal of: {}", original.description);
+
+        let mut tx = pool.begin().await.map_err(map_sqlx_err)?;
+
+        sqlx::query(
+            "INSERT INTO journal_entries \
+             (id, organization_id, date, reference, description, status, created_by, reversal_of) \
+             VALUES ($1, $2, $3, $4, $5, 'posted', $6, $7)",
+        )
+        .bind(reversal_id)
+        .bind(org_uuid)
+        .bind(effective_date)
+        .bind(&original.reference)
+        .bind(&description)
+        .bind(user_uuid)
+        .bind(id_uuid)
+        .execute(&mut *tx)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        for line in &original_lines {
+            let line_id = Uuid::new_v4();
+            let acct_uuid = parse_uuid(&line.account_id)?;
+            // Swap debit/credit for the reversal.
+            sqlx::query(
+                "INSERT INTO journal_lines \
+                 (id, journal_entry_id, account_id, description, debit, credit) \
+                 VALUES ($1, $2, $3, $4, $5, $6)",
+            )
+            .bind(line_id)
+            .bind(reversal_id)
+            .bind(acct_uuid)
+            .bind(&line.description)
+            .bind(line.credit)
+            .bind(line.debit)
+            .execute(&mut *tx)
+            .await
+            .map_err(map_sqlx_err)?;
+        }
+
+        tx.commit().await.map_err(map_sqlx_err)?;
+
+        Self::get_by_id(pool, org_id, &reversal_id.to_string()).await
+    }
+
     async fn fetch_lines(pool: &PgPool, entry_id: Uuid) -> Result<Vec<JournalLine>, DbError> {
         let rows: Vec<LineRow> = sqlx::query_as(
             "SELECT id, journal_entry_id, account_id, description, debit, credit \
@@ -246,6 +338,7 @@ fn entry_from_row(r: EntryRow, lines: Vec<JournalLine>) -> JournalEntry {
         },
         lines,
         created_by: r.created_by.to_string(),
+        reversal_of: r.reversal_of.map(|u| u.to_string()),
         created_at: r.created_at,
         updated_at: r.updated_at,
     }

@@ -17,7 +17,7 @@ use crate::{
     handlers::{
         accounts, api_keys, attachments, audit, auth, auth_sso, bank, bank_rules, batch_payments,
         budgets, bulk, client_portal, closed_periods, consolidated, contacts, custom_fields,
-        departments, dunning, email, exchange_rates, expense_policies, expenses, export,
+        departments, dunning, email, employees, exchange_rates, expense_policies, expenses, export,
         fixed_assets, fx, health, identity, import, inventory, invoice_templates, invoices,
         late_fees, mileage, notes, notifications, organizations, payment_links, payments, payroll,
         price_lists, products, projects, purchase_orders, recurring, reports, retainers, roles,
@@ -145,6 +145,10 @@ pub fn build(state: AppState) -> Router {
             "/transactions/:id",
             get(transactions::get_transaction).patch(transactions::void_transaction),
         )
+        .route(
+            "/transactions/:id/reverse",
+            post(transactions::reverse_transaction),
+        )
         // Contacts
         .route(
             "/contacts",
@@ -168,6 +172,12 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/invoices/:id/payments",
             post(payments::create_payment).get(payments::list_payments),
+        )
+        // Payment void and refunds
+        .route("/payments/:id/void", post(payments::void_payment))
+        .route(
+            "/payments/:id/refunds",
+            post(payments::create_refund).get(payments::list_refunds),
         )
         .route("/invoices/:id/convert", post(invoices::convert_quote))
         .route("/invoices/:id/apply-credit", post(invoices::apply_credit))
@@ -637,6 +647,17 @@ pub fn build(state: AppState) -> Router {
         )
         // Spend analysis
         .route("/reports/spend-analysis", get(price_lists::spend_analysis))
+        // Employees
+        .route(
+            "/employees",
+            get(employees::list_employees).post(employees::create_employee),
+        )
+        .route(
+            "/employees/:id",
+            get(employees::get_employee)
+                .patch(employees::update_employee)
+                .delete(employees::delete_employee),
+        )
         // TOTP 2FA
         .route("/auth/totp/setup", post(totp::setup_totp))
         .route("/auth/totp/verify", post(totp::verify_totp))

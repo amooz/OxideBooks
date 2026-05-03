@@ -13,6 +13,7 @@ pub mod custom_field;
 pub mod department;
 pub mod dunning;
 pub mod email;
+pub mod employee;
 pub mod expense;
 pub mod expense_policy;
 pub mod fixed_asset;
@@ -69,6 +70,7 @@ pub use custom_field::{
 pub use department::{CreateDepartment, Department, DepartmentPlReport, UpdateDepartment};
 pub use dunning::{CreateDunningRule, DunningRule, InvoiceReminder, OverdueInvoice};
 pub use email::{EmailLog, EmailSettings, SendEmailRequest, UpsertEmailSettings};
+pub use employee::{CreateEmployee, Employee, UpdateEmployee};
 pub use expense::{CreateExpense, Expense, ExpenseStatus, UpdateExpense};
 pub use expense_policy::{ContactStatement, ExpensePolicy, StatementLine, UpsertExpensePolicy};
 pub use fixed_asset::{
@@ -94,7 +96,7 @@ pub use mileage::{CreateMileageTrip, MileageSummary, MileageTrip};
 pub use note::{CreateNote, Note};
 pub use notification::{CreateNotification, Notification};
 pub use organization::{CreateOrganization, Organization, UpdateOrganization};
-pub use payment::{CreatePayment, Payment, VALID_METHODS};
+pub use payment::{CreatePayment, CreateRefund, Payment, Refund, VALID_METHODS};
 pub use payment_link::{CreatePaymentLink, PaymentLink};
 pub use payroll::{
     CreatePayrollEntry, CreatePayrollRun, PayrollEntry, PayrollRun, PayrollRunSummary,

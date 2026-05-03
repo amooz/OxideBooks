@@ -1,4 +1,4 @@
-use oxidebooks_core::models::{CreatePayment, Payment};
+use oxidebooks_core::models::{CreatePayment, CreateRefund, Payment, Refund};
 use sqlx::PgPool;
 use time::{Date, OffsetDateTime};
 use uuid::Uuid;
@@ -15,6 +15,8 @@ struct PaymentRow {
     method: String,
     reference: Option<String>,
     notes: Option<String>,
+    status: String,
+    voided_at: Option<OffsetDateTime>,
     created_at: OffsetDateTime,
 }
 
@@ -29,10 +31,38 @@ impl From<PaymentRow> for Payment {
             method: r.method,
             reference: r.reference,
             notes: r.notes,
+            status: r.status,
+            voided_at: r.voided_at,
             created_at: r.created_at,
         }
     }
 }
+
+#[derive(sqlx::FromRow)]
+struct RefundRow {
+    id: Uuid,
+    payment_id: Uuid,
+    amount: i64,
+    reason: Option<String>,
+    refund_date: Date,
+    created_at: OffsetDateTime,
+}
+
+impl From<RefundRow> for Refund {
+    fn from(r: RefundRow) -> Self {
+        Refund {
+            id: r.id.to_string(),
+            payment_id: r.payment_id.to_string(),
+            amount: r.amount,
+            reason: r.reason,
+            refund_date: r.refund_date,
+            created_at: r.created_at,
+        }
+    }
+}
+
+const PAYMENT_COLS: &str = "id, organization_id, invoice_id, amount, payment_date, method, \
+     reference, notes, status, voided_at, created_at";
 
 pub struct PaymentRepo;
 
@@ -81,10 +111,9 @@ impl PaymentRepo {
         // Compute total paid and invoice total, update status.
         Self::sync_invoice_status(pool, org_uuid, inv_uuid).await?;
 
-        let row: PaymentRow = sqlx::query_as(
-            "SELECT id, organization_id, invoice_id, amount, payment_date, method, \
-             reference, notes, created_at FROM payments WHERE id = $1",
-        )
+        let row: PaymentRow = sqlx::query_as(&format!(
+            "SELECT {PAYMENT_COLS} FROM payments WHERE id = $1"
+        ))
         .bind(id)
         .fetch_one(pool)
         .await
@@ -101,12 +130,11 @@ impl PaymentRepo {
         let org_uuid = parse_uuid(org_id)?;
         let inv_uuid = parse_uuid(invoice_id)?;
 
-        let rows: Vec<PaymentRow> = sqlx::query_as(
-            "SELECT id, organization_id, invoice_id, amount, payment_date, method, \
-             reference, notes, created_at \
+        let rows: Vec<PaymentRow> = sqlx::query_as(&format!(
+            "SELECT {PAYMENT_COLS} \
              FROM payments WHERE organization_id = $1 AND invoice_id = $2 \
-             ORDER BY payment_date ASC, created_at ASC",
-        )
+             ORDER BY payment_date ASC, created_at ASC"
+        ))
         .bind(org_uuid)
         .bind(inv_uuid)
         .fetch_all(pool)
@@ -116,15 +144,153 @@ impl PaymentRepo {
         Ok(rows.into_iter().map(Payment::from).collect())
     }
 
-    /// Recompute invoice status based on total payments vs. invoice line total.
+    /// Void a payment, restore invoice status to 'sent' if fully paid/partial.
+    pub async fn void(pool: &PgPool, org_id: &str, payment_id: &str) -> Result<Payment, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let pay_uuid = parse_uuid(payment_id)?;
+
+        let rows_affected = sqlx::query(
+            "UPDATE payments \
+             SET status = 'voided', voided_at = NOW(), updated_at = NOW() \
+             WHERE id = $1 AND organization_id = $2 AND status = 'recorded'",
+        )
+        .bind(pay_uuid)
+        .bind(org_uuid)
+        .execute(pool)
+        .await
+        .map_err(map_sqlx_err)?
+        .rows_affected();
+
+        if rows_affected == 0 {
+            let row: Option<PaymentRow> = sqlx::query_as(&format!(
+                "SELECT {PAYMENT_COLS} FROM payments WHERE id = $1 AND organization_id = $2"
+            ))
+            .bind(pay_uuid)
+            .bind(org_uuid)
+            .fetch_optional(pool)
+            .await
+            .map_err(map_sqlx_err)?;
+            return match row {
+                None => Err(DbError::NotFound),
+                Some(r) => Err(DbError::Conflict(format!(
+                    "payment cannot be voided from status '{}'",
+                    r.status
+                ))),
+            };
+        }
+
+        // Re-sync the invoice status after voiding.
+        let inv_uuid: (Uuid,) = sqlx::query_as("SELECT invoice_id FROM payments WHERE id = $1")
+            .bind(pay_uuid)
+            .fetch_one(pool)
+            .await
+            .map_err(map_sqlx_err)?;
+        Self::sync_invoice_status(pool, org_uuid, inv_uuid.0).await?;
+
+        let row: PaymentRow = sqlx::query_as(&format!(
+            "SELECT {PAYMENT_COLS} FROM payments WHERE id = $1"
+        ))
+        .bind(pay_uuid)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+        Ok(row.into())
+    }
+
+    pub async fn create_refund(
+        pool: &PgPool,
+        org_id: &str,
+        payment_id: &str,
+        input: CreateRefund,
+    ) -> Result<Refund, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let pay_uuid = parse_uuid(payment_id)?;
+
+        // Verify payment belongs to this org and is not voided.
+        let row: Option<PaymentRow> = sqlx::query_as(&format!(
+            "SELECT {PAYMENT_COLS} FROM payments \
+             WHERE id = $1 AND organization_id = $2"
+        ))
+        .bind(pay_uuid)
+        .bind(org_uuid)
+        .fetch_optional(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let payment = row.ok_or(DbError::NotFound)?;
+        if payment.status == "voided" {
+            return Err(DbError::Conflict("cannot refund a voided payment".into()));
+        }
+        if input.amount <= 0 || input.amount > payment.amount {
+            return Err(DbError::Conflict(
+                "refund amount must be positive and not exceed payment amount".into(),
+            ));
+        }
+
+        let id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO refunds (id, payment_id, amount, reason, refund_date) \
+             VALUES ($1, $2, $3, $4, $5)",
+        )
+        .bind(id)
+        .bind(pay_uuid)
+        .bind(input.amount)
+        .bind(&input.reason)
+        .bind(input.refund_date)
+        .execute(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let refund: RefundRow = sqlx::query_as(
+            "SELECT id, payment_id, amount, reason, refund_date, created_at \
+             FROM refunds WHERE id = $1",
+        )
+        .bind(id)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        Ok(refund.into())
+    }
+
+    pub async fn list_refunds(
+        pool: &PgPool,
+        org_id: &str,
+        payment_id: &str,
+    ) -> Result<Vec<Refund>, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let pay_uuid = parse_uuid(payment_id)?;
+
+        // Verify payment belongs to this org.
+        let exists: Option<(Uuid,)> =
+            sqlx::query_as("SELECT id FROM payments WHERE id = $1 AND organization_id = $2")
+                .bind(pay_uuid)
+                .bind(org_uuid)
+                .fetch_optional(pool)
+                .await
+                .map_err(map_sqlx_err)?;
+        if exists.is_none() {
+            return Err(DbError::NotFound);
+        }
+
+        let rows: Vec<RefundRow> = sqlx::query_as(
+            "SELECT id, payment_id, amount, reason, refund_date, created_at \
+             FROM refunds WHERE payment_id = $1 ORDER BY created_at ASC",
+        )
+        .bind(pay_uuid)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        Ok(rows.into_iter().map(Refund::from).collect())
+    }
+
+    /// Recompute invoice status based on total non-voided payments vs. invoice line total.
     pub(crate) async fn sync_invoice_status(
         pool: &PgPool,
         org_uuid: Uuid,
         inv_uuid: Uuid,
     ) -> Result<(), DbError> {
-        // Invoice total = sum of quantity * unit_price * (1 + tax_rate/1_000_000)
-        // tax_rate is stored as basis points of a basis point, i.e. 1% = 10000.
-        // Simplified: total_minor_units = sum(quantity * unit_price + quantity * unit_price * tax_rate / 1_000_000)
         let invoice_total: (i64,) = sqlx::query_as(
             "SELECT COALESCE(SUM(quantity * unit_price + quantity * unit_price * tax_rate / 1000000), 0)::BIGINT \
              FROM invoice_lines WHERE invoice_id = $1",
@@ -136,7 +302,7 @@ impl PaymentRepo {
 
         let paid_total: (i64,) = sqlx::query_as(
             "SELECT COALESCE(SUM(amount), 0)::BIGINT FROM payments \
-             WHERE organization_id = $1 AND invoice_id = $2",
+             WHERE organization_id = $1 AND invoice_id = $2 AND status = 'recorded'",
         )
         .bind(org_uuid)
         .bind(inv_uuid)
@@ -149,12 +315,12 @@ impl PaymentRepo {
         } else if paid_total.0 > 0 {
             "partial"
         } else {
-            return Ok(());
+            "sent"
         };
 
         sqlx::query(
             "UPDATE invoices SET status = $1, updated_at = NOW() \
-             WHERE organization_id = $2 AND id = $3 AND status NOT IN ('voided', 'paid')",
+             WHERE organization_id = $2 AND id = $3 AND status NOT IN ('voided', 'draft')",
         )
         .bind(new_status)
         .bind(org_uuid)

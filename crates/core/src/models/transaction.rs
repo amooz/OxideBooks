@@ -33,6 +33,7 @@ pub struct JournalEntry {
     pub status: JournalEntryStatus,
     pub lines: Vec<JournalLine>,
     pub created_by: String,
+    pub reversal_of: Option<String>,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
