@@ -1,7 +1,8 @@
 use oxidebooks_core::models::{
     AccountBalance, AccountType, AgingReport, AgingRow, BalanceSheetReport, CashFlowReport,
-    CashFlowSection, ConsolidatedProfitLoss, DashboardKpis, OrgProfitLoss, ProfitLossReport,
-    ReportLine, ReportSection, TaxSummaryLine, TaxSummaryReport, TrialBalance,
+    CashFlowSection, ConsolidatedProfitLoss, ContactStatement, DashboardKpis, OrgProfitLoss,
+    ProfitLossReport, ReportLine, ReportSection, StatementLine, TaxSummaryLine, TaxSummaryReport,
+    TrialBalance,
 };
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -665,6 +666,199 @@ impl ReportRepo {
             net_change,
             opening_cash,
             closing_cash: opening_cash + net_change,
+        })
+    }
+
+    /// Cash-basis P&L: revenue = payments received, expenses = reimbursed expenses.
+    pub async fn profit_loss_cash(
+        pool: &PgPool,
+        org_id: &str,
+        from: Date,
+        to: Date,
+    ) -> Result<ProfitLossReport, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        let total_revenue: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(SUM(p.amount), 0)::BIGINT \
+             FROM payments p \
+             JOIN invoices inv ON inv.id = p.invoice_id \
+             WHERE inv.organization_id = $1 \
+               AND p.payment_date BETWEEN $2 AND $3 \
+               AND inv.invoice_type = 'invoice'",
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        #[derive(sqlx::FromRow)]
+        struct CategoryRow {
+            category: String,
+            total: i64,
+        }
+        let expense_rows: Vec<CategoryRow> = sqlx::query_as(
+            "SELECT category, COALESCE(SUM(amount), 0)::BIGINT AS total \
+             FROM expenses \
+             WHERE organization_id = $1 \
+               AND status = 'reimbursed' \
+               AND expense_date BETWEEN $2 AND $3 \
+             GROUP BY category ORDER BY total DESC",
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let expense_total: i64 = expense_rows.iter().map(|r| r.total).sum();
+        let expense_lines: Vec<ReportLine> = expense_rows
+            .into_iter()
+            .map(|r| ReportLine {
+                account_id: String::new(),
+                account_code: String::new(),
+                account_name: r.category,
+                amount: r.total,
+            })
+            .collect();
+
+        Ok(ProfitLossReport {
+            from,
+            to,
+            revenue: ReportSection {
+                accounts: vec![ReportLine {
+                    account_id: String::new(),
+                    account_code: String::new(),
+                    account_name: "Cash Receipts".to_string(),
+                    amount: total_revenue,
+                }],
+                total: total_revenue,
+            },
+            expenses: ReportSection {
+                accounts: expense_lines,
+                total: expense_total,
+            },
+            net_income: total_revenue - expense_total,
+        })
+    }
+
+    pub async fn contact_statement(
+        pool: &PgPool,
+        org_id: &str,
+        contact_id: &str,
+        from: Date,
+        to: Date,
+    ) -> Result<ContactStatement, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let contact_uuid = parse_uuid(contact_id)?;
+
+        // Opening balance: (invoices issued before `from`) - (payments received before `from`)
+        let inv_before: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(SUM(\
+               (il.quantity * il.unit_price / 100) + \
+               (il.quantity * il.unit_price / 100 * il.tax_rate / 10000)\
+             ), 0)::BIGINT \
+             FROM invoices inv \
+             JOIN invoice_lines il ON il.invoice_id = inv.id \
+             WHERE inv.organization_id = $1 AND inv.contact_id = $2 \
+               AND inv.date < $3 AND inv.invoice_type = 'invoice' \
+               AND inv.status NOT IN ('draft', 'voided')",
+        )
+        .bind(org_uuid)
+        .bind(contact_uuid)
+        .bind(from)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let pay_before: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(SUM(p.amount), 0)::BIGINT \
+             FROM payments p \
+             JOIN invoices inv ON inv.id = p.invoice_id \
+             WHERE inv.organization_id = $1 AND inv.contact_id = $2 \
+               AND p.payment_date < $3 AND inv.invoice_type = 'invoice'",
+        )
+        .bind(org_uuid)
+        .bind(contact_uuid)
+        .bind(from)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let opening_balance = inv_before - pay_before;
+
+        #[derive(sqlx::FromRow)]
+        struct EventRow {
+            event_date: Date,
+            description: String,
+            reference: Option<String>,
+            debit: i64,
+            credit: i64,
+        }
+
+        let events: Vec<EventRow> = sqlx::query_as(
+            "SELECT event_date, description, reference, debit, credit FROM (\
+               SELECT inv.date AS event_date, \
+                      'Invoice ' || inv.invoice_number AS description, \
+                      inv.invoice_number AS reference, \
+                      COALESCE(SUM(\
+                        (il.quantity * il.unit_price / 100) + \
+                        (il.quantity * il.unit_price / 100 * il.tax_rate / 10000)\
+                      ), 0)::BIGINT AS debit, \
+                      0::BIGINT AS credit \
+               FROM invoices inv \
+               JOIN invoice_lines il ON il.invoice_id = inv.id \
+               WHERE inv.organization_id = $1 AND inv.contact_id = $2 \
+                 AND inv.date BETWEEN $3 AND $4 \
+                 AND inv.invoice_type = 'invoice' \
+                 AND inv.status NOT IN ('draft', 'voided') \
+               GROUP BY inv.id, inv.invoice_number, inv.date \
+               UNION ALL \
+               SELECT p.payment_date AS event_date, \
+                      'Payment for ' || inv.invoice_number AS description, \
+                      inv.invoice_number AS reference, \
+                      0::BIGINT AS debit, \
+                      p.amount AS credit \
+               FROM payments p \
+               JOIN invoices inv ON inv.id = p.invoice_id \
+               WHERE inv.organization_id = $1 AND inv.contact_id = $2 \
+                 AND p.payment_date BETWEEN $3 AND $4 \
+                 AND inv.invoice_type = 'invoice'\
+             ) sub ORDER BY event_date, description",
+        )
+        .bind(org_uuid)
+        .bind(contact_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let mut running = opening_balance;
+        let lines: Vec<StatementLine> = events
+            .into_iter()
+            .map(|e| {
+                running += e.debit - e.credit;
+                StatementLine {
+                    date: e.event_date,
+                    description: e.description,
+                    reference: e.reference,
+                    debit: e.debit,
+                    credit: e.credit,
+                    balance: running,
+                }
+            })
+            .collect();
+
+        Ok(ContactStatement {
+            contact_id: contact_id.to_string(),
+            from,
+            to,
+            opening_balance,
+            closing_balance: running,
+            lines,
         })
     }
 

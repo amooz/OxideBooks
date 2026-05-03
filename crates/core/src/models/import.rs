@@ -23,3 +23,13 @@ pub struct ContactCsvRow {
     pub contact_type: Option<String>,
     pub currency: Option<String>,
 }
+
+/// A single row from a chart-of-accounts CSV import.
+/// Required columns: code, name, account_type. Optional: description.
+#[derive(Debug, Clone, Deserialize)]
+pub struct AccountCsvRow {
+    pub code: String,
+    pub name: String,
+    pub account_type: String,
+    pub description: Option<String>,
+}
