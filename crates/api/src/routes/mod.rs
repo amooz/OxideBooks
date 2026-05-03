@@ -16,14 +16,15 @@ use tower_http::{
 use crate::{
     handlers::{
         accounts, api_keys, attachments, audit, auth, auth_sso, bank, bank_rules, batch_payments,
-        bills, budgets, bulk, client_portal, closed_periods, consolidated, contacts, credit_notes,
-        custom_fields, departments, dunning, email, employees, exchange_rates, expense_categories,
-        expense_policies, expenses, export, fixed_assets, fx, health, identity, import, inventory,
-        invoice_templates, invoices, late_fees, leave, mileage, notes, notifications,
-        organizations, payment_links, payments, payroll, payslips, prepayments, price_lists,
-        product_categories, products, projects, purchase_orders, recurring, reports, retainers,
-        roles, scim, sessions, stripe_webhook, tags, tax_periods, tax_rates, time_entries, totp,
-        transactions, users, webhooks,
+        bills, budgets, bulk, client_portal, closed_periods, consolidated, contact_groups,
+        contacts, credit_notes, custom_fields, departments, dunning, email, employees,
+        exchange_rates, expense_categories, expense_policies, expenses, export, fixed_assets, fx,
+        health, identity, import, inventory, invoice_templates, invoices, late_fees, leave,
+        mileage, notes, notifications, opening_balances, organizations, payment_links,
+        payment_terms, payments, payroll, payslips, prepayments, price_lists, product_categories,
+        products, projects, purchase_orders, recurring, reports, retainers, roles, scim, sessions,
+        stripe_webhook, tags, tax_periods, tax_rates, time_entries, totp, transactions, users,
+        webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -157,6 +158,25 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/transactions/:id/approve",
             post(transactions::approve_transaction),
+        )
+        // Contact groups
+        .route(
+            "/contact-groups",
+            get(contact_groups::list_contact_groups).post(contact_groups::create_contact_group),
+        )
+        .route(
+            "/contact-groups/:id",
+            get(contact_groups::get_contact_group)
+                .patch(contact_groups::update_contact_group)
+                .delete(contact_groups::delete_contact_group),
+        )
+        .route(
+            "/contact-groups/:id/members",
+            get(contact_groups::list_group_members),
+        )
+        .route(
+            "/contact-groups/:id/members/:contact_id",
+            post(contact_groups::add_group_member).delete(contact_groups::remove_group_member),
         )
         // Contacts
         .route(
@@ -693,6 +713,23 @@ pub fn build(state: AppState) -> Router {
             get(api_keys::list_api_keys).post(api_keys::create_api_key),
         )
         .route("/api-keys/:id/revoke", post(api_keys::revoke_api_key))
+        // Payment terms
+        .route(
+            "/payment-terms",
+            get(payment_terms::list_payment_terms).post(payment_terms::create_payment_terms),
+        )
+        .route(
+            "/payment-terms/:id",
+            get(payment_terms::get_payment_terms)
+                .patch(payment_terms::update_payment_terms)
+                .delete(payment_terms::delete_payment_terms),
+        )
+        // Opening balances
+        .route(
+            "/opening-balances",
+            get(opening_balances::get_opening_balances)
+                .post(opening_balances::set_opening_balances),
+        )
         // Prepayments (customer advance payments)
         .route(
             "/prepayments",

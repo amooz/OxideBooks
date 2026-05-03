@@ -10,6 +10,7 @@ pub mod client_portal;
 pub mod closed_period;
 pub mod consolidated;
 pub mod contact;
+pub mod contact_group;
 pub mod credit_note;
 pub mod custom_field;
 pub mod department;
@@ -33,6 +34,7 @@ pub mod notification;
 pub mod organization;
 pub mod payment;
 pub mod payment_link;
+pub mod payment_terms;
 pub mod payroll;
 pub mod payslip;
 pub mod prepayment;
@@ -74,6 +76,7 @@ pub use client_portal::{ClientPortalToken, CreateClientPortalToken};
 pub use closed_period::{ClosedPeriod, CreateClosedPeriod};
 pub use consolidated::{ConsolidatedProfitLoss, OrgProfitLoss};
 pub use contact::{Contact, ContactType, CreateContact, UpdateContact};
+pub use contact_group::{ContactGroup, CreateContactGroup, UpdateContactGroup};
 pub use credit_note::{ApplyCreditNote, CreateCreditNote, CreditNote, CreditNoteApplication};
 pub use custom_field::{
     CreateCustomFieldDefinition, CustomFieldDefinition, CustomFieldValue, SetCustomFieldValue,
@@ -116,6 +119,7 @@ pub use notification::{CreateNotification, Notification};
 pub use organization::{CreateOrganization, Organization, UpdateOrganization};
 pub use payment::{CreatePayment, CreateRefund, Payment, Refund, VALID_METHODS};
 pub use payment_link::{CreatePaymentLink, PaymentLink};
+pub use payment_terms::{CreatePaymentTerms, PaymentTerms, UpdatePaymentTerms};
 pub use payroll::{
     CreatePayrollEntry, CreatePayrollRun, PayrollEntry, PayrollRun, PayrollRunSummary,
 };

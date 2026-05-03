@@ -126,6 +126,27 @@ impl TransactionRepo {
         user_id: &str,
         input: CreateJournalEntry,
     ) -> Result<JournalEntry, DbError> {
+        Self::insert_entry(pool, org_id, user_id, "draft", input).await
+    }
+
+    /// Create a journal entry pre-posted (no approval workflow).
+    /// Use for system-generated entries: invoices, payroll, opening balances.
+    pub async fn create_posted(
+        pool: &PgPool,
+        org_id: &str,
+        user_id: &str,
+        input: CreateJournalEntry,
+    ) -> Result<JournalEntry, DbError> {
+        Self::insert_entry(pool, org_id, user_id, "posted", input).await
+    }
+
+    async fn insert_entry(
+        pool: &PgPool,
+        org_id: &str,
+        user_id: &str,
+        status: &str,
+        input: CreateJournalEntry,
+    ) -> Result<JournalEntry, DbError> {
         input.validate()?;
 
         let org_uuid = parse_uuid(org_id)?;
@@ -137,13 +158,14 @@ impl TransactionRepo {
         sqlx::query(
             "INSERT INTO journal_entries \
              (id, organization_id, date, reference, description, status, created_by) \
-             VALUES ($1, $2, $3, $4, $5, 'draft', $6)",
+             VALUES ($1, $2, $3, $4, $5, $6, $7)",
         )
         .bind(id)
         .bind(org_uuid)
         .bind(input.date)
         .bind(&input.reference)
         .bind(&input.description)
+        .bind(status)
         .bind(user_uuid)
         .execute(&mut *tx)
         .await
@@ -171,6 +193,31 @@ impl TransactionRepo {
         tx.commit().await.map_err(map_sqlx_err)?;
 
         Self::get_by_id(pool, org_id, &id.to_string()).await
+    }
+
+    pub async fn get_opening_balance(
+        pool: &PgPool,
+        org_id: &str,
+    ) -> Result<Option<JournalEntry>, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        let row: Option<EntryRow> = sqlx::query_as(&format!(
+            "SELECT {ENTRY_COLS} FROM journal_entries \
+             WHERE organization_id = $1 AND reference = 'OPENING_BALANCE' \
+             ORDER BY created_at DESC LIMIT 1"
+        ))
+        .bind(org_uuid)
+        .fetch_optional(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        match row {
+            None => Ok(None),
+            Some(r) => {
+                let lines = Self::fetch_lines(pool, r.id).await?;
+                Ok(Some(entry_from_row(r, lines)))
+            }
+        }
     }
 
     pub async fn submit(
