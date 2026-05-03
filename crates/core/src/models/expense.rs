@@ -65,6 +65,7 @@ pub struct Expense {
     pub category: String,
     pub description: String,
     pub account_id: Option<String>,
+    pub project_id: Option<String>,
     pub status: ExpenseStatus,
     pub receipt_url: Option<String>,
     pub notes: Option<String>,
@@ -84,6 +85,7 @@ pub struct CreateExpense {
     pub category: String,
     pub description: String,
     pub account_id: Option<String>,
+    pub project_id: Option<String>,
     pub receipt_url: Option<String>,
     pub notes: Option<String>,
 }

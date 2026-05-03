@@ -5,7 +5,7 @@
 ///    → Fetches provider config, builds OIDC authorization URL (PKCE), redirects browser.
 /// 2. `GET /auth/oidc/:provider_id/callback?code=...&state=...`
 ///    → Exchanges code, validates ID token, upserts user, issues our JWT, redirects
-///      browser to `post_login_uri?token=<jwt>`.
+///    browser to `post_login_uri?token=<jwt>`.
 ///
 /// # SAML flow
 /// 1. `GET /auth/saml/:provider_id?org_id=...&redirect_uri=...`
@@ -665,14 +665,14 @@ fn extract_element_raw(xml: &str, local: &str) -> Option<Vec<u8>> {
         .filter_map(|pat| {
             xml.find(pat.as_str()).map(|pos| {
                 // Walk back to the `<` that opens this tag.
-                xml[..pos].rfind('<').map(|open| open)
+                xml[..pos].rfind('<')
             })
         })
         .flatten()
         .min()?;
 
     // Find the matching closing tag by counting nesting depth.
-    let tag_name_end = xml[start + 1..].find(|c: char| c == ' ' || c == '>' || c == '/')?;
+    let tag_name_end = xml[start + 1..].find([' ', '>', '/'])?;
     let full_tag = &xml[start + 1..start + 1 + tag_name_end];
 
     let close_tag = format!("</{full_tag}>");
@@ -687,13 +687,13 @@ fn extract_element_raw(xml: &str, local: &str) -> Option<Vec<u8>> {
                     if depth == 0 {
                         // Closing tag for our element.
                         let end = xml[i..].find('>')? + i + 1;
-                        return Some(xml[start..end].as_bytes().to_vec());
+                        return Some(xml.as_bytes()[start..end].to_vec());
                     }
                     depth -= 1;
                 } else if xml[i..].starts_with(&format!("<{full_tag}"))
                     || xml[i..].starts_with(&format!(
                         "<{}",
-                        full_tag.split(':').last().unwrap_or(full_tag)
+                        full_tag.split(':').next_back().unwrap_or(full_tag)
                     ))
                 {
                     depth += 1;
