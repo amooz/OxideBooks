@@ -67,6 +67,7 @@ pub mod time_entry;
 pub mod tracking_category;
 pub mod transaction;
 pub mod vendor_credit;
+pub mod warehouse;
 pub mod webhook;
 
 pub use account::{Account, AccountType, CreateAccount, UpdateAccount};
@@ -180,10 +181,11 @@ pub use recurring::{
     CreateRecurringSchedule, Frequency, RecurringSchedule, UpdateRecurringSchedule,
 };
 pub use reports::{
-    AccountBalance, AccountLedger, AgingReport, AgingRow, BalanceSheetReport, CashFlowReport,
-    CashFlowSection, DashboardKpis, LedgerLine, ProfitLossReport, ProjectProfitabilityReport,
-    ProjectProfitabilityRow, ReportLine, ReportSection, SalesByProductReport, SalesByProductRow,
-    SearchHit, Summary1099, TaxSummaryLine, TaxSummaryReport, TrialBalance, Vendor1099Row,
+    AccountBalance, AccountLedger, AgingReport, AgingRow, BalanceSheetReport, CashFlowForecast,
+    CashFlowForecastBucket, CashFlowReport, CashFlowSection, DashboardKpis, LedgerLine,
+    ProfitLossReport, ProjectProfitabilityReport, ProjectProfitabilityRow, ReportLine,
+    ReportSection, SalesByProductReport, SalesByProductRow, SearchHit, Summary1099, TaxSummaryLine,
+    TaxSummaryReport, TrialBalance, Vendor1099Row,
 };
 pub use retainer::{ApplyRetainer, CreateRetainer, DepositRetainer, Retainer, RetainerTransaction};
 pub use role::{AssignPermission, CreateRole, Permission, Role};
@@ -212,6 +214,9 @@ pub use transaction::{
 pub use vendor_credit::{
     ApplyVendorCredit, CreateVendorCredit, CreateVendorCreditLine, VendorCredit,
     VendorCreditApplication, VendorCreditLine,
+};
+pub use warehouse::{
+    CreateWarehouse, InventoryTransfer, TransferStock, UpdateWarehouse, Warehouse, WarehouseStock,
 };
 pub use webhook::{
     CreateWebhookEndpoint, UpdateWebhookEndpoint, WebhookEndpoint, WebhookPayload, ALL_EVENT_TYPES,

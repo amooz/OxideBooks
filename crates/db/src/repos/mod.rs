@@ -70,6 +70,7 @@ pub mod tracking_categories;
 pub mod transactions;
 pub mod users;
 pub mod vendor_credits;
+pub mod warehouses;
 pub mod webhooks;
 
 pub use accounts::AccountRepo;
@@ -144,4 +145,5 @@ pub use tracking_categories::TrackingCategoryRepo;
 pub use transactions::TransactionRepo;
 pub use users::{UpdateUser, UserRepo};
 pub use vendor_credits::VendorCreditRepo;
+pub use warehouses::WarehouseRepo;
 pub use webhooks::WebhookRepo;

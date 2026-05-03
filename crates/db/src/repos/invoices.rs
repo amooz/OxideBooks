@@ -25,6 +25,7 @@ struct InvoiceRow {
     doc_number: Option<String>,
     notes: Option<String>,
     expiry_date: Option<Date>,
+    global_discount_pct: i64,
     journal_entry_id: Option<Uuid>,
     created_at: OffsetDateTime,
     updated_at: OffsetDateTime,
@@ -68,7 +69,7 @@ impl InvoiceRepo {
             let cursor_id = parse_uuid(&c.id)?;
             sqlx::query_as(
                 "SELECT id, organization_id, invoice_number, contact_id, invoice_type, status, \
-                 date, due_date, currency, exchange_rate, doc_number, notes, expiry_date, journal_entry_id, created_at, updated_at \
+                 date, due_date, currency, exchange_rate, doc_number, notes, expiry_date, global_discount_pct, journal_entry_id, created_at, updated_at \
                  FROM invoices \
                  WHERE organization_id = $1 \
                    AND (created_at, id) > ($2, $3) \
@@ -94,7 +95,7 @@ impl InvoiceRepo {
         } else {
             sqlx::query_as(
                 "SELECT id, organization_id, invoice_number, contact_id, invoice_type, status, \
-                 date, due_date, currency, exchange_rate, doc_number, notes, expiry_date, journal_entry_id, created_at, updated_at \
+                 date, due_date, currency, exchange_rate, doc_number, notes, expiry_date, global_discount_pct, journal_entry_id, created_at, updated_at \
                  FROM invoices \
                  WHERE organization_id = $1 \
                    AND ($2::text IS NULL OR status = $2) \
@@ -217,8 +218,8 @@ impl InvoiceRepo {
         sqlx::query(
             "INSERT INTO invoices \
              (id, organization_id, invoice_number, contact_id, invoice_type, \
-              date, due_date, currency, exchange_rate, notes) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+              date, due_date, currency, exchange_rate, notes, global_discount_pct) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
         )
         .bind(id)
         .bind(org_uuid)
@@ -230,6 +231,7 @@ impl InvoiceRepo {
         .bind(&currency)
         .bind(exchange_rate)
         .bind(&input.notes)
+        .bind(input.global_discount_pct)
         .execute(&mut *tx)
         .await
         .map_err(map_sqlx_err)?;
@@ -327,6 +329,19 @@ impl InvoiceRepo {
                  WHERE id = $2 AND organization_id = $3",
             )
             .bind(expiry_date)
+            .bind(id_uuid)
+            .bind(org_uuid)
+            .execute(pool)
+            .await
+            .map_err(map_sqlx_err)?;
+        }
+
+        if let Some(pct) = input.global_discount_pct {
+            sqlx::query(
+                "UPDATE invoices SET global_discount_pct = $1, updated_at = NOW() \
+                 WHERE id = $2 AND organization_id = $3",
+            )
+            .bind(pct)
             .bind(id_uuid)
             .bind(org_uuid)
             .execute(pool)
@@ -684,6 +699,7 @@ fn invoice_from_row(r: InvoiceRow, lines: Vec<InvoiceLine>) -> Invoice {
         doc_number: r.doc_number,
         notes: r.notes,
         expiry_date: r.expiry_date,
+        global_discount_pct: r.global_discount_pct,
         lines,
         journal_entry_id: r.journal_entry_id.map(|u| u.to_string()),
         created_at: r.created_at,

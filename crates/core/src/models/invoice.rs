@@ -101,6 +101,8 @@ pub struct Invoice {
     pub notes: Option<String>,
     #[serde(default, with = "crate::models::opt_date_serde")]
     pub expiry_date: Option<Date>,
+    #[serde(default)]
+    pub global_discount_pct: i64,
     pub lines: Vec<InvoiceLine>,
     pub journal_entry_id: Option<String>,
     #[serde(with = "time::serde::rfc3339")]
@@ -173,6 +175,7 @@ pub struct UpdateInvoice {
     #[serde(default, with = "crate::models::opt_date_serde")]
     pub expiry_date: Option<Date>,
     pub notes: Option<String>,
+    pub global_discount_pct: Option<i64>,
 }
 
 /// Query filters for listing invoices.
@@ -235,6 +238,8 @@ pub struct CreateInvoice {
     #[serde(default)]
     pub exchange_rate: Option<rust_decimal::Decimal>,
     pub notes: Option<String>,
+    #[serde(default)]
+    pub global_discount_pct: i64,
     pub lines: Vec<CreateInvoiceLine>,
 }
 
@@ -431,6 +436,7 @@ mod tests {
             currency: None,
             exchange_rate: None,
             notes: None,
+            global_discount_pct: 0,
             lines: vec![CreateInvoiceLine {
                 description: "Widget".to_string(),
                 account_id: None,
@@ -454,6 +460,7 @@ mod tests {
             currency: None,
             exchange_rate: None,
             notes: None,
+            global_discount_pct: 0,
             lines: vec![],
         };
         assert!(input.validate().is_ok());
@@ -469,6 +476,7 @@ mod tests {
             currency: None,
             exchange_rate: None,
             notes: None,
+            global_discount_pct: 0,
             lines: vec![CreateInvoiceLine {
                 description: "Bad".to_string(),
                 account_id: None,
@@ -492,6 +500,7 @@ mod tests {
             currency: None,
             exchange_rate: None,
             notes: None,
+            global_discount_pct: 0,
             lines: vec![CreateInvoiceLine {
                 description: "Bad".to_string(),
                 account_id: None,
@@ -515,6 +524,7 @@ mod tests {
             currency: None,
             exchange_rate: None,
             notes: None,
+            global_discount_pct: 0,
             lines: vec![CreateInvoiceLine {
                 description: "Bad".to_string(),
                 account_id: None,
@@ -541,6 +551,7 @@ mod tests {
             currency: None,
             exchange_rate: None,
             notes: None,
+            global_discount_pct: 0,
             lines: vec![CreateInvoiceLine {
                 description: "Free item".to_string(),
                 account_id: None,

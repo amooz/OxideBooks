@@ -1,9 +1,10 @@
 use oxidebooks_core::models::{
     AccountBalance, AccountLedger, AccountType, AgingReport, AgingRow, BalanceSheetReport,
-    CashFlowReport, CashFlowSection, ConsolidatedProfitLoss, ContactStatement, DashboardKpis,
-    LedgerLine, OrgProfitLoss, ProfitLossReport, ProjectProfitabilityReport,
-    ProjectProfitabilityRow, ReportLine, ReportSection, SalesByProductReport, SalesByProductRow,
-    StatementLine, TaxSummaryLine, TaxSummaryReport, TrialBalance,
+    CashFlowForecast, CashFlowForecastBucket, CashFlowReport, CashFlowSection,
+    ConsolidatedProfitLoss, ContactStatement, DashboardKpis, LedgerLine, OrgProfitLoss,
+    ProfitLossReport, ProjectProfitabilityReport, ProjectProfitabilityRow, ReportLine,
+    ReportSection, SalesByProductReport, SalesByProductRow, StatementLine, TaxSummaryLine,
+    TaxSummaryReport, TrialBalance,
 };
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -1349,6 +1350,106 @@ impl ReportRepo {
             total_expenses,
             total_time_cost: total_time,
             total_profit,
+        })
+    }
+
+    /// Cash flow forecast: project AR inflows and AP outflows by weekly bucket
+    /// over the next `days` days, starting from `from_date`.
+    pub async fn cash_flow_forecast(
+        pool: &PgPool,
+        org_id: &str,
+        from_date: Date,
+        days: i64,
+    ) -> Result<CashFlowForecast, DbError> {
+        let org = parse_uuid(org_id)?;
+        let to_date = from_date + time::Duration::days(days);
+
+        // Opening cash balance: sum of cash/bank accounts
+        let opening_balance: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(SUM(jl.debit - jl.credit), 0)::BIGINT
+             FROM journal_lines jl
+             JOIN accounts a ON a.id = jl.account_id
+             WHERE a.organization_id = $1 AND a.sub_type IN ('bank','cash')",
+        )
+        .bind(org)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        // Open AR by due_date (inflows)
+        let ar_rows: Vec<(Date, i64)> = sqlx::query_as(
+            "SELECT due_date, SUM(total_amount - paid_amount)::BIGINT
+             FROM invoices
+             WHERE organization_id = $1
+               AND invoice_type = 'invoice'
+               AND status NOT IN ('voided','draft','paid')
+               AND due_date BETWEEN $2 AND $3
+             GROUP BY due_date ORDER BY due_date",
+        )
+        .bind(org)
+        .bind(from_date)
+        .bind(to_date)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        // Open AP by due_date (outflows)
+        let ap_rows: Vec<(Date, i64)> = sqlx::query_as(
+            "SELECT due_date, SUM(total_amount - paid_amount)::BIGINT
+             FROM invoices
+             WHERE organization_id = $1
+               AND invoice_type = 'bill'
+               AND status NOT IN ('voided','draft','paid')
+               AND due_date BETWEEN $2 AND $3
+             GROUP BY due_date ORDER BY due_date",
+        )
+        .bind(org)
+        .bind(from_date)
+        .bind(to_date)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        // Build weekly buckets
+        let week_count = (days / 7).max(1) as usize;
+        let mut buckets: Vec<CashFlowForecastBucket> = (0..week_count)
+            .map(|i| {
+                let start = from_date + time::Duration::days(i as i64 * 7);
+                let end = (start + time::Duration::days(6)).min(to_date);
+                CashFlowForecastBucket {
+                    period_start: start,
+                    period_end: end,
+                    inflows: 0,
+                    outflows: 0,
+                    net: 0,
+                    running_balance: 0,
+                }
+            })
+            .collect();
+
+        let bucket_for = |d: Date| -> usize {
+            let diff = (d - from_date).whole_days().max(0) as usize;
+            (diff / 7).min(week_count - 1)
+        };
+
+        for (due, amount) in ar_rows {
+            buckets[bucket_for(due)].inflows += amount;
+        }
+        for (due, amount) in ap_rows {
+            buckets[bucket_for(due)].outflows += amount;
+        }
+
+        let mut running = opening_balance;
+        for b in &mut buckets {
+            b.net = b.inflows - b.outflows;
+            running += b.net;
+            b.running_balance = running;
+        }
+
+        Ok(CashFlowForecast {
+            opening_balance,
+            buckets,
+            closing_balance: running,
         })
     }
 }

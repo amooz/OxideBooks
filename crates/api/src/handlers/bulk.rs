@@ -49,6 +49,7 @@ pub async fn bulk_void_invoices(
                 due_date: None,
                 expiry_date: None,
                 notes: None,
+                global_discount_pct: None,
             },
         )
         .await
@@ -83,6 +84,7 @@ pub async fn bulk_send_invoices(
                 due_date: None,
                 expiry_date: None,
                 notes: None,
+                global_discount_pct: None,
             },
         )
         .await

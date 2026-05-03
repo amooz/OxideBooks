@@ -68,6 +68,7 @@ async fn run_schedule_inner(
                 due_date: None,
                 expiry_date: None,
                 notes: None,
+                global_discount_pct: None,
             },
         )
         .await;
