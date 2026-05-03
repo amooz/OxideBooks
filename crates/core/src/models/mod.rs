@@ -1,4 +1,5 @@
 pub mod account;
+pub mod attachment;
 pub mod bank;
 pub mod budget;
 pub mod contact;
@@ -14,6 +15,8 @@ pub mod note;
 pub mod notification;
 pub mod organization;
 pub mod payment;
+pub mod payment_link;
+pub mod payroll;
 pub mod product;
 pub mod project;
 pub mod purchase_order;
@@ -27,6 +30,7 @@ pub mod transaction;
 pub mod webhook;
 
 pub use account::{Account, AccountType, CreateAccount, UpdateAccount};
+pub use attachment::{Attachment, CreateAttachment};
 pub use bank::{
     BankAccount, BankTransaction, CreateBankAccount, ImportBankTransaction, MatchTransaction,
     ReconciliationSummary, UpdateBankAccount,
@@ -62,6 +66,10 @@ pub use note::{CreateNote, Note};
 pub use notification::{CreateNotification, Notification};
 pub use organization::{CreateOrganization, Organization, UpdateOrganization};
 pub use payment::{CreatePayment, Payment, VALID_METHODS};
+pub use payment_link::{CreatePaymentLink, PaymentLink};
+pub use payroll::{
+    CreatePayrollEntry, CreatePayrollRun, PayrollEntry, PayrollRun, PayrollRunSummary,
+};
 pub use product::{CreateProduct, Product, UpdateProduct};
 pub use project::{CreateProject, Project, ProjectSummary, UpdateProject};
 pub use purchase_order::{
