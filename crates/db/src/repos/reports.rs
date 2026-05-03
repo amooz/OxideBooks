@@ -1,7 +1,7 @@
 use oxidebooks_core::models::{
     AccountBalance, AccountType, AgingReport, AgingRow, BalanceSheetReport, CashFlowReport,
-    CashFlowSection, DashboardKpis, ProfitLossReport, ReportLine, ReportSection, TaxSummaryLine,
-    TaxSummaryReport, TrialBalance,
+    CashFlowSection, ConsolidatedProfitLoss, DashboardKpis, OrgProfitLoss, ProfitLossReport,
+    ReportLine, ReportSection, TaxSummaryLine, TaxSummaryReport, TrialBalance,
 };
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -665,6 +665,33 @@ impl ReportRepo {
             net_change,
             opening_cash,
             closing_cash: opening_cash + net_change,
+        })
+    }
+
+    pub async fn consolidated_profit_loss(
+        pool: &PgPool,
+        org_ids: &[&str],
+        from: Date,
+        to: Date,
+    ) -> Result<ConsolidatedProfitLoss, DbError> {
+        let mut per_org: Vec<OrgProfitLoss> = Vec::with_capacity(org_ids.len());
+        for org_id in org_ids {
+            let report = Self::profit_loss(pool, org_id, from, to).await?;
+            per_org.push(OrgProfitLoss {
+                org_id: (*org_id).to_string(),
+                report,
+            });
+        }
+        let combined_revenue: i64 = per_org.iter().map(|o| o.report.revenue.total).sum();
+        let combined_expenses: i64 = per_org.iter().map(|o| o.report.expenses.total).sum();
+        let combined_net_income = combined_revenue - combined_expenses;
+        Ok(ConsolidatedProfitLoss {
+            from,
+            to,
+            per_org,
+            combined_revenue,
+            combined_expenses,
+            combined_net_income,
         })
     }
 }

@@ -38,6 +38,8 @@ pub struct AppSettings {
     pub allowed_origins: Vec<String>,
     /// Base URL for the exchange rate provider (Frankfurter-compatible API).
     pub exchange_rate_url: String,
+    /// Stripe webhook signing secret (optional). When set, incoming Stripe webhooks are verified.
+    pub stripe_webhook_secret: Option<String>,
 }
 
 impl Settings {
