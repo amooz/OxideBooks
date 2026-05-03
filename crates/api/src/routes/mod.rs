@@ -19,10 +19,10 @@ use crate::{
         bills, budgets, bulk, client_portal, closed_periods, consolidated, contacts, credit_notes,
         custom_fields, departments, dunning, email, employees, exchange_rates, expense_policies,
         expenses, export, fixed_assets, fx, health, identity, import, inventory, invoice_templates,
-        invoices, late_fees, mileage, notes, notifications, organizations, payment_links, payments,
-        payroll, payslips, price_lists, products, projects, purchase_orders, recurring, reports,
-        retainers, roles, scim, sessions, stripe_webhook, tags, tax_rates, time_entries, totp,
-        transactions, users, webhooks,
+        invoices, late_fees, leave, mileage, notes, notifications, organizations, payment_links,
+        payments, payroll, payslips, price_lists, products, projects, purchase_orders, recurring,
+        reports, retainers, roles, scim, sessions, stripe_webhook, tags, tax_rates, time_entries,
+        totp, transactions, users, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -180,6 +180,10 @@ pub fn build(state: AppState) -> Router {
             post(payments::create_refund).get(payments::list_refunds),
         )
         .route("/invoices/:id/convert", post(invoices::convert_quote))
+        // Quote workflow
+        .route("/quotes/:id/accept", post(invoices::accept_quote))
+        .route("/quotes/:id/decline", post(invoices::decline_quote))
+        .route("/quotes/:id/expire", post(invoices::expire_quote))
         .route("/invoices/:id/apply-credit", post(invoices::apply_credit))
         // Organization settings
         .route(
@@ -203,6 +207,7 @@ pub fn build(state: AppState) -> Router {
         .route("/reports/cash-flow", get(reports::cash_flow))
         .route("/reports/budget-vs-actual", get(budgets::budget_vs_actual))
         .route("/reports/1099-summary", get(reports::summary_1099))
+        .route("/reports/account-ledger", get(reports::account_ledger))
         // Dashboard
         .route("/dashboard", get(reports::dashboard))
         // Global search
@@ -691,6 +696,31 @@ pub fn build(state: AppState) -> Router {
             post(payslips::create_payslip).get(payslips::list_payslips),
         )
         .route("/payslips/:id", get(payslips::get_payslip))
+        // Leave management
+        .route(
+            "/leave-types",
+            get(leave::list_leave_types).post(leave::create_leave_type),
+        )
+        .route(
+            "/leave-types/:id",
+            axum::routing::patch(leave::update_leave_type).delete(leave::delete_leave_type),
+        )
+        .route(
+            "/leave-requests",
+            get(leave::list_leave_requests).post(leave::create_leave_request),
+        )
+        .route(
+            "/leave-requests/:id/approve",
+            post(leave::approve_leave_request),
+        )
+        .route(
+            "/leave-requests/:id/reject",
+            post(leave::reject_leave_request),
+        )
+        .route(
+            "/leave-requests/:id/cancel",
+            post(leave::cancel_leave_request),
+        )
         // TOTP 2FA
         .route("/auth/totp/setup", post(totp::setup_totp))
         .route("/auth/totp/verify", post(totp::verify_totp))

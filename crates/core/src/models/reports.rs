@@ -176,6 +176,31 @@ pub struct Summary1099 {
     pub vendors: Vec<Vendor1099Row>,
 }
 
+// ── Account Ledger ────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LedgerLine {
+    pub journal_entry_id: String,
+    pub date: Date,
+    pub description: String,
+    pub reference: Option<String>,
+    pub debit: MinorUnits,
+    pub credit: MinorUnits,
+    pub running_balance: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountLedger {
+    pub account_id: String,
+    pub account_code: String,
+    pub account_name: String,
+    pub from: Date,
+    pub to: Date,
+    pub opening_balance: MinorUnits,
+    pub lines: Vec<LedgerLine>,
+    pub closing_balance: MinorUnits,
+}
+
 // ── Global Search ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,8 +1,8 @@
 use oxidebooks_core::models::{
-    AccountBalance, AccountType, AgingReport, AgingRow, BalanceSheetReport, CashFlowReport,
-    CashFlowSection, ConsolidatedProfitLoss, ContactStatement, DashboardKpis, OrgProfitLoss,
-    ProfitLossReport, ReportLine, ReportSection, StatementLine, TaxSummaryLine, TaxSummaryReport,
-    TrialBalance,
+    AccountBalance, AccountLedger, AccountType, AgingReport, AgingRow, BalanceSheetReport,
+    CashFlowReport, CashFlowSection, ConsolidatedProfitLoss, ContactStatement, DashboardKpis,
+    LedgerLine, OrgProfitLoss, ProfitLossReport, ReportLine, ReportSection, StatementLine,
+    TaxSummaryLine, TaxSummaryReport, TrialBalance,
 };
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -1051,6 +1051,116 @@ impl ReportRepo {
         }
 
         Ok(hits)
+    }
+
+    /// General ledger detail for a single account between two dates.
+    pub async fn account_ledger(
+        pool: &PgPool,
+        org_id: &str,
+        account_id: &str,
+        from: Date,
+        to: Date,
+    ) -> Result<AccountLedger, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let acct_uuid = parse_uuid(account_id)?;
+
+        // Account metadata.
+        let meta: Option<(String, String, String)> = sqlx::query_as(
+            "SELECT code, name, account_type FROM accounts \
+             WHERE organization_id = $1 AND id = $2",
+        )
+        .bind(org_uuid)
+        .bind(acct_uuid)
+        .fetch_optional(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let (code, name, acct_type_str) = meta.ok_or(DbError::NotFound)?;
+        let account_type = AccountType::from_str(&acct_type_str).unwrap_or(AccountType::Asset);
+
+        // Opening balance: sum of journal lines before `from`.
+        let opening: (i64, i64) = sqlx::query_as(
+            "SELECT COALESCE(SUM(jl.debit), 0)::BIGINT, COALESCE(SUM(jl.credit), 0)::BIGINT \
+             FROM journal_lines jl \
+             JOIN journal_entries je ON je.id = jl.journal_entry_id \
+             WHERE jl.account_id = $1 AND je.organization_id = $2 \
+               AND je.status = 'posted' AND je.date < $3",
+        )
+        .bind(acct_uuid)
+        .bind(org_uuid)
+        .bind(from)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let opening_balance = if account_type.is_debit_normal() {
+            opening.0 - opening.1
+        } else {
+            opening.1 - opening.0
+        };
+
+        // Lines within the date range.
+        #[derive(sqlx::FromRow)]
+        struct RawLine {
+            journal_entry_id: Uuid,
+            date: Date,
+            description: String,
+            reference: Option<String>,
+            debit: i64,
+            credit: i64,
+        }
+
+        let raw: Vec<RawLine> = sqlx::query_as(
+            "SELECT je.id AS journal_entry_id, je.date, je.description, je.reference, \
+                    jl.debit, jl.credit \
+             FROM journal_lines jl \
+             JOIN journal_entries je ON je.id = jl.journal_entry_id \
+             WHERE jl.account_id = $1 AND je.organization_id = $2 \
+               AND je.status = 'posted' AND je.date >= $3 AND je.date <= $4 \
+             ORDER BY je.date ASC, je.id ASC",
+        )
+        .bind(acct_uuid)
+        .bind(org_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let mut running = opening_balance;
+        let lines: Vec<LedgerLine> = raw
+            .into_iter()
+            .map(|r| {
+                let movement = if account_type.is_debit_normal() {
+                    r.debit - r.credit
+                } else {
+                    r.credit - r.debit
+                };
+                running += movement;
+                LedgerLine {
+                    journal_entry_id: r.journal_entry_id.to_string(),
+                    date: r.date,
+                    description: r.description,
+                    reference: r.reference,
+                    debit: r.debit,
+                    credit: r.credit,
+                    running_balance: running,
+                }
+            })
+            .collect();
+
+        let closing_balance = running;
+
+        Ok(AccountLedger {
+            account_id: acct_uuid.to_string(),
+            account_code: code,
+            account_name: name,
+            from,
+            to,
+            opening_balance,
+            lines,
+            closing_balance,
+        })
     }
 }
 

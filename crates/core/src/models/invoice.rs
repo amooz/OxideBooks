@@ -97,6 +97,8 @@ pub struct Invoice {
     pub due_date: Date,
     pub currency: String,
     pub notes: Option<String>,
+    #[serde(default, with = "crate::models::opt_date_serde")]
+    pub expiry_date: Option<Date>,
     pub lines: Vec<InvoiceLine>,
     pub journal_entry_id: Option<String>,
     #[serde(with = "time::serde::rfc3339")]
@@ -152,6 +154,8 @@ pub struct UpdateInvoice {
     pub status: Option<InvoiceStatus>,
     #[serde(default, with = "crate::models::opt_date_serde")]
     pub due_date: Option<Date>,
+    #[serde(default, with = "crate::models::opt_date_serde")]
+    pub expiry_date: Option<Date>,
     pub notes: Option<String>,
 }
 

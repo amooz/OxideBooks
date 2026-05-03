@@ -227,3 +227,29 @@ pub async fn global_search(
     let hits = ReportRepo::search(&state.db, &claims.org, &q.q, &type_filter, limit).await?;
     Ok(Json(serde_json::json!({ "data": hits })))
 }
+
+#[derive(Deserialize)]
+pub struct LedgerQuery {
+    pub account_id: String,
+    pub from: String,
+    pub to: String,
+}
+
+/// GET /api/v1/reports/account-ledger?account_id=&from=YYYY-MM-DD&to=YYYY-MM-DD
+pub async fn account_ledger(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<LedgerQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let from = parse_date(&q.from)?;
+    let to = parse_date(&q.to)?;
+    if to < from {
+        return Err(ApiError::BadRequest("to must be >= from".into()));
+    }
+    let ledger =
+        ReportRepo::account_ledger(&state.db, &claims.org, &q.account_id, from, to).await?;
+    Ok(Json(serde_json::json!({ "data": ledger })))
+}
