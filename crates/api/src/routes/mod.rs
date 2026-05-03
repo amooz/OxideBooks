@@ -15,11 +15,11 @@ use tower_http::{
 
 use crate::{
     handlers::{
-        accounts, attachments, audit, auth, auth_sso, bank, budgets, contacts, custom_fields,
-        email, exchange_rates, expenses, export, fixed_assets, fx, health, identity, inventory,
-        invoices, notes, notifications, organizations, payment_links, payments, payroll, products,
-        projects, purchase_orders, recurring, reports, roles, scim, tags, tax_rates, time_entries,
-        transactions, users, webhooks,
+        accounts, attachments, audit, auth, auth_sso, bank, budgets, consolidated, contacts,
+        custom_fields, dunning, email, exchange_rates, expenses, export, fixed_assets, fx, health,
+        identity, import, inventory, invoices, mileage, notes, notifications, organizations,
+        payment_links, payments, payroll, products, projects, purchase_orders, recurring, reports,
+        roles, scim, stripe_webhook, tags, tax_rates, time_entries, transactions, users, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -487,6 +487,31 @@ pub fn build(state: AppState) -> Router {
         .route("/export/transactions", get(export::export_transactions))
         .route("/export/profit-loss", get(export::export_profit_loss))
         .route("/export/trial-balance", get(export::export_trial_balance))
+        // Consolidated (multi-entity) reports
+        .route(
+            "/reports/consolidated",
+            get(consolidated::consolidated_profit_loss),
+        )
+        // Dunning (overdue reminders)
+        .route(
+            "/dunning-rules",
+            get(dunning::list_dunning_rules).post(dunning::upsert_dunning_rule),
+        )
+        .route("/dunning-rules/:id", delete(dunning::delete_dunning_rule))
+        .route("/invoices/overdue", get(dunning::list_overdue_invoices))
+        .route(
+            "/invoices/:id/reminders",
+            get(dunning::list_invoice_reminders).post(dunning::send_reminder),
+        )
+        // Mileage tracking
+        .route(
+            "/mileage",
+            get(mileage::list_mileage_trips).post(mileage::create_mileage_trip),
+        )
+        .route("/mileage/summary", get(mileage::mileage_summary))
+        .route("/mileage/:id", delete(mileage::delete_mileage_trip))
+        // CSV import
+        .route("/import/contacts", post(import::import_contacts_csv))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     // SCIM 2.0 endpoints (separate bearer-token auth, not JWT)
@@ -509,6 +534,8 @@ pub fn build(state: AppState) -> Router {
     Router::new()
         .nest("/api/v1", public.merge(protected))
         .merge(scim_routes)
+        // Stripe webhook (public — HMAC-verified internally)
+        .route("/webhooks/stripe", post(stripe_webhook::stripe_webhook))
         .route("/health", get(health::readiness))
         .route("/health/live", get(health::liveness))
         .route("/health/ready", get(health::readiness))

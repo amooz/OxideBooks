@@ -2,15 +2,19 @@ pub mod account;
 pub mod attachment;
 pub mod bank;
 pub mod budget;
+pub mod consolidated;
 pub mod contact;
 pub mod custom_field;
+pub mod dunning;
 pub mod email;
 pub mod expense;
 pub mod fixed_asset;
 pub mod fx;
 pub mod identity;
+pub mod import;
 pub mod inventory;
 pub mod invoice;
+pub mod mileage;
 pub mod note;
 pub mod notification;
 pub mod organization;
@@ -39,11 +43,13 @@ pub use budget::{
     Budget, BudgetLine, BudgetVsActualLine, BudgetVsActualReport, CreateBudget, UpdateBudget,
     UpsertBudgetLine,
 };
+pub use consolidated::{ConsolidatedProfitLoss, OrgProfitLoss};
 pub use contact::{Contact, ContactType, CreateContact, UpdateContact};
 pub use custom_field::{
     CreateCustomFieldDefinition, CustomFieldDefinition, CustomFieldValue, SetCustomFieldValue,
     UpdateCustomFieldDefinition,
 };
+pub use dunning::{CreateDunningRule, DunningRule, InvoiceReminder, OverdueInvoice};
 pub use email::{EmailLog, EmailSettings, SendEmailRequest, UpsertEmailSettings};
 pub use expense::{CreateExpense, Expense, ExpenseStatus, UpdateExpense};
 pub use fixed_asset::{
@@ -54,6 +60,7 @@ pub use identity::{
     CreateOidcProvider, CreateSamlProvider, CreateScimToken, CreatedScimToken, IdentityProvider,
     ProviderSummary, ProviderType, ScimToken,
 };
+pub use import::{ContactCsvRow, ImportError, ImportResult};
 pub use inventory::{
     CreateInventoryItem, InventoryAdjustment, InventoryItem, InventoryMovement, LowStockItem,
     UpdateInventoryItem,
@@ -62,6 +69,7 @@ pub use invoice::{
     CreateInvoice, CreateInvoiceLine, Invoice, InvoiceFilters, InvoiceLine, InvoiceStatus,
     InvoiceType, UpdateInvoice,
 };
+pub use mileage::{CreateMileageTrip, MileageSummary, MileageTrip};
 pub use note::{CreateNote, Note};
 pub use notification::{CreateNotification, Notification};
 pub use organization::{CreateOrganization, Organization, UpdateOrganization};
