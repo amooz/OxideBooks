@@ -3,6 +3,7 @@ pub mod api_key;
 pub mod approval_rule;
 pub mod attachment;
 pub mod bank;
+pub mod bank_deposit;
 pub mod bank_rule;
 pub mod batch_payment;
 pub mod bill;
@@ -26,6 +27,7 @@ pub mod expense_policy;
 pub mod expense_report;
 pub mod fixed_asset;
 pub mod fx;
+pub mod fx_revaluation;
 pub mod identity;
 pub mod import;
 pub mod inventory;
@@ -75,6 +77,9 @@ pub use bank::{
     BankAccount, BankTransaction, CreateBankAccount, ImportBankTransaction, MatchTransaction,
     ReconciliationSummary, UpdateBankAccount,
 };
+pub use bank_deposit::{
+    BankDeposit, BankDepositItem, ClearBankDeposit, CreateBankDeposit, CreateDepositItem,
+};
 pub use bank_rule::{BankRule, CreateBankRule};
 pub use batch_payment::{BatchPayment, BatchPaymentLine, CreateBatchPayment};
 pub use bill::{
@@ -119,6 +124,7 @@ pub use fixed_asset::{
     AssetRegisterRow, CreateFixedAsset, DepreciationMethod, FixedAsset, UpdateFixedAsset,
 };
 pub use fx::{FxSummaryRow, RealizedFxEntry};
+pub use fx_revaluation::{CreateFxRevaluation, FxRevaluation};
 pub use identity::{
     CreateOidcProvider, CreateSamlProvider, CreateScimToken, CreatedScimToken, IdentityProvider,
     ProviderSummary, ProviderType, ScimToken,

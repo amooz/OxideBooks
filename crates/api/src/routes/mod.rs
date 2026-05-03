@@ -15,18 +15,18 @@ use tower_http::{
 
 use crate::{
     handlers::{
-        accounts, api_keys, approval_rules, attachments, audit, auth, auth_sso, bank, bank_rules,
-        batch_payments, bills, budgets, bulk, client_portal, closed_periods, consolidated,
-        contact_groups, contacts, credit_notes, custom_fields, deferred_charges, deferred_revenue,
-        departments, doc_sequences, dunning, email, employees, exchange_rates, expense_categories,
-        expense_policies, expense_reports, expenses, export, fixed_assets, fx, health, identity,
-        import, inventory, invoice_templates, invoices, late_fees, leave, mileage, notes,
-        notifications, opening_balances, organizations, payment_links, payment_plans,
-        payment_terms, payments, payroll, payslips, prepayments, price_lists, product_categories,
-        products, projects, purchase_orders, purchase_requisitions, recurring, reports, retainers,
-        roles, sales_orders, scim, sessions, stripe_webhook, subscriptions, tags, tax_groups,
-        tax_periods, tax_rates, time_entries, totp, tracking_categories, transactions, users,
-        vendor_credits, webhooks,
+        accounts, api_keys, approval_rules, attachments, audit, auth, auth_sso, bank,
+        bank_deposits, bank_rules, batch_payments, bills, budgets, bulk, client_portal,
+        closed_periods, consolidated, contact_groups, contacts, credit_notes, custom_fields,
+        deferred_charges, deferred_revenue, departments, doc_sequences, dunning, email, employees,
+        exchange_rates, expense_categories, expense_policies, expense_reports, expenses, export,
+        fixed_assets, fx, fx_revaluations, health, identity, import, inventory, invoice_templates,
+        invoices, late_fees, leave, mileage, notes, notifications, opening_balances, organizations,
+        payment_links, payment_plans, payment_terms, payments, payroll, payslips, prepayments,
+        price_lists, product_categories, products, projects, purchase_orders,
+        purchase_requisitions, recurring, reports, retainers, roles, sales_orders, scim, sessions,
+        stripe_webhook, subscriptions, tags, tax_groups, tax_periods, tax_rates, time_entries,
+        totp, tracking_categories, transactions, users, vendor_credits, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -581,6 +581,19 @@ pub fn build(state: AppState) -> Router {
             "/bank-transactions/:id/exclude",
             post(bank::exclude_bank_transaction),
         )
+        // Bank deposits
+        .route(
+            "/bank-deposits",
+            get(bank_deposits::list_bank_deposits).post(bank_deposits::create_bank_deposit),
+        )
+        .route(
+            "/bank-deposits/:id",
+            get(bank_deposits::get_bank_deposit).delete(bank_deposits::delete_bank_deposit),
+        )
+        .route(
+            "/bank-deposits/:id/clear",
+            post(bank_deposits::clear_bank_deposit),
+        )
         // Inventory
         .route(
             "/inventory",
@@ -621,6 +634,11 @@ pub fn build(state: AppState) -> Router {
         )
         // FX gain/loss report
         .route("/reports/fx-summary", get(fx::fx_summary))
+        // FX revaluations (period-end unrealized gain/loss)
+        .route(
+            "/fx/revaluations",
+            get(fx_revaluations::list_revaluations).post(fx_revaluations::create_revaluation),
+        )
         // Tags
         .route("/tags", get(tags::list_tags).post(tags::create_tag))
         .route(

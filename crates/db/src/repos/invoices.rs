@@ -164,6 +164,47 @@ impl InvoiceRepo {
 
         let org_uuid = parse_uuid(org_id)?;
         let contact_uuid = parse_uuid(&input.contact_id)?;
+
+        // Credit limit check: sum open AR for this contact
+        if input.invoice_type == InvoiceType::Invoice {
+            let limit_row: Option<(Option<i64>, String)> = sqlx::query_as(
+                "SELECT credit_limit, credit_limit_behaviour FROM contacts
+                 WHERE organization_id = $1 AND id = $2",
+            )
+            .bind(org_uuid)
+            .bind(contact_uuid)
+            .fetch_optional(pool)
+            .await
+            .map_err(map_sqlx_err)?;
+
+            if let Some((Some(limit), behaviour)) = limit_row {
+                let open_ar: (i64,) = sqlx::query_as(
+                    "SELECT COALESCE(SUM(total_amount - paid_amount), 0)::BIGINT
+                     FROM invoices
+                     WHERE organization_id = $1 AND contact_id = $2
+                       AND invoice_type = 'invoice'
+                       AND status NOT IN ('voided','draft')",
+                )
+                .bind(org_uuid)
+                .bind(contact_uuid)
+                .fetch_one(pool)
+                .await
+                .map_err(map_sqlx_err)?;
+
+                let invoice_total: i64 = input
+                    .lines
+                    .iter()
+                    .map(|l| l.quantity * l.unit_price / 100)
+                    .sum();
+
+                if open_ar.0 + invoice_total > limit && behaviour == "block" {
+                    return Err(DbError::Conflict(format!(
+                        "credit limit exceeded: limit {limit}, current exposure {}",
+                        open_ar.0 + invoice_total
+                    )));
+                }
+            }
+        }
         let id = Uuid::new_v4();
         let invoice_type = input.invoice_type.to_string();
         let currency = input.currency.unwrap_or_else(|| "USD".to_string());
