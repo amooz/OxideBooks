@@ -11,7 +11,29 @@ pub struct Payment {
     pub method: String,
     pub reference: Option<String>,
     pub notes: Option<String>,
+    pub status: String,
+    pub voided_at: Option<OffsetDateTime>,
     pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Refund {
+    pub id: String,
+    pub payment_id: String,
+    pub amount: i64,
+    pub reason: Option<String>,
+    #[serde(with = "crate::models::date_serde")]
+    pub refund_date: Date,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateRefund {
+    pub amount: i64,
+    pub reason: Option<String>,
+    #[serde(with = "crate::models::date_serde")]
+    pub refund_date: Date,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

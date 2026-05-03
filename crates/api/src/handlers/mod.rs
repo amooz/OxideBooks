@@ -17,6 +17,7 @@ pub mod custom_fields;
 pub mod departments;
 pub mod dunning;
 pub mod email;
+pub mod employees;
 pub mod exchange_rates;
 pub mod expense_policies;
 pub mod expenses;

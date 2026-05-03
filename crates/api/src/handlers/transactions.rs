@@ -7,6 +7,7 @@ use oxidebooks_core::models::CreateJournalEntry;
 use oxidebooks_core::pagination::PageParams;
 use oxidebooks_db::repos::{AuditRepo, TransactionRepo};
 use serde::Deserialize;
+use time::Date;
 use tracing::info;
 
 use crate::{
@@ -103,4 +104,47 @@ pub async fn void_transaction(
     )
     .await;
     Ok(Json(serde_json::json!({ "data": entry })))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ReverseRequest {
+    pub date: Option<String>,
+}
+
+/// POST /api/v1/transactions/:id/reverse
+pub async fn reverse_transaction(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<String>,
+    Json(body): Json<ReverseRequest>,
+) -> ApiResult<(StatusCode, Json<serde_json::Value>)> {
+    if !claims.has("transactions:write") {
+        return Err(ApiError::Forbidden);
+    }
+    let reversal_date = if let Some(ref ds) = body.date {
+        let fmt = time::format_description::parse("[year]-[month]-[day]")
+            .map_err(|_| ApiError::BadRequest("invalid date format".into()))?;
+        Some(
+            Date::parse(ds, &fmt)
+                .map_err(|_| ApiError::BadRequest("date must be YYYY-MM-DD".into()))?,
+        )
+    } else {
+        None
+    };
+    let entry =
+        TransactionRepo::reverse(&state.db, &claims.org, &claims.sub, &id, reversal_date).await?;
+    let _ = AuditRepo::record(
+        &state.db,
+        &claims.org,
+        Some(&claims.sub),
+        "reverse",
+        "journal_entry",
+        &id,
+        None,
+    )
+    .await;
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({ "data": entry })),
+    ))
 }
