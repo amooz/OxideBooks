@@ -254,6 +254,18 @@ pub async fn account_ledger(
     Ok(Json(serde_json::json!({ "data": ledger })))
 }
 
+/// GET /api/v1/reports/project-profitability
+pub async fn project_profitability(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("reports:read") {
+        return Err(ApiError::Forbidden);
+    }
+    let report = ReportRepo::project_profitability(&state.db, &claims.org).await?;
+    Ok(Json(serde_json::json!({ "data": report })))
+}
+
 /// GET /api/v1/reports/sales-by-product?from=YYYY-MM-DD&to=YYYY-MM-DD
 pub async fn sales_by_product(
     State(state): State<AppState>,

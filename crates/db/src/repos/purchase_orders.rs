@@ -384,4 +384,30 @@ impl PurchaseOrderRepo {
 
         Self::get_by_id(pool, org_id, po_id).await
     }
+
+    pub async fn approve(pool: &PgPool, org_id: &str, id: &str) -> Result<PurchaseOrder, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let id_uuid = parse_uuid(id)?;
+
+        let rows = sqlx::query(
+            "UPDATE purchase_orders SET status = 'approved', updated_at = NOW() \
+             WHERE id = $1 AND organization_id = $2 AND status = 'draft'",
+        )
+        .bind(id_uuid)
+        .bind(org_uuid)
+        .execute(pool)
+        .await
+        .map_err(map_sqlx_err)?
+        .rows_affected();
+
+        if rows == 0 {
+            let po = Self::get_by_id(pool, org_id, id).await?;
+            return Err(DbError::Conflict(format!(
+                "PO cannot be approved from status '{}'",
+                po.status
+            )));
+        }
+
+        Self::get_by_id(pool, org_id, id).await
+    }
 }

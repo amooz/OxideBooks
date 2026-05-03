@@ -82,6 +82,19 @@ pub async fn delete_purchase_order(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// POST /api/v1/purchase-orders/:id/approve
+pub async fn approve_purchase_order(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_admin() {
+        return Err(ApiError::Forbidden);
+    }
+    let po = PurchaseOrderRepo::approve(&state.db, &claims.org, &id).await?;
+    Ok(Json(serde_json::json!({ "data": po })))
+}
+
 pub async fn receive_purchase_order(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,

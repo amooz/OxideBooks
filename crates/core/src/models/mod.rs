@@ -19,6 +19,7 @@ pub mod email;
 pub mod employee;
 pub mod expense;
 pub mod expense_policy;
+pub mod expense_report;
 pub mod fixed_asset;
 pub mod fx;
 pub mod identity;
@@ -91,6 +92,9 @@ pub use expense::{
     UpdateExpenseCategory,
 };
 pub use expense_policy::{ContactStatement, ExpensePolicy, StatementLine, UpsertExpensePolicy};
+pub use expense_report::{
+    AddExpenseToReport, CreateExpenseReport, ExpenseReport, UpdateExpenseReport,
+};
 pub use fixed_asset::{
     AssetRegisterRow, CreateFixedAsset, DepreciationMethod, FixedAsset, UpdateFixedAsset,
 };
@@ -141,9 +145,9 @@ pub use recurring::{
 };
 pub use reports::{
     AccountBalance, AccountLedger, AgingReport, AgingRow, BalanceSheetReport, CashFlowReport,
-    CashFlowSection, DashboardKpis, LedgerLine, ProfitLossReport, ReportLine, ReportSection,
-    SalesByProductReport, SalesByProductRow, SearchHit, Summary1099, TaxSummaryLine,
-    TaxSummaryReport, TrialBalance, Vendor1099Row,
+    CashFlowSection, DashboardKpis, LedgerLine, ProfitLossReport, ProjectProfitabilityReport,
+    ProjectProfitabilityRow, ReportLine, ReportSection, SalesByProductReport, SalesByProductRow,
+    SearchHit, Summary1099, TaxSummaryLine, TaxSummaryReport, TrialBalance, Vendor1099Row,
 };
 pub use retainer::{ApplyRetainer, CreateRetainer, DepositRetainer, Retainer, RetainerTransaction};
 pub use role::{AssignPermission, CreateRole, Permission, Role};

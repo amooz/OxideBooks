@@ -18,13 +18,13 @@ use crate::{
         accounts, api_keys, attachments, audit, auth, auth_sso, bank, bank_rules, batch_payments,
         bills, budgets, bulk, client_portal, closed_periods, consolidated, contact_groups,
         contacts, credit_notes, custom_fields, departments, dunning, email, employees,
-        exchange_rates, expense_categories, expense_policies, expenses, export, fixed_assets, fx,
-        health, identity, import, inventory, invoice_templates, invoices, late_fees, leave,
-        mileage, notes, notifications, opening_balances, organizations, payment_links,
-        payment_terms, payments, payroll, payslips, prepayments, price_lists, product_categories,
-        products, projects, purchase_orders, recurring, reports, retainers, roles, scim, sessions,
-        stripe_webhook, tags, tax_periods, tax_rates, time_entries, totp, transactions, users,
-        webhooks,
+        exchange_rates, expense_categories, expense_policies, expense_reports, expenses, export,
+        fixed_assets, fx, health, identity, import, inventory, invoice_templates, invoices,
+        late_fees, leave, mileage, notes, notifications, opening_balances, organizations,
+        payment_links, payment_terms, payments, payroll, payslips, prepayments, price_lists,
+        product_categories, products, projects, purchase_orders, recurring, reports, retainers,
+        roles, scim, sessions, stripe_webhook, tags, tax_periods, tax_rates, time_entries, totp,
+        transactions, users, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -238,6 +238,10 @@ pub fn build(state: AppState) -> Router {
         .route("/reports/1099-summary", get(reports::summary_1099))
         .route("/reports/account-ledger", get(reports::account_ledger))
         .route("/reports/sales-by-product", get(reports::sales_by_product))
+        .route(
+            "/reports/project-profitability",
+            get(reports::project_profitability),
+        )
         // Dashboard
         .route("/dashboard", get(reports::dashboard))
         // Global search
@@ -395,6 +399,39 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/purchase-orders/:id/create-bill",
             post(purchase_orders::po_create_bill),
+        )
+        .route(
+            "/purchase-orders/:id/approve",
+            post(purchase_orders::approve_purchase_order),
+        )
+        // Expense reports
+        .route(
+            "/expense-reports",
+            get(expense_reports::list_expense_reports).post(expense_reports::create_expense_report),
+        )
+        .route(
+            "/expense-reports/:id",
+            get(expense_reports::get_expense_report).patch(expense_reports::update_expense_report),
+        )
+        .route(
+            "/expense-reports/:id/expenses",
+            post(expense_reports::add_expense_to_report),
+        )
+        .route(
+            "/expense-reports/:id/submit",
+            post(expense_reports::submit_expense_report),
+        )
+        .route(
+            "/expense-reports/:id/approve",
+            post(expense_reports::approve_expense_report),
+        )
+        .route(
+            "/expense-reports/:id/reject",
+            post(expense_reports::reject_expense_report),
+        )
+        .route(
+            "/expense-reports/:id/reimburse",
+            post(expense_reports::reimburse_expense_report),
         )
         // Fixed assets
         .route(
