@@ -38,6 +38,7 @@ struct InvoiceLineRow {
     tax_rate: i64,
     discount_pct: i64,
     sort_order: i32,
+    product_id: Option<Uuid>,
 }
 
 pub struct InvoiceRepo;
@@ -191,11 +192,12 @@ impl InvoiceRepo {
             let line_id = Uuid::new_v4();
             let acct_uuid = line.account_id.as_deref().map(parse_uuid).transpose()?;
             let tax_rate = line.tax_rate.unwrap_or(0);
+            let prod_uuid = line.product_id.as_deref().map(parse_uuid).transpose()?;
             sqlx::query(
                 "INSERT INTO invoice_lines \
                  (id, invoice_id, description, account_id, quantity, unit_price, \
-                  tax_rate, discount_pct, sort_order) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+                  tax_rate, discount_pct, sort_order, product_id) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
             )
             .bind(line_id)
             .bind(id)
@@ -206,6 +208,7 @@ impl InvoiceRepo {
             .bind(tax_rate)
             .bind(line.discount_pct)
             .bind(i as i32)
+            .bind(prod_uuid)
             .execute(&mut *tx)
             .await
             .map_err(map_sqlx_err)?;
@@ -390,11 +393,12 @@ impl InvoiceRepo {
         for (i, line) in quote.lines.iter().enumerate() {
             let line_id = Uuid::new_v4();
             let acct_uuid = line.account_id.as_deref().map(parse_uuid).transpose()?;
+            let prod_uuid = line.product_id.as_deref().map(parse_uuid).transpose()?;
             sqlx::query(
                 "INSERT INTO invoice_lines \
                  (id, invoice_id, description, account_id, quantity, unit_price, \
-                  tax_rate, discount_pct, sort_order) \
-                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+                  tax_rate, discount_pct, sort_order, product_id) \
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
             )
             .bind(line_id)
             .bind(new_id)
@@ -405,6 +409,7 @@ impl InvoiceRepo {
             .bind(line.tax_rate)
             .bind(line.discount_pct)
             .bind(i as i32)
+            .bind(prod_uuid)
             .execute(&mut *tx)
             .await
             .map_err(map_sqlx_err)?;
@@ -476,7 +481,7 @@ impl InvoiceRepo {
     async fn fetch_lines(pool: &PgPool, invoice_id: Uuid) -> Result<Vec<InvoiceLine>, DbError> {
         let rows: Vec<InvoiceLineRow> = sqlx::query_as(
             "SELECT id, invoice_id, description, account_id, quantity, unit_price, \
-             tax_rate, discount_pct, sort_order \
+             tax_rate, discount_pct, sort_order, product_id \
              FROM invoice_lines WHERE invoice_id = $1 ORDER BY sort_order",
         )
         .bind(invoice_id)
@@ -496,6 +501,7 @@ impl InvoiceRepo {
                 tax_rate: r.tax_rate,
                 discount_pct: r.discount_pct,
                 sort_order: r.sort_order,
+                product_id: r.product_id.map(|u| u.to_string()),
             })
             .collect())
     }

@@ -201,6 +201,31 @@ pub struct AccountLedger {
     pub closing_balance: MinorUnits,
 }
 
+// ── Sales by Product ─────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SalesByProductRow {
+    pub product_id: String,
+    pub product_name: String,
+    pub sku: Option<String>,
+    pub quantity: i64,
+    pub gross_amount: MinorUnits,
+    pub discount_amount: MinorUnits,
+    pub net_amount: MinorUnits,
+    pub tax_amount: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SalesByProductReport {
+    pub from: Date,
+    pub to: Date,
+    pub rows: Vec<SalesByProductRow>,
+    pub total_gross: MinorUnits,
+    pub total_discount: MinorUnits,
+    pub total_net: MinorUnits,
+    pub total_tax: MinorUnits,
+}
+
 // ── Global Search ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

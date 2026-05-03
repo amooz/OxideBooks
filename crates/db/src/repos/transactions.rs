@@ -7,7 +7,8 @@ use uuid::Uuid;
 use crate::error::{map_sqlx_err, DbError};
 
 const ENTRY_COLS: &str = "id, organization_id, date, reference, description, status, \
-                          created_by, reversal_of, created_at, updated_at";
+                          created_by, reversal_of, submitted_by, submitted_at, \
+                          approved_by, approved_at, created_at, updated_at";
 
 #[derive(sqlx::FromRow)]
 struct EntryRow {
@@ -19,6 +20,10 @@ struct EntryRow {
     status: String,
     created_by: Uuid,
     reversal_of: Option<Uuid>,
+    submitted_by: Option<Uuid>,
+    submitted_at: Option<OffsetDateTime>,
+    approved_by: Option<Uuid>,
+    approved_at: Option<OffsetDateTime>,
     created_at: OffsetDateTime,
     updated_at: OffsetDateTime,
 }
@@ -132,7 +137,7 @@ impl TransactionRepo {
         sqlx::query(
             "INSERT INTO journal_entries \
              (id, organization_id, date, reference, description, status, created_by) \
-             VALUES ($1, $2, $3, $4, $5, 'posted', $6)",
+             VALUES ($1, $2, $3, $4, $5, 'draft', $6)",
         )
         .bind(id)
         .bind(org_uuid)
@@ -166,6 +171,74 @@ impl TransactionRepo {
         tx.commit().await.map_err(map_sqlx_err)?;
 
         Self::get_by_id(pool, org_id, &id.to_string()).await
+    }
+
+    pub async fn submit(
+        pool: &PgPool,
+        org_id: &str,
+        user_id: &str,
+        id: &str,
+    ) -> Result<JournalEntry, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let id_uuid = parse_uuid(id)?;
+        let user_uuid = parse_uuid(user_id)?;
+
+        let rows_affected = sqlx::query(
+            "UPDATE journal_entries \
+             SET status = 'submitted', submitted_by = $3, submitted_at = NOW(), updated_at = NOW() \
+             WHERE id = $1 AND organization_id = $2 AND status = 'draft'",
+        )
+        .bind(id_uuid)
+        .bind(org_uuid)
+        .bind(user_uuid)
+        .execute(pool)
+        .await
+        .map_err(map_sqlx_err)?
+        .rows_affected();
+
+        if rows_affected == 0 {
+            let entry = Self::get_by_id(pool, org_id, id).await?;
+            return Err(DbError::Conflict(format!(
+                "journal entry cannot be submitted from status '{}'",
+                entry.status
+            )));
+        }
+
+        Self::get_by_id(pool, org_id, id).await
+    }
+
+    pub async fn approve(
+        pool: &PgPool,
+        org_id: &str,
+        user_id: &str,
+        id: &str,
+    ) -> Result<JournalEntry, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let id_uuid = parse_uuid(id)?;
+        let user_uuid = parse_uuid(user_id)?;
+
+        let rows_affected = sqlx::query(
+            "UPDATE journal_entries \
+             SET status = 'posted', approved_by = $3, approved_at = NOW(), updated_at = NOW() \
+             WHERE id = $1 AND organization_id = $2 AND status = 'submitted'",
+        )
+        .bind(id_uuid)
+        .bind(org_uuid)
+        .bind(user_uuid)
+        .execute(pool)
+        .await
+        .map_err(map_sqlx_err)?
+        .rows_affected();
+
+        if rows_affected == 0 {
+            let entry = Self::get_by_id(pool, org_id, id).await?;
+            return Err(DbError::Conflict(format!(
+                "journal entry cannot be approved from status '{}'",
+                entry.status
+            )));
+        }
+
+        Self::get_by_id(pool, org_id, id).await
     }
 
     pub async fn void(pool: &PgPool, org_id: &str, id: &str) -> Result<JournalEntry, DbError> {
@@ -333,12 +406,17 @@ fn entry_from_row(r: EntryRow, lines: Vec<JournalLine>) -> JournalEntry {
         description: r.description,
         status: match r.status.as_str() {
             "draft" => JournalEntryStatus::Draft,
+            "submitted" => JournalEntryStatus::Submitted,
             "voided" => JournalEntryStatus::Voided,
             _ => JournalEntryStatus::Posted,
         },
         lines,
         created_by: r.created_by.to_string(),
         reversal_of: r.reversal_of.map(|u| u.to_string()),
+        submitted_by: r.submitted_by.map(|u| u.to_string()),
+        submitted_at: r.submitted_at,
+        approved_by: r.approved_by.map(|u| u.to_string()),
+        approved_at: r.approved_at,
         created_at: r.created_at,
         updated_at: r.updated_at,
     }
