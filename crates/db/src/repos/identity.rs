@@ -107,6 +107,46 @@ impl IdentityProviderRepo {
         row.try_into()
     }
 
+    /// List public provider metadata for a given org (no secrets returned).
+    /// Returns `(id, protocol, display_name, org_id)` tuples.
+    pub async fn list_public_by_org(
+        pool: &PgPool,
+        org_id: &str,
+    ) -> Result<Vec<(String, String, String, String)>, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let rows: Vec<(Uuid, String, String, Uuid)> = sqlx::query_as(
+            "SELECT id, provider_type, name, org_id FROM identity_providers \
+             WHERE org_id = $1 AND is_enabled = TRUE ORDER BY name",
+        )
+        .bind(org_uuid)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        Ok(rows
+            .into_iter()
+            .map(|(id, ptype, name, oid)| (id.to_string(), ptype, name, oid.to_string()))
+            .collect())
+    }
+
+    /// Resolve org_id from a domain name, then list public providers.
+    pub async fn list_public_by_domain(
+        pool: &PgPool,
+        domain: &str,
+    ) -> Result<Vec<(String, String, String, String)>, DbError> {
+        let row: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM organizations WHERE domain = $1")
+            .bind(domain)
+            .fetch_optional(pool)
+            .await
+            .map_err(map_sqlx_err)?;
+
+        match row {
+            // Return empty list if org not found — avoids org enumeration.
+            None => Ok(vec![]),
+            Some((org_id,)) => Self::list_public_by_org(pool, &org_id.to_string()).await,
+        }
+    }
+
     pub async fn create_oidc(
         pool: &PgPool,
         org_id: &str,

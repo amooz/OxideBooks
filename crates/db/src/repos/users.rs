@@ -1,3 +1,4 @@
+use oxidebooks_core::pagination::{encode_cursor, PageParams};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use time::OffsetDateTime;
@@ -115,23 +116,65 @@ impl UserRepo {
         Ok(row.into())
     }
 
-    pub async fn list(pool: &PgPool, org_id: &str) -> Result<Vec<User>, DbError> {
+    pub async fn list(
+        pool: &PgPool,
+        org_id: &str,
+        page: &PageParams,
+    ) -> Result<(Vec<User>, Option<String>), DbError> {
         let org_uuid = parse_uuid(org_id)?;
+        let limit = page.limit_clamped();
+        let cursor = page.decode_cursor();
 
-        let rows: Vec<UserRow> = sqlx::query_as(
-            "SELECT u.id, u.organization_id, u.email, u.name, r.name AS role_name, \
-                    u.is_active, u.created_at, u.updated_at \
-             FROM users u \
-             JOIN roles r ON r.id = u.role_id \
-             WHERE u.organization_id = $1 \
-             ORDER BY u.created_at ASC",
-        )
-        .bind(org_uuid)
-        .fetch_all(pool)
-        .await
-        .map_err(map_sqlx_err)?;
+        let rows: Vec<UserRow> = if let Some(c) = cursor {
+            let cursor_ts = time::OffsetDateTime::parse(
+                &c.created_at,
+                &time::format_description::well_known::Rfc3339,
+            )
+            .map_err(|_| DbError::Conflict("invalid cursor".into()))?;
+            let cursor_id = parse_uuid(&c.id)?;
+            sqlx::query_as(
+                "SELECT u.id, u.organization_id, u.email, u.name, r.name AS role_name, \
+                        u.is_active, u.created_at, u.updated_at \
+                 FROM users u \
+                 JOIN roles r ON r.id = u.role_id \
+                 WHERE u.organization_id = $1 AND (u.created_at, u.id) > ($2, $3) \
+                 ORDER BY u.created_at ASC, u.id ASC LIMIT $4",
+            )
+            .bind(org_uuid)
+            .bind(cursor_ts)
+            .bind(cursor_id)
+            .bind(limit + 1)
+            .fetch_all(pool)
+            .await
+            .map_err(map_sqlx_err)?
+        } else {
+            sqlx::query_as(
+                "SELECT u.id, u.organization_id, u.email, u.name, r.name AS role_name, \
+                        u.is_active, u.created_at, u.updated_at \
+                 FROM users u \
+                 JOIN roles r ON r.id = u.role_id \
+                 WHERE u.organization_id = $1 \
+                 ORDER BY u.created_at ASC, u.id ASC LIMIT $2",
+            )
+            .bind(org_uuid)
+            .bind(limit + 1)
+            .fetch_all(pool)
+            .await
+            .map_err(map_sqlx_err)?
+        };
 
-        Ok(rows.into_iter().map(User::from).collect())
+        let has_next = rows.len() as i64 > limit;
+        let mut rows = rows;
+        if has_next {
+            rows.pop();
+        }
+        let next_cursor = if has_next {
+            rows.last()
+                .map(|r| encode_cursor(r.created_at, &r.id.to_string()))
+        } else {
+            None
+        };
+        Ok((rows.into_iter().map(User::from).collect(), next_cursor))
     }
 
     pub async fn get_by_id_with_hash(pool: &PgPool, id: &str) -> Result<UserWithHash, DbError> {

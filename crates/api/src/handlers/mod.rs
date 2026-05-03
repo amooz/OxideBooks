@@ -3,6 +3,7 @@ pub mod auth;
 pub mod auth_sso;
 pub mod contacts;
 pub mod exchange_rates;
+pub mod health;
 pub mod identity;
 pub mod invoices;
 pub mod organizations;

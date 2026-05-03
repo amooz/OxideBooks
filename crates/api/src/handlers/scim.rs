@@ -16,10 +16,25 @@ use axum::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 
+use argon2::{
+    password_hash::{rand_core::OsRng, PasswordHasher, SaltString},
+    Argon2,
+};
 use oxidebooks_db::repos::users::CreateUser;
 use oxidebooks_db::repos::{ScimTokenRepo, UserRepo};
 
 use crate::{error::ApiError, state::AppState};
+
+fn hash_password_scim(password: &str) -> Option<String> {
+    if password.len() < 12 {
+        return None;
+    }
+    let salt = SaltString::generate(&mut OsRng);
+    Argon2::default()
+        .hash_password(password.as_bytes(), &salt)
+        .ok()
+        .map(|h| h.to_string())
+}
 
 // ── SCIM schema constants ─────────────────────────────────────────────────────
 
@@ -37,6 +52,8 @@ pub struct ScimUserInput {
     pub active: Option<bool>,
     pub name: Option<ScimName>,
     pub emails: Option<Vec<ScimEmail>>,
+    #[serde(skip_serializing)]
+    pub password: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -225,12 +242,28 @@ pub async fn create_user(
         })
         .unwrap_or_else(|| email.split('@').next().unwrap_or("User").to_string());
 
+    // Hash password if provided; reject if it fails the complexity check.
+    let password_hash = if let Some(ref pw) = input.password {
+        match hash_password_scim(pw) {
+            Some(h) => h,
+            None => {
+                return scim_error(
+                    StatusCode::BAD_REQUEST,
+                    "password must be at least 12 characters",
+                )
+                .into_response()
+            }
+        }
+    } else {
+        "".to_string()
+    };
+
     let user = match UserRepo::create(
         &state.db,
         CreateUser {
             organization_id: org_id.clone(),
             email: email.clone(),
-            password_hash: "".to_string(),
+            password_hash,
             name: name.clone(),
             role: "viewer".to_string(),
         },
@@ -289,23 +322,40 @@ pub async fn patch_user(
     };
 
     for op in &patch.operations {
-        if op.op.to_lowercase() == "replace" {
-            let active = match op.path.as_deref() {
-                Some("active") => op.value.as_ref().and_then(|v| v.as_bool()),
-                _ => op
-                    .value
-                    .as_ref()
-                    .and_then(|v| v.get("active"))
-                    .and_then(|v| v.as_bool()),
-            };
+        match op.op.to_lowercase().as_str() {
+            "replace" => {
+                // active flag
+                let active = match op.path.as_deref() {
+                    Some("active") => op.value.as_ref().and_then(|v| v.as_bool()),
+                    _ => op
+                        .value
+                        .as_ref()
+                        .and_then(|v| v.get("active"))
+                        .and_then(|v| v.as_bool()),
+                };
+                if let Some(is_active) = active {
+                    let _ = sqlx::query("UPDATE users SET is_active = $1 WHERE id = $2")
+                        .bind(is_active)
+                        .bind(user_uuid)
+                        .execute(&state.db)
+                        .await;
+                }
 
-            if let Some(is_active) = active {
-                let _ = sqlx::query("UPDATE users SET is_active = $1 WHERE id = $2")
-                    .bind(is_active)
-                    .bind(user_uuid)
-                    .execute(&state.db)
-                    .await;
+                // password
+                if op.path.as_deref() == Some("password") {
+                    if let Some(pw) = op.value.as_ref().and_then(|v| v.as_str()) {
+                        if let Some(hash) = hash_password_scim(pw) {
+                            let _ =
+                                sqlx::query("UPDATE users SET password_hash = $1 WHERE id = $2")
+                                    .bind(&hash)
+                                    .bind(user_uuid)
+                                    .execute(&state.db)
+                                    .await;
+                        }
+                    }
+                }
             }
+            _ => {}
         }
     }
 

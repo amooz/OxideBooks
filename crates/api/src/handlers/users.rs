@@ -1,8 +1,9 @@
 use axum::{
-    extract::{Extension, Path, State},
+    extract::{Extension, Path, Query, State},
     http::StatusCode,
     Json,
 };
+use oxidebooks_core::pagination::PageParams;
 use oxidebooks_db::repos::users::{CreateUser, UpdateUser, UserRepo};
 use serde::Deserialize;
 use tracing::info;
@@ -17,12 +18,16 @@ use crate::{
 pub async fn list_users(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
+    Query(page): Query<PageParams>,
 ) -> ApiResult<Json<serde_json::Value>> {
     if !claims.has("users:read") {
         return Err(ApiError::Forbidden);
     }
-    let users = UserRepo::list(&state.db, &claims.org).await?;
-    Ok(Json(serde_json::json!({ "data": users })))
+    let (users, next_cursor) = UserRepo::list(&state.db, &claims.org, &page).await?;
+    Ok(Json(serde_json::json!({
+        "data": users,
+        "pagination": { "has_next": next_cursor.is_some(), "next_cursor": next_cursor }
+    })))
 }
 
 /// GET /api/v1/users/:id
