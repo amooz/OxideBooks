@@ -24,8 +24,9 @@ use crate::{
         notifications, opening_balances, organizations, payment_links, payment_plans,
         payment_terms, payments, payroll, payslips, prepayments, price_lists, product_categories,
         products, projects, purchase_orders, purchase_requisitions, recurring, reports, retainers,
-        roles, sales_orders, scim, sessions, stripe_webhook, tags, tax_groups, tax_periods,
-        tax_rates, time_entries, totp, transactions, users, vendor_credits, webhooks,
+        roles, sales_orders, scim, sessions, stripe_webhook, subscriptions, tags, tax_groups,
+        tax_periods, tax_rates, time_entries, totp, tracking_categories, transactions, users,
+        vendor_credits, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -995,6 +996,53 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/payment-plans/:id/cancel",
             post(payment_plans::cancel_payment_plan),
+        )
+        // Subscription plans
+        .route(
+            "/subscription-plans",
+            get(subscriptions::list_plans).post(subscriptions::create_plan),
+        )
+        .route(
+            "/subscription-plans/:id",
+            get(subscriptions::get_plan).patch(subscriptions::update_plan),
+        )
+        // Subscriptions
+        .route(
+            "/subscriptions",
+            get(subscriptions::list_subscriptions).post(subscriptions::create_subscription),
+        )
+        .route(
+            "/subscriptions/:id",
+            get(subscriptions::get_subscription).patch(subscriptions::update_subscription),
+        )
+        .route(
+            "/subscriptions/:id/cancel",
+            post(subscriptions::cancel_subscription),
+        )
+        .route(
+            "/subscriptions/:id/renew",
+            post(subscriptions::renew_subscription),
+        )
+        // Tracking categories (QB-style classes/locations)
+        .route(
+            "/tracking-categories",
+            get(tracking_categories::list_tracking_categories)
+                .post(tracking_categories::create_tracking_category),
+        )
+        .route(
+            "/tracking-categories/:id",
+            get(tracking_categories::get_tracking_category)
+                .patch(tracking_categories::update_tracking_category)
+                .delete(tracking_categories::delete_tracking_category),
+        )
+        .route(
+            "/tracking-categories/:id/options",
+            post(tracking_categories::add_tracking_option),
+        )
+        .route(
+            "/tracking-categories/:id/options/:option_id",
+            axum::routing::patch(tracking_categories::update_tracking_option)
+                .delete(tracking_categories::delete_tracking_option),
         )
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 

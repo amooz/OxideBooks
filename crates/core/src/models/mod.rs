@@ -55,11 +55,13 @@ pub mod retainer;
 pub mod role;
 pub mod sales_order;
 pub mod session;
+pub mod subscription;
 pub mod tag;
 pub mod tax_group;
 pub mod tax_period;
 pub mod tax_rate;
 pub mod time_entry;
+pub mod tracking_category;
 pub mod transaction;
 pub mod vendor_credit;
 pub mod webhook;
@@ -175,12 +177,20 @@ pub use sales_order::{
     ConvertSoToInvoice, CreateSalesOrder, CreateSoLine, SalesOrder, SoLine, UpdateSalesOrder,
 };
 pub use session::Session;
+pub use subscription::{
+    CreateSubscription, CreateSubscriptionPlan, Subscription, SubscriptionPlan, UpdateSubscription,
+    UpdateSubscriptionPlan,
+};
 pub use tag::{CreateTag, Tag, UpdateTag};
 pub use tax_group::{CreateTaxGroup, TaxGroup, TaxGroupRate, TaxGroupRateInput, UpdateTaxGroup};
 pub use tax_period::{CreateTaxPeriod, FileTaxPeriod, TaxPeriod};
 pub use tax_rate::{CreateTaxRate, TaxRate, UpdateTaxRate};
 pub use time_entry::{
     BillTimeEntries, CreateTimeEntry, TimeEntry, TimeSummaryRow, UpdateTimeEntry,
+};
+pub use tracking_category::{
+    CreateTrackingCategory, CreateTrackingOption, TrackingCategory, TrackingOption,
+    UpdateTrackingCategory, UpdateTrackingOption,
 };
 pub use transaction::{
     CreateJournalEntry, CreateJournalLine, JournalEntry, JournalEntryStatus, JournalLine,
