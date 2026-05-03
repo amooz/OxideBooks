@@ -1,6 +1,6 @@
 use oxidebooks_core::models::{
-    AccountBalance, AccountType, BalanceSheetReport, ProfitLossReport, ReportLine, ReportSection,
-    TrialBalance,
+    AccountBalance, AccountType, AgingReport, AgingRow, BalanceSheetReport, DashboardKpis,
+    ProfitLossReport, ReportLine, ReportSection, TaxSummaryLine, TaxSummaryReport, TrialBalance,
 };
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -254,6 +254,294 @@ impl ReportRepo {
                 total: equity_total,
             },
             is_balanced: asset_total == liability_total + equity_total,
+        })
+    }
+
+    /// AR/AP aging report — outstanding invoice balances bucketed by days overdue.
+    pub async fn aging(
+        pool: &PgPool,
+        org_id: &str,
+        aging_type: &str,
+        as_of: Date,
+    ) -> Result<AgingReport, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let invoice_type = if aging_type == "payable" {
+            "bill"
+        } else {
+            "invoice"
+        };
+
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            contact_id: Uuid,
+            contact_name: String,
+            due_date: Date,
+            balance: i64,
+        }
+
+        let rows: Vec<Row> = sqlx::query_as(
+            r#"
+            SELECT
+                c.id   AS contact_id,
+                c.name AS contact_name,
+                i.due_date,
+                GREATEST(0,
+                    (SELECT COALESCE(SUM(il.quantity * il.unit_price
+                           * (1 + il.tax_rate::float8 / 10000)), 0)::BIGINT
+                     FROM invoice_lines il WHERE il.invoice_id = i.id)
+                    - COALESCE((SELECT SUM(p.amount) FROM payments p
+                                WHERE p.invoice_id = i.id
+                                  AND p.payment_date <= $3), 0)
+                ) AS balance
+            FROM invoices i
+            JOIN contacts c ON c.id = i.contact_id
+            WHERE i.organization_id = $1
+              AND i.invoice_type = $2
+              AND i.status IN ('sent','partial')
+              AND i.date <= $3
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(invoice_type)
+        .bind(as_of)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        // Bucket by days overdue
+        use std::collections::HashMap;
+        let mut map: HashMap<String, AgingRow> = HashMap::new();
+
+        for row in &rows {
+            let days_overdue = (as_of - row.due_date).whole_days();
+            let entry = map
+                .entry(row.contact_id.to_string())
+                .or_insert_with(|| AgingRow {
+                    contact_id: row.contact_id.to_string(),
+                    contact_name: row.contact_name.clone(),
+                    current: 0,
+                    days_1_30: 0,
+                    days_31_60: 0,
+                    days_61_90: 0,
+                    days_over_90: 0,
+                    total: 0,
+                });
+
+            match days_overdue {
+                d if d <= 0 => entry.current += row.balance,
+                1..=30 => entry.days_1_30 += row.balance,
+                31..=60 => entry.days_31_60 += row.balance,
+                61..=90 => entry.days_61_90 += row.balance,
+                _ => entry.days_over_90 += row.balance,
+            }
+            entry.total += row.balance;
+        }
+
+        let mut aging_rows: Vec<AgingRow> = map.into_values().collect();
+        aging_rows.retain(|r| r.total > 0);
+        aging_rows.sort_by(|a, b| a.contact_name.cmp(&b.contact_name));
+
+        let totals = AgingRow {
+            contact_id: String::new(),
+            contact_name: "Total".to_string(),
+            current: aging_rows.iter().map(|r| r.current).sum(),
+            days_1_30: aging_rows.iter().map(|r| r.days_1_30).sum(),
+            days_31_60: aging_rows.iter().map(|r| r.days_31_60).sum(),
+            days_61_90: aging_rows.iter().map(|r| r.days_61_90).sum(),
+            days_over_90: aging_rows.iter().map(|r| r.days_over_90).sum(),
+            total: aging_rows.iter().map(|r| r.total).sum(),
+        };
+
+        Ok(AgingReport {
+            as_of,
+            aging_type: aging_type.to_string(),
+            rows: aging_rows,
+            totals,
+        })
+    }
+
+    /// Dashboard KPI snapshot for an organization.
+    pub async fn dashboard(pool: &PgPool, org_id: &str) -> Result<DashboardKpis, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        let cash: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COALESCE(SUM(jl.debit - jl.credit), 0)::BIGINT
+            FROM accounts a
+            JOIN journal_lines jl ON jl.account_id = a.id
+            JOIN journal_entries je ON je.id = jl.journal_entry_id
+            WHERE a.organization_id = $1
+              AND a.account_type = 'asset'
+              AND a.sub_type IN ('bank', 'cash')
+              AND je.status = 'posted'
+            "#,
+        )
+        .bind(org_uuid)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let ar: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COALESCE(SUM(
+                (SELECT COALESCE(SUM(il.quantity * il.unit_price
+                       * (1 + il.tax_rate::float8 / 10000)), 0)::BIGINT
+                 FROM invoice_lines il WHERE il.invoice_id = i.id)
+                - COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.invoice_id = i.id), 0)
+            ), 0)::BIGINT
+            FROM invoices i
+            WHERE i.organization_id = $1
+              AND i.invoice_type = 'invoice'
+              AND i.status IN ('sent', 'partial')
+            "#,
+        )
+        .bind(org_uuid)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let ap: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COALESCE(SUM(
+                (SELECT COALESCE(SUM(il.quantity * il.unit_price
+                       * (1 + il.tax_rate::float8 / 10000)), 0)::BIGINT
+                 FROM invoice_lines il WHERE il.invoice_id = i.id)
+                - COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.invoice_id = i.id), 0)
+            ), 0)::BIGINT
+            FROM invoices i
+            WHERE i.organization_id = $1
+              AND i.invoice_type = 'bill'
+              AND i.status IN ('sent', 'partial')
+            "#,
+        )
+        .bind(org_uuid)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let revenue_mtd: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COALESCE(SUM(jl.credit - jl.debit), 0)::BIGINT
+            FROM accounts a
+            JOIN journal_lines jl ON jl.account_id = a.id
+            JOIN journal_entries je ON je.id = jl.journal_entry_id
+            WHERE a.organization_id = $1
+              AND a.account_type = 'revenue'
+              AND je.status = 'posted'
+              AND date_trunc('month', je.date::timestamptz) = date_trunc('month', NOW())
+            "#,
+        )
+        .bind(org_uuid)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let expenses_mtd: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COALESCE(SUM(jl.debit - jl.credit), 0)::BIGINT
+            FROM accounts a
+            JOIN journal_lines jl ON jl.account_id = a.id
+            JOIN journal_entries je ON je.id = jl.journal_entry_id
+            WHERE a.organization_id = $1
+              AND a.account_type = 'expense'
+              AND je.status = 'posted'
+              AND date_trunc('month', je.date::timestamptz) = date_trunc('month', NOW())
+            "#,
+        )
+        .bind(org_uuid)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let overdue: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM invoices i \
+             WHERE i.organization_id = $1 \
+               AND i.status IN ('sent','partial') \
+               AND i.due_date < CURRENT_DATE",
+        )
+        .bind(org_uuid)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        Ok(DashboardKpis {
+            cash_balance: cash,
+            accounts_receivable: ar,
+            accounts_payable: ap,
+            revenue_mtd,
+            expenses_mtd,
+            overdue_invoices: overdue,
+        })
+    }
+
+    /// Tax summary report — tax collected on invoices vs paid on bills.
+    pub async fn tax_summary(
+        pool: &PgPool,
+        org_id: &str,
+        from: Date,
+        to: Date,
+    ) -> Result<TaxSummaryReport, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            tax_rate_id: Uuid,
+            tax_rate_name: String,
+            rate_bps: i32,
+            tax_collected: i64,
+            tax_paid: i64,
+        }
+
+        let rows: Vec<Row> = sqlx::query_as(
+            r#"
+            SELECT
+                tr.id           AS tax_rate_id,
+                tr.name         AS tax_rate_name,
+                tr.rate_bps,
+                COALESCE(SUM(CASE WHEN i.invoice_type = 'invoice'
+                    THEN (il.quantity * il.unit_price * il.tax_rate / 10000)::BIGINT ELSE 0 END), 0) AS tax_collected,
+                COALESCE(SUM(CASE WHEN i.invoice_type = 'bill'
+                    THEN (il.quantity * il.unit_price * il.tax_rate / 10000)::BIGINT ELSE 0 END), 0) AS tax_paid
+            FROM tax_rates tr
+            JOIN invoice_lines il ON il.tax_rate = tr.rate_bps
+            JOIN invoices i ON i.id = il.invoice_id
+            WHERE tr.organization_id = $1
+              AND i.organization_id  = $1
+              AND i.status != 'voided'
+              AND i.date BETWEEN $2 AND $3
+            GROUP BY tr.id, tr.name, tr.rate_bps
+            ORDER BY tr.name
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let lines: Vec<TaxSummaryLine> = rows
+            .iter()
+            .map(|r| TaxSummaryLine {
+                tax_rate_id: r.tax_rate_id.to_string(),
+                tax_rate_name: r.tax_rate_name.clone(),
+                rate_bps: r.rate_bps,
+                tax_collected: r.tax_collected,
+                tax_paid: r.tax_paid,
+                net: r.tax_collected - r.tax_paid,
+            })
+            .collect();
+
+        let total_collected = lines.iter().map(|l| l.tax_collected).sum();
+        let total_paid = lines.iter().map(|l| l.tax_paid).sum();
+
+        Ok(TaxSummaryReport {
+            from,
+            to,
+            lines,
+            total_collected,
+            total_paid,
+            net: total_collected - total_paid,
         })
     }
 }

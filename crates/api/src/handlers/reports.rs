@@ -85,3 +85,62 @@ pub async fn balance_sheet(
     let report = ReportRepo::balance_sheet(&state.db, &claims.org, as_of).await?;
     Ok(Json(serde_json::json!({ "data": report })))
 }
+
+#[derive(Deserialize)]
+pub struct AgingQuery {
+    pub as_of: String,
+    #[serde(rename = "type")]
+    pub aging_type: Option<String>,
+}
+
+/// GET /api/v1/reports/aging?type=receivable|payable&as_of=YYYY-MM-DD
+pub async fn aging(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<AgingQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("reports:read") {
+        return Err(ApiError::Forbidden);
+    }
+    let as_of = parse_date(&q.as_of)?;
+    let aging_type = q.aging_type.as_deref().unwrap_or("receivable");
+    if aging_type != "receivable" && aging_type != "payable" {
+        return Err(ApiError::BadRequest(
+            "type must be 'receivable' or 'payable'".into(),
+        ));
+    }
+    let report = ReportRepo::aging(&state.db, &claims.org, aging_type, as_of).await?;
+    Ok(Json(serde_json::json!({ "data": report })))
+}
+
+/// GET /api/v1/reports/tax-summary?from=YYYY-MM-DD&to=YYYY-MM-DD
+pub async fn tax_summary(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<DateRangeQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("reports:read") {
+        return Err(ApiError::Forbidden);
+    }
+    let from = parse_date(&q.from)?;
+    let to = parse_date(&q.to)?;
+    if from > to {
+        return Err(ApiError::BadRequest(
+            "'from' must be on or before 'to'".into(),
+        ));
+    }
+    let report = ReportRepo::tax_summary(&state.db, &claims.org, from, to).await?;
+    Ok(Json(serde_json::json!({ "data": report })))
+}
+
+/// GET /api/v1/dashboard
+pub async fn dashboard(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("reports:read") {
+        return Err(ApiError::Forbidden);
+    }
+    let kpis = ReportRepo::dashboard(&state.db, &claims.org).await?;
+    Ok(Json(serde_json::json!({ "data": kpis })))
+}

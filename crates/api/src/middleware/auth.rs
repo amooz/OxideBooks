@@ -48,6 +48,16 @@ impl Claims {
     pub fn has(&self, permission: &str) -> bool {
         self.permissions.iter().any(|p| p == permission)
     }
+
+    /// Returns true if the caller is admin or owner.
+    pub fn is_admin(&self) -> bool {
+        matches!(self.role.as_str(), "admin" | "owner")
+    }
+
+    /// Returns true if the caller is accountant, admin, or owner.
+    pub fn is_at_least_accountant(&self) -> bool {
+        matches!(self.role.as_str(), "accountant" | "admin" | "owner")
+    }
 }
 
 /// Axum middleware: validates Bearer token and injects [`Claims`] as a request extension.
