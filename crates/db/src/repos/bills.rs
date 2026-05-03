@@ -1,6 +1,7 @@
 use oxidebooks_core::models::{
     BillLine, BillPayment, CreateBillPayment, CreateVendorBill, UpdateVendorBill, VendorBill,
 };
+use rust_decimal::Decimal;
 use sqlx::PgPool;
 use time::{Date, OffsetDateTime};
 use uuid::Uuid;
@@ -16,6 +17,9 @@ struct BillRow {
     reference: Option<String>,
     description: String,
     status: String,
+    doc_number: Option<String>,
+    currency_code: String,
+    exchange_rate: Decimal,
     created_at: OffsetDateTime,
     updated_at: OffsetDateTime,
 }
@@ -65,7 +69,8 @@ impl BillRepo {
         let org_uuid = parse_uuid(org_id)?;
         let rows: Vec<BillRow> = sqlx::query_as(
             "SELECT id, contact_id, bill_date, due_date, reference, \
-             description, status, created_at, updated_at \
+             description, status, doc_number, currency_code, exchange_rate, \
+             created_at, updated_at \
              FROM vendor_bills WHERE organization_id = $1 \
              ORDER BY bill_date DESC, created_at DESC",
         )
@@ -86,7 +91,8 @@ impl BillRepo {
         let id_uuid = parse_uuid(id)?;
         let row: BillRow = sqlx::query_as(
             "SELECT id, contact_id, bill_date, due_date, reference, \
-             description, status, created_at, updated_at \
+             description, status, doc_number, currency_code, exchange_rate, \
+             created_at, updated_at \
              FROM vendor_bills WHERE organization_id = $1 AND id = $2",
         )
         .bind(org_uuid)
@@ -111,8 +117,9 @@ impl BillRepo {
 
         sqlx::query(
             "INSERT INTO vendor_bills \
-             (id, organization_id, contact_id, bill_date, due_date, reference, description) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7)",
+             (id, organization_id, contact_id, bill_date, due_date, reference, description, \
+              currency_code, exchange_rate) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
         )
         .bind(id)
         .bind(org_uuid)
@@ -121,6 +128,8 @@ impl BillRepo {
         .bind(input.due_date)
         .bind(&input.reference)
         .bind(&input.description)
+        .bind(&input.currency_code)
+        .bind(input.exchange_rate)
         .execute(&mut *tx)
         .await
         .map_err(map_sqlx_err)?;
@@ -402,6 +411,9 @@ impl BillRepo {
             reference: r.reference,
             description: r.description,
             status: r.status,
+            doc_number: r.doc_number,
+            currency_code: r.currency_code,
+            exchange_rate: r.exchange_rate,
             lines,
             total,
             amount_paid: paid.0,

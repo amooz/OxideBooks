@@ -17,14 +17,14 @@ use crate::{
     handlers::{
         accounts, api_keys, attachments, audit, auth, auth_sso, bank, bank_rules, batch_payments,
         bills, budgets, bulk, client_portal, closed_periods, consolidated, contact_groups,
-        contacts, credit_notes, custom_fields, departments, dunning, email, employees,
-        exchange_rates, expense_categories, expense_policies, expense_reports, expenses, export,
-        fixed_assets, fx, health, identity, import, inventory, invoice_templates, invoices,
+        contacts, credit_notes, custom_fields, departments, doc_sequences, dunning, email,
+        employees, exchange_rates, expense_categories, expense_policies, expense_reports, expenses,
+        export, fixed_assets, fx, health, identity, import, inventory, invoice_templates, invoices,
         late_fees, leave, mileage, notes, notifications, opening_balances, organizations,
         payment_links, payment_terms, payments, payroll, payslips, prepayments, price_lists,
-        product_categories, products, projects, purchase_orders, recurring, reports, retainers,
-        roles, scim, sessions, stripe_webhook, tags, tax_periods, tax_rates, time_entries, totp,
-        transactions, users, webhooks,
+        product_categories, products, projects, purchase_orders, purchase_requisitions, recurring,
+        reports, retainers, roles, scim, sessions, stripe_webhook, tags, tax_periods, tax_rates,
+        time_entries, totp, transactions, users, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -403,6 +403,42 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/purchase-orders/:id/approve",
             post(purchase_orders::approve_purchase_order),
+        )
+        // Purchase requisitions
+        .route(
+            "/purchase-requisitions",
+            get(purchase_requisitions::list_purchase_requisitions)
+                .post(purchase_requisitions::create_purchase_requisition),
+        )
+        .route(
+            "/purchase-requisitions/:id",
+            get(purchase_requisitions::get_purchase_requisition)
+                .patch(purchase_requisitions::update_purchase_requisition),
+        )
+        .route(
+            "/purchase-requisitions/:id/submit",
+            post(purchase_requisitions::submit_purchase_requisition),
+        )
+        .route(
+            "/purchase-requisitions/:id/approve",
+            post(purchase_requisitions::approve_purchase_requisition),
+        )
+        .route(
+            "/purchase-requisitions/:id/reject",
+            post(purchase_requisitions::reject_purchase_requisition),
+        )
+        .route(
+            "/purchase-requisitions/:id/convert",
+            post(purchase_requisitions::convert_requisition_to_po),
+        )
+        // Document number sequences
+        .route(
+            "/doc-sequences",
+            get(doc_sequences::list_sequences).put(doc_sequences::upsert_sequence),
+        )
+        .route(
+            "/doc-sequences/:doc_type/reset",
+            post(doc_sequences::reset_sequence),
         )
         // Expense reports
         .route(

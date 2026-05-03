@@ -96,6 +96,8 @@ pub struct Invoice {
     #[serde(with = "crate::models::date_serde")]
     pub due_date: Date,
     pub currency: String,
+    pub exchange_rate: rust_decimal::Decimal,
+    pub doc_number: Option<String>,
     pub notes: Option<String>,
     #[serde(default, with = "crate::models::opt_date_serde")]
     pub expiry_date: Option<Date>,
@@ -230,6 +232,8 @@ pub struct CreateInvoice {
     #[serde(with = "crate::models::date_serde")]
     pub due_date: Date,
     pub currency: Option<String>,
+    #[serde(default)]
+    pub exchange_rate: Option<rust_decimal::Decimal>,
     pub notes: Option<String>,
     pub lines: Vec<CreateInvoiceLine>,
 }
@@ -425,6 +429,7 @@ mod tests {
             date: date(),
             due_date: date(),
             currency: None,
+                exchange_rate: None,
             notes: None,
             lines: vec![CreateInvoiceLine {
                 description: "Widget".to_string(),
@@ -447,6 +452,7 @@ mod tests {
             date: date(),
             due_date: date(),
             currency: None,
+                exchange_rate: None,
             notes: None,
             lines: vec![],
         };
@@ -461,6 +467,7 @@ mod tests {
             date: date(),
             due_date: date(),
             currency: None,
+                exchange_rate: None,
             notes: None,
             lines: vec![CreateInvoiceLine {
                 description: "Bad".to_string(),
@@ -483,6 +490,7 @@ mod tests {
             date: date(),
             due_date: date(),
             currency: None,
+                exchange_rate: None,
             notes: None,
             lines: vec![CreateInvoiceLine {
                 description: "Bad".to_string(),
@@ -505,6 +513,7 @@ mod tests {
             date: date(),
             due_date: date(),
             currency: None,
+                exchange_rate: None,
             notes: None,
             lines: vec![CreateInvoiceLine {
                 description: "Bad".to_string(),
@@ -530,6 +539,7 @@ mod tests {
             date: date(),
             due_date: date(),
             currency: None,
+                exchange_rate: None,
             notes: None,
             lines: vec![CreateInvoiceLine {
                 description: "Free item".to_string(),

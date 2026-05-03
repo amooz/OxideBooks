@@ -17,6 +17,7 @@ path = "src/main.rs"
 [dependencies]
 oxidebooks-core = { workspace = true }
 oxidebooks-db = { workspace = true }
+rust_decimal = { workspace = true }
 
 axum = { workspace = true }
 tokio = { workspace = true }

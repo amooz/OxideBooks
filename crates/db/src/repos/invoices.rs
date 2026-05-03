@@ -2,6 +2,7 @@ use oxidebooks_core::models::{
     CreateInvoice, Invoice, InvoiceFilters, InvoiceLine, InvoiceStatus, InvoiceType, UpdateInvoice,
 };
 use oxidebooks_core::pagination::{encode_cursor, PageParams};
+use rust_decimal::Decimal;
 use sqlx::PgPool;
 use std::str::FromStr;
 use time::{Date, OffsetDateTime};
@@ -20,6 +21,8 @@ struct InvoiceRow {
     date: Date,
     due_date: Date,
     currency: String,
+    exchange_rate: Decimal,
+    doc_number: Option<String>,
     notes: Option<String>,
     expiry_date: Option<Date>,
     journal_entry_id: Option<Uuid>,
@@ -65,7 +68,7 @@ impl InvoiceRepo {
             let cursor_id = parse_uuid(&c.id)?;
             sqlx::query_as(
                 "SELECT id, organization_id, invoice_number, contact_id, invoice_type, status, \
-                 date, due_date, currency, notes, expiry_date, journal_entry_id, created_at, updated_at \
+                 date, due_date, currency, exchange_rate, doc_number, notes, expiry_date, journal_entry_id, created_at, updated_at \
                  FROM invoices \
                  WHERE organization_id = $1 \
                    AND (created_at, id) > ($2, $3) \
@@ -91,7 +94,7 @@ impl InvoiceRepo {
         } else {
             sqlx::query_as(
                 "SELECT id, organization_id, invoice_number, contact_id, invoice_type, status, \
-                 date, due_date, currency, notes, expiry_date, journal_entry_id, created_at, updated_at \
+                 date, due_date, currency, exchange_rate, doc_number, notes, expiry_date, journal_entry_id, created_at, updated_at \
                  FROM invoices \
                  WHERE organization_id = $1 \
                    AND ($2::text IS NULL OR status = $2) \
@@ -164,6 +167,7 @@ impl InvoiceRepo {
         let id = Uuid::new_v4();
         let invoice_type = input.invoice_type.to_string();
         let currency = input.currency.unwrap_or_else(|| "USD".to_string());
+        let exchange_rate = input.exchange_rate.unwrap_or(Decimal::ONE);
 
         let mut tx = pool.begin().await.map_err(map_sqlx_err)?;
         let invoice_number =
@@ -172,8 +176,8 @@ impl InvoiceRepo {
         sqlx::query(
             "INSERT INTO invoices \
              (id, organization_id, invoice_number, contact_id, invoice_type, \
-              date, due_date, currency, notes) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+              date, due_date, currency, exchange_rate, notes) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
         )
         .bind(id)
         .bind(org_uuid)
@@ -183,6 +187,7 @@ impl InvoiceRepo {
         .bind(input.date)
         .bind(input.due_date)
         .bind(&currency)
+        .bind(exchange_rate)
         .bind(&input.notes)
         .execute(&mut *tx)
         .await
@@ -554,6 +559,8 @@ fn invoice_from_row(r: InvoiceRow, lines: Vec<InvoiceLine>) -> Invoice {
         date: r.date,
         due_date: r.due_date,
         currency: r.currency,
+        exchange_rate: r.exchange_rate,
+        doc_number: r.doc_number,
         notes: r.notes,
         expiry_date: r.expiry_date,
         lines,

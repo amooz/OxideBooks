@@ -16,6 +16,9 @@ pub struct VendorBill {
     pub reference: Option<String>,
     pub description: String,
     pub status: String,
+    pub doc_number: Option<String>,
+    pub currency_code: String,
+    pub exchange_rate: rust_decimal::Decimal,
     pub lines: Vec<BillLine>,
     pub total: MinorUnits,
     pub amount_paid: MinorUnits,
@@ -67,6 +70,10 @@ pub struct CreateVendorBill {
     pub reference: Option<String>,
     #[serde(default)]
     pub description: String,
+    #[serde(default = "default_currency")]
+    pub currency_code: String,
+    #[serde(default = "default_rate")]
+    pub exchange_rate: rust_decimal::Decimal,
     pub lines: Vec<CreateBillLine>,
 }
 
@@ -103,4 +110,12 @@ pub struct CreateBillPayment {
 
 fn default_method() -> String {
     "bank_transfer".into()
+}
+
+fn default_currency() -> String {
+    "USD".into()
+}
+
+fn default_rate() -> rust_decimal::Decimal {
+    rust_decimal::Decimal::ONE
 }
