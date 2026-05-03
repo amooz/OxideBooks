@@ -16,13 +16,13 @@ use tower_http::{
 use crate::{
     handlers::{
         accounts, api_keys, attachments, audit, auth, auth_sso, bank, bank_rules, batch_payments,
-        budgets, bulk, client_portal, closed_periods, consolidated, contacts, custom_fields,
-        departments, dunning, email, employees, exchange_rates, expense_policies, expenses, export,
-        fixed_assets, fx, health, identity, import, inventory, invoice_templates, invoices,
-        late_fees, mileage, notes, notifications, organizations, payment_links, payments, payroll,
-        price_lists, products, projects, purchase_orders, recurring, reports, retainers, roles,
-        scim, sessions, stripe_webhook, tags, tax_rates, time_entries, totp, transactions, users,
-        webhooks,
+        bills, budgets, bulk, client_portal, closed_periods, consolidated, contacts, credit_notes,
+        custom_fields, departments, dunning, email, employees, exchange_rates, expense_policies,
+        expenses, export, fixed_assets, fx, health, identity, import, inventory, invoice_templates,
+        invoices, late_fees, mileage, notes, notifications, organizations, payment_links, payments,
+        payroll, payslips, price_lists, products, projects, purchase_orders, recurring, reports,
+        retainers, roles, scim, sessions, stripe_webhook, tags, tax_rates, time_entries, totp,
+        transactions, users, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -658,6 +658,39 @@ pub fn build(state: AppState) -> Router {
                 .patch(employees::update_employee)
                 .delete(employees::delete_employee),
         )
+        // Vendor bills (AP)
+        .route("/bills", get(bills::list_bills).post(bills::create_bill))
+        .route("/bills/:id", get(bills::get_bill).patch(bills::update_bill))
+        .route("/bills/:id/approve", post(bills::approve_bill))
+        .route("/bills/:id/void", post(bills::void_bill))
+        .route(
+            "/bills/:id/payments",
+            post(bills::create_bill_payment).get(bills::list_bill_payments),
+        )
+        // Credit notes
+        .route(
+            "/credit-notes",
+            get(credit_notes::list_credit_notes).post(credit_notes::create_credit_note),
+        )
+        .route("/credit-notes/:id", get(credit_notes::get_credit_note))
+        .route(
+            "/credit-notes/:id/apply",
+            post(credit_notes::apply_credit_note),
+        )
+        .route(
+            "/credit-notes/:id/void",
+            post(credit_notes::void_credit_note),
+        )
+        .route(
+            "/credit-notes/:id/applications",
+            get(credit_notes::list_credit_note_applications),
+        )
+        // Payslips
+        .route(
+            "/payroll-runs/:id/payslips",
+            post(payslips::create_payslip).get(payslips::list_payslips),
+        )
+        .route("/payslips/:id", get(payslips::get_payslip))
         // TOTP 2FA
         .route("/auth/totp/setup", post(totp::setup_totp))
         .route("/auth/totp/verify", post(totp::verify_totp))
