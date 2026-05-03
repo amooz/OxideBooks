@@ -5,7 +5,7 @@ use axum::{
 };
 use oxidebooks_core::models::CreateJournalEntry;
 use oxidebooks_core::pagination::PageParams;
-use oxidebooks_db::repos::TransactionRepo;
+use oxidebooks_db::repos::{AuditRepo, TransactionRepo};
 use serde::Deserialize;
 use tracing::info;
 
@@ -54,6 +54,16 @@ pub async fn create_transaction(
         return Err(ApiError::Forbidden);
     }
     let entry = TransactionRepo::create(&state.db, &claims.org, &claims.sub, body).await?;
+    let _ = AuditRepo::record(
+        &state.db,
+        &claims.org,
+        Some(&claims.sub),
+        "create",
+        "journal_entry",
+        &entry.id,
+        None,
+    )
+    .await;
     Ok((
         StatusCode::CREATED,
         Json(serde_json::json!({ "data": entry })),
@@ -81,10 +91,16 @@ pub async fn void_transaction(
         ));
     }
     let entry = TransactionRepo::void(&state.db, &claims.org, &id).await?;
-    info!(
-        entry_id = %id,
-        org_id = %claims.org,
-        "💸 journal entry voided"
-    );
+    info!(entry_id = %id, org_id = %claims.org, "journal entry voided");
+    let _ = AuditRepo::record(
+        &state.db,
+        &claims.org,
+        Some(&claims.sub),
+        "void",
+        "journal_entry",
+        &id,
+        None,
+    )
+    .await;
     Ok(Json(serde_json::json!({ "data": entry })))
 }

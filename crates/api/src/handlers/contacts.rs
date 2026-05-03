@@ -5,7 +5,7 @@ use axum::{
 };
 use oxidebooks_core::models::{CreateContact, UpdateContact};
 use oxidebooks_core::pagination::PageParams;
-use oxidebooks_db::repos::ContactRepo;
+use oxidebooks_db::repos::{AuditRepo, ContactRepo};
 
 use crate::{
     error::{ApiError, ApiResult},
@@ -52,6 +52,16 @@ pub async fn create_contact(
         return Err(ApiError::Forbidden);
     }
     let contact = ContactRepo::create(&state.db, &claims.org, body).await?;
+    let _ = AuditRepo::record(
+        &state.db,
+        &claims.org,
+        Some(&claims.sub),
+        "create",
+        "contact",
+        &contact.id,
+        None,
+    )
+    .await;
     Ok((
         StatusCode::CREATED,
         Json(serde_json::json!({ "data": contact })),
@@ -82,5 +92,15 @@ pub async fn delete_contact(
         return Err(ApiError::Forbidden);
     }
     ContactRepo::delete(&state.db, &claims.org, &id).await?;
+    let _ = AuditRepo::record(
+        &state.db,
+        &claims.org,
+        Some(&claims.sub),
+        "delete",
+        "contact",
+        &id,
+        None,
+    )
+    .await;
     Ok(StatusCode::NO_CONTENT)
 }

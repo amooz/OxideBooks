@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use time::Date;
 
 use crate::{models::AccountType, money::MinorUnits};
 
@@ -45,6 +46,42 @@ impl TrialBalance {
     pub fn is_balanced(&self) -> bool {
         self.total_debits == self.total_credits
     }
+}
+
+// ── Profit & Loss ─────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReportLine {
+    pub account_id: String,
+    pub account_code: String,
+    pub account_name: String,
+    pub amount: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReportSection {
+    pub accounts: Vec<ReportLine>,
+    pub total: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfitLossReport {
+    pub from: Date,
+    pub to: Date,
+    pub revenue: ReportSection,
+    pub expenses: ReportSection,
+    pub net_income: MinorUnits,
+}
+
+// ── Balance Sheet ─────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BalanceSheetReport {
+    pub as_of: Date,
+    pub assets: ReportSection,
+    pub liabilities: ReportSection,
+    pub equity: ReportSection,
+    pub is_balanced: bool,
 }
 
 #[cfg(test)]

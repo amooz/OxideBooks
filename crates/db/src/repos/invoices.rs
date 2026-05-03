@@ -1,5 +1,5 @@
 use oxidebooks_core::models::{
-    CreateInvoice, Invoice, InvoiceLine, InvoiceStatus, InvoiceType, UpdateInvoice,
+    CreateInvoice, Invoice, InvoiceFilters, InvoiceLine, InvoiceStatus, InvoiceType, UpdateInvoice,
 };
 use oxidebooks_core::pagination::{encode_cursor, PageParams};
 use sqlx::PgPool;
@@ -45,10 +45,13 @@ impl InvoiceRepo {
         pool: &PgPool,
         org_id: &str,
         page: &PageParams,
+        filters: &InvoiceFilters,
     ) -> Result<(Vec<Invoice>, Option<String>), DbError> {
         let org_uuid = parse_uuid(org_id)?;
         let limit = page.limit_clamped();
         let cursor = page.decode_cursor();
+
+        let contact_uuid = filters.contact_id.as_deref().map(parse_uuid).transpose()?;
 
         let rows: Vec<InvoiceRow> = if let Some(c) = cursor {
             let cursor_ts = time::OffsetDateTime::parse(
@@ -61,12 +64,23 @@ impl InvoiceRepo {
                 "SELECT id, organization_id, invoice_number, contact_id, invoice_type, status, \
                  date, due_date, currency, notes, journal_entry_id, created_at, updated_at \
                  FROM invoices \
-                 WHERE organization_id = $1 AND (created_at, id) > ($2, $3) \
-                 ORDER BY created_at ASC, id ASC LIMIT $4",
+                 WHERE organization_id = $1 \
+                   AND (created_at, id) > ($2, $3) \
+                   AND ($4::text IS NULL OR status = $4) \
+                   AND ($5::text IS NULL OR invoice_type = $5) \
+                   AND ($6::uuid IS NULL OR contact_id = $6) \
+                   AND ($7::date IS NULL OR date >= $7) \
+                   AND ($8::date IS NULL OR date <= $8) \
+                 ORDER BY created_at ASC, id ASC LIMIT $9",
             )
             .bind(org_uuid)
             .bind(cursor_ts)
             .bind(cursor_id)
+            .bind(filters.status.as_deref())
+            .bind(filters.invoice_type.as_deref())
+            .bind(contact_uuid)
+            .bind(filters.from)
+            .bind(filters.to)
             .bind(limit + 1)
             .fetch_all(pool)
             .await
@@ -75,10 +89,21 @@ impl InvoiceRepo {
             sqlx::query_as(
                 "SELECT id, organization_id, invoice_number, contact_id, invoice_type, status, \
                  date, due_date, currency, notes, journal_entry_id, created_at, updated_at \
-                 FROM invoices WHERE organization_id = $1 \
-                 ORDER BY created_at ASC, id ASC LIMIT $2",
+                 FROM invoices \
+                 WHERE organization_id = $1 \
+                   AND ($2::text IS NULL OR status = $2) \
+                   AND ($3::text IS NULL OR invoice_type = $3) \
+                   AND ($4::uuid IS NULL OR contact_id = $4) \
+                   AND ($5::date IS NULL OR date >= $5) \
+                   AND ($6::date IS NULL OR date <= $6) \
+                 ORDER BY created_at ASC, id ASC LIMIT $7",
             )
             .bind(org_uuid)
+            .bind(filters.status.as_deref())
+            .bind(filters.invoice_type.as_deref())
+            .bind(contact_uuid)
+            .bind(filters.from)
+            .bind(filters.to)
             .bind(limit + 1)
             .fetch_all(pool)
             .await

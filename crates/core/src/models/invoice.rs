@@ -134,6 +134,16 @@ pub struct UpdateInvoice {
     pub notes: Option<String>,
 }
 
+/// Query filters for listing invoices.
+#[derive(Debug, Default, Clone)]
+pub struct InvoiceFilters {
+    pub status: Option<String>,
+    pub invoice_type: Option<String>,
+    pub contact_id: Option<String>,
+    pub from: Option<Date>,
+    pub to: Option<Date>,
+}
+
 impl InvoiceStatus {
     /// Returns the set of valid next states from the current status.
     pub fn allowed_transitions(&self) -> &'static [InvoiceStatus] {

@@ -3,6 +3,7 @@ pub mod contact;
 pub mod identity;
 pub mod invoice;
 pub mod organization;
+pub mod payment;
 pub mod reports;
 pub mod role;
 pub mod transaction;
@@ -14,11 +15,14 @@ pub use identity::{
     ProviderSummary, ProviderType, ScimToken,
 };
 pub use invoice::{
-    CreateInvoice, CreateInvoiceLine, Invoice, InvoiceLine, InvoiceStatus, InvoiceType,
-    UpdateInvoice,
+    CreateInvoice, CreateInvoiceLine, Invoice, InvoiceFilters, InvoiceLine, InvoiceStatus,
+    InvoiceType, UpdateInvoice,
 };
 pub use organization::{CreateOrganization, Organization, UpdateOrganization};
-pub use reports::{AccountBalance, TrialBalance};
+pub use payment::{CreatePayment, Payment, VALID_METHODS};
+pub use reports::{
+    AccountBalance, BalanceSheetReport, ProfitLossReport, ReportLine, ReportSection, TrialBalance,
+};
 pub use role::{AssignPermission, CreateRole, Permission, Role};
 pub use transaction::{
     CreateJournalEntry, CreateJournalLine, JournalEntry, JournalEntryStatus, JournalLine,
