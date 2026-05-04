@@ -5,14 +5,16 @@ use oxidebooks_core::models::{
     CashDisbursementsJournalRow, CashFlowForecast, CashFlowForecastBucket, CashFlowIndirectLine,
     CashFlowIndirectReport, CashFlowIndirectSection, CashFlowReport, CashFlowSection,
     CashReceiptsJournal, CashReceiptsJournalRow, ConsolidatedProfitLoss, ContactStatement,
-    CurrencyExposureReport, CurrencyExposureRow, DashboardKpis, Form941Quarter, GrniReport,
-    GrniRow, JobCostingCostCodeRow, JobCostingReport, JobCostingRow, LedgerLine, OrgProfitLoss,
-    OutstandingQuoteRow, OutstandingQuotesReport, PLComparisonReport, PayrollSummaryReport,
-    PayrollSummaryRow, PoSpendingReport, PoSpendingRow, ProfitLossReport,
+    CurrencyExposureReport, CurrencyExposureRow, DashboardKpis, EquityStatement,
+    EquityStatementLine, Form941Quarter, GrniReport, GrniRow, InventoryAgingReport,
+    InventoryAgingRow, JobCostingCostCodeRow, JobCostingReport, JobCostingRow, LedgerLine,
+    OrgProfitLoss, OutstandingQuoteRow, OutstandingQuotesReport, PLComparisonReport,
+    PayrollSummaryReport, PayrollSummaryRow, PoSpendingReport, PoSpendingRow, ProfitLossReport,
     ProjectProfitabilityReport, ProjectProfitabilityRow, ReportLine, ReportSection,
     SalesByCustomerReport, SalesByCustomerRow, SalesByProductReport, SalesByProductRow,
     SalesTaxByNexusReport, SalesTaxByNexusRow, StatementLine, TaxSummaryLine, TaxSummaryReport,
-    TrialBalance, VatReturnLine, VatReturnReport, VendorSpendReport, VendorSpendRow, W2Row,
+    TrackingPLReport, TrackingPLRow, TrialBalance, VatReturnLine, VatReturnReport,
+    VendorSpendReport, VendorSpendRow, W2Row,
 };
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -3010,6 +3012,340 @@ impl ReportRepo {
             to_date: to,
             rows,
             total,
+        })
+    }
+
+    /// P&L broken down by tracking option for a given tracking category.
+    pub async fn pl_by_tracking_category(
+        pool: &PgPool,
+        org_id: &str,
+        category_id: &str,
+        from: Date,
+        to: Date,
+    ) -> Result<TrackingPLReport, DbError> {
+        let org_uuid =
+            Uuid::parse_str(org_id).map_err(|_| DbError::Internal("invalid org_id UUID".into()))?;
+        let cat_uuid = Uuid::parse_str(category_id)
+            .map_err(|_| DbError::Internal("invalid category_id UUID".into()))?;
+
+        #[derive(sqlx::FromRow)]
+        struct CatRow {
+            name: String,
+        }
+
+        let cat = sqlx::query_as::<_, CatRow>(
+            "SELECT name FROM tracking_categories WHERE organization_id = $1 AND id = $2",
+        )
+        .bind(org_uuid)
+        .bind(cat_uuid)
+        .fetch_optional(pool)
+        .await
+        .map_err(map_sqlx_err)?
+        .ok_or(DbError::NotFound)?;
+
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            option_id: Uuid,
+            option_name: String,
+            revenue: i64,
+            expenses: i64,
+        }
+
+        let rows = sqlx::query_as::<_, Row>(
+            r#"
+            WITH posted AS (
+                SELECT jl.id AS line_id, jl.account_id, jl.debit, jl.credit
+                FROM journal_lines jl
+                JOIN journal_entries je ON je.id = jl.journal_entry_id
+                WHERE je.organization_id = $1
+                  AND je.status = 'posted'
+                  AND je.date BETWEEN $3 AND $4
+            ),
+            tagged AS (
+                SELECT p.line_id, jlt.option_id, p.account_id, p.debit, p.credit
+                FROM posted p
+                JOIN journal_line_tracking jlt ON jlt.line_id = p.line_id
+                JOIN tracking_options topt ON topt.id = jlt.option_id
+                WHERE topt.category_id = $2
+            )
+            SELECT
+                t.option_id,
+                topt.name AS option_name,
+                COALESCE(SUM(CASE WHEN a.account_type = 'revenue' THEN t.credit - t.debit ELSE 0 END), 0)::BIGINT AS revenue,
+                COALESCE(SUM(CASE WHEN a.account_type = 'expense' THEN t.debit - t.credit ELSE 0 END), 0)::BIGINT AS expenses
+            FROM tagged t
+            JOIN tracking_options topt ON topt.id = t.option_id
+            JOIN accounts a ON a.id = t.account_id
+            GROUP BY t.option_id, topt.name
+            ORDER BY topt.name
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(cat_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        // Compute untracked amounts (posted entries with no tracking tag for this category)
+        #[derive(sqlx::FromRow)]
+        struct UntrackedRow {
+            untracked_revenue: i64,
+            untracked_expenses: i64,
+        }
+
+        let untracked = sqlx::query_as::<_, UntrackedRow>(
+            r#"
+            WITH posted AS (
+                SELECT jl.id AS line_id, jl.account_id, jl.debit, jl.credit
+                FROM journal_lines jl
+                JOIN journal_entries je ON je.id = jl.journal_entry_id
+                WHERE je.organization_id = $1
+                  AND je.status = 'posted'
+                  AND je.date BETWEEN $3 AND $4
+            ),
+            tagged_lines AS (
+                SELECT DISTINCT p.line_id
+                FROM posted p
+                JOIN journal_line_tracking jlt ON jlt.line_id = p.line_id
+                JOIN tracking_options topt ON topt.id = jlt.option_id
+                WHERE topt.category_id = $2
+            )
+            SELECT
+                COALESCE(SUM(CASE WHEN a.account_type = 'revenue' THEN p.credit - p.debit ELSE 0 END), 0)::BIGINT AS untracked_revenue,
+                COALESCE(SUM(CASE WHEN a.account_type = 'expense' THEN p.debit - p.credit ELSE 0 END), 0)::BIGINT AS untracked_expenses
+            FROM posted p
+            LEFT JOIN tagged_lines tl ON tl.line_id = p.line_id
+            JOIN accounts a ON a.id = p.account_id
+            WHERE tl.line_id IS NULL
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(cat_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let pl_rows: Vec<TrackingPLRow> = rows
+            .into_iter()
+            .map(|r| TrackingPLRow {
+                option_id: r.option_id.to_string(),
+                option_name: r.option_name,
+                revenue: r.revenue,
+                expenses: r.expenses,
+                net_income: r.revenue - r.expenses,
+            })
+            .collect();
+
+        Ok(TrackingPLReport {
+            category_id: category_id.to_string(),
+            category_name: cat.name,
+            from_date: from,
+            to_date: to,
+            rows: pl_rows,
+            untracked_revenue: untracked.untracked_revenue,
+            untracked_expenses: untracked.untracked_expenses,
+        })
+    }
+
+    /// Statement of changes in equity for a period.
+    pub async fn equity_statement(
+        pool: &PgPool,
+        org_id: &str,
+        from: Date,
+        to: Date,
+    ) -> Result<EquityStatement, DbError> {
+        let org_uuid =
+            Uuid::parse_str(org_id).map_err(|_| DbError::Internal("invalid org_id UUID".into()))?;
+
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            account_type: String,
+            net: i64,
+        }
+
+        // Opening equity: sum of equity account balances up to (from - 1 day)
+        let opening_rows = sqlx::query_as::<_, Row>(
+            r#"
+            SELECT a.account_type, COALESCE(SUM(jl.credit - jl.debit), 0)::BIGINT AS net
+            FROM journal_lines jl
+            JOIN journal_entries je ON je.id = jl.journal_entry_id
+            JOIN accounts a ON a.id = jl.account_id
+            WHERE je.organization_id = $1
+              AND je.status = 'posted'
+              AND je.date < $2
+              AND a.account_type IN ('equity','revenue','expense')
+            GROUP BY a.account_type
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let mut opening_equity: i64 = 0;
+        for r in &opening_rows {
+            match r.account_type.as_str() {
+                "equity" => opening_equity += r.net,
+                "revenue" => opening_equity += r.net,
+                "expense" => opening_equity -= r.net,
+                _ => {}
+            }
+        }
+
+        // Period net income
+        let period_rows = sqlx::query_as::<_, Row>(
+            r#"
+            SELECT a.account_type, COALESCE(SUM(jl.credit - jl.debit), 0)::BIGINT AS net
+            FROM journal_lines jl
+            JOIN journal_entries je ON je.id = jl.journal_entry_id
+            JOIN accounts a ON a.id = jl.account_id
+            WHERE je.organization_id = $1
+              AND je.status = 'posted'
+              AND je.date BETWEEN $2 AND $3
+              AND a.account_type IN ('revenue','expense')
+            GROUP BY a.account_type
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let mut net_revenue: i64 = 0;
+        let mut net_expense: i64 = 0;
+        for r in &period_rows {
+            match r.account_type.as_str() {
+                "revenue" => net_revenue += r.net,
+                "expense" => net_expense += r.net,
+                _ => {}
+            }
+        }
+        let net_income = net_revenue - net_expense;
+
+        // Equity movements in period (distributions, owner contributions, etc.)
+        #[derive(sqlx::FromRow)]
+        struct EquityRow {
+            account_name: String,
+            net: i64,
+        }
+        let equity_movements = sqlx::query_as::<_, EquityRow>(
+            r#"
+            SELECT a.name AS account_name, COALESCE(SUM(jl.credit - jl.debit), 0)::BIGINT AS net
+            FROM journal_lines jl
+            JOIN journal_entries je ON je.id = jl.journal_entry_id
+            JOIN accounts a ON a.id = jl.account_id
+            WHERE je.organization_id = $1
+              AND je.status = 'posted'
+              AND je.date BETWEEN $2 AND $3
+              AND a.account_type = 'equity'
+            GROUP BY a.name
+            ORDER BY a.name
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let other_lines: Vec<EquityStatementLine> = equity_movements
+            .into_iter()
+            .map(|r| EquityStatementLine {
+                label: r.account_name,
+                amount: r.net,
+            })
+            .collect();
+
+        let equity_delta: i64 = other_lines.iter().map(|l| l.amount).sum();
+        let closing_equity = opening_equity + net_income + equity_delta;
+
+        Ok(EquityStatement {
+            from_date: from,
+            to_date: to,
+            opening_equity,
+            net_income,
+            other_lines,
+            closing_equity,
+        })
+    }
+
+    /// Inventory aging: qty and cost by lot age bucket (0-30, 31-60, 61-90, 90+ days).
+    pub async fn inventory_aging(
+        pool: &PgPool,
+        org_id: &str,
+        as_of: Date,
+    ) -> Result<InventoryAgingReport, DbError> {
+        let org_uuid =
+            Uuid::parse_str(org_id).map_err(|_| DbError::Internal("invalid org_id UUID".into()))?;
+
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            product_id: Uuid,
+            product_name: String,
+            sku: String,
+            qty_0_30: i64,
+            qty_31_60: i64,
+            qty_61_90: i64,
+            qty_over_90: i64,
+            total_qty: i64,
+            total_cost: i64,
+        }
+
+        let rows = sqlx::query_as::<_, Row>(
+            r#"
+            SELECT
+                ii.id AS product_id,
+                ii.name AS product_name,
+                COALESCE(ii.sku, '') AS sku,
+                COALESCE(SUM(CASE WHEN $2::date - il.created_at::date <= 30 THEN il.quantity ELSE 0 END), 0)::BIGINT AS qty_0_30,
+                COALESCE(SUM(CASE WHEN $2::date - il.created_at::date BETWEEN 31 AND 60 THEN il.quantity ELSE 0 END), 0)::BIGINT AS qty_31_60,
+                COALESCE(SUM(CASE WHEN $2::date - il.created_at::date BETWEEN 61 AND 90 THEN il.quantity ELSE 0 END), 0)::BIGINT AS qty_61_90,
+                COALESCE(SUM(CASE WHEN $2::date - il.created_at::date > 90 THEN il.quantity ELSE 0 END), 0)::BIGINT AS qty_over_90,
+                COALESCE(SUM(il.quantity), 0)::BIGINT AS total_qty,
+                COALESCE(SUM(il.quantity * il.cost_per_unit), 0)::BIGINT AS total_cost
+            FROM inventory_items ii
+            JOIN inventory_lots il ON il.item_id = ii.id
+            WHERE ii.organization_id = $1
+              AND il.quantity > 0
+              AND il.created_at::date <= $2
+            GROUP BY ii.id, ii.name, ii.sku
+            ORDER BY ii.name
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(as_of)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let grand_total_cost: i64 = rows.iter().map(|r| r.total_cost).sum();
+        let aging_rows: Vec<InventoryAgingRow> = rows
+            .into_iter()
+            .map(|r| InventoryAgingRow {
+                product_id: r.product_id.to_string(),
+                product_name: r.product_name,
+                sku: r.sku,
+                qty_0_30: r.qty_0_30,
+                qty_31_60: r.qty_31_60,
+                qty_61_90: r.qty_61_90,
+                qty_over_90: r.qty_over_90,
+                total_qty: r.total_qty,
+                total_cost: r.total_cost,
+            })
+            .collect();
+
+        Ok(InventoryAgingReport {
+            as_of,
+            rows: aging_rows,
+            grand_total_cost,
         })
     }
 }

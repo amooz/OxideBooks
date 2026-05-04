@@ -659,3 +659,66 @@ pub async fn cash_disbursements_journal(
     let report = ReportRepo::cash_disbursements_journal(&state.db, &claims.org, from, to).await?;
     Ok(Json(serde_json::json!({ "data": report })))
 }
+
+#[derive(Deserialize)]
+pub struct TrackingPLQuery {
+    pub category_id: String,
+    pub from: String,
+    pub to: String,
+}
+
+/// GET /api/v1/reports/pl-by-tracking-category?category_id=&from=YYYY-MM-DD&to=YYYY-MM-DD
+pub async fn pl_by_tracking_category(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<TrackingPLQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let from = parse_date(&q.from)?;
+    let to = parse_date(&q.to)?;
+    if from > to {
+        return Err(ApiError::BadRequest(
+            "'from' must be on or before 'to'".into(),
+        ));
+    }
+    let report =
+        ReportRepo::pl_by_tracking_category(&state.db, &claims.org, &q.category_id, from, to)
+            .await?;
+    Ok(Json(serde_json::json!({ "data": report })))
+}
+
+/// GET /api/v1/reports/equity-statement?from=YYYY-MM-DD&to=YYYY-MM-DD
+pub async fn equity_statement(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<DateRangeQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let from = parse_date(&q.from)?;
+    let to = parse_date(&q.to)?;
+    if from > to {
+        return Err(ApiError::BadRequest(
+            "'from' must be on or before 'to'".into(),
+        ));
+    }
+    let report = ReportRepo::equity_statement(&state.db, &claims.org, from, to).await?;
+    Ok(Json(serde_json::json!({ "data": report })))
+}
+
+/// GET /api/v1/reports/inventory-aging?as_of=YYYY-MM-DD
+pub async fn inventory_aging(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<AsOfQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let as_of = parse_date(&q.as_of)?;
+    let report = ReportRepo::inventory_aging(&state.db, &claims.org, as_of).await?;
+    Ok(Json(serde_json::json!({ "data": report })))
+}
