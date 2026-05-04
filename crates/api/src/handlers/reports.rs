@@ -370,3 +370,36 @@ pub async fn payroll_summary(
     let report = ReportRepo::payroll_summary(&state.db, &claims.org, from, to).await?;
     Ok(Json(serde_json::json!({ "data": report })))
 }
+
+#[derive(Deserialize)]
+pub struct PLComparisonQuery {
+    pub current_from: String,
+    pub current_to: String,
+    pub prior_from: String,
+    pub prior_to: String,
+}
+
+/// GET /api/v1/reports/pl-comparison
+pub async fn pl_comparison(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<PLComparisonQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let current_from = parse_date(&q.current_from)?;
+    let current_to = parse_date(&q.current_to)?;
+    let prior_from = parse_date(&q.prior_from)?;
+    let prior_to = parse_date(&q.prior_to)?;
+    let report = ReportRepo::pl_comparison(
+        &state.db,
+        &claims.org,
+        current_from,
+        current_to,
+        prior_from,
+        prior_to,
+    )
+    .await?;
+    Ok(Json(serde_json::json!({ "data": report })))
+}

@@ -1,11 +1,12 @@
 use oxidebooks_core::models::{
     AccountBalance, AccountLedger, AccountType, AgingReport, AgingRow, BalanceSheetReport,
     CashFlowForecast, CashFlowForecastBucket, CashFlowReport, CashFlowSection,
-    ConsolidatedProfitLoss, ContactStatement, DashboardKpis, JobCostingCostCodeRow,
-    JobCostingReport, JobCostingRow, LedgerLine, OrgProfitLoss, PayrollSummaryReport,
-    PayrollSummaryRow, ProfitLossReport, ProjectProfitabilityReport, ProjectProfitabilityRow,
-    ReportLine, ReportSection, SalesByProductReport, SalesByProductRow, StatementLine,
-    TaxSummaryLine, TaxSummaryReport, TrialBalance, VendorSpendReport, VendorSpendRow,
+    ConsolidatedProfitLoss, ContactStatement, DashboardKpis, Form941Quarter, JobCostingCostCodeRow,
+    JobCostingReport, JobCostingRow, LedgerLine, OrgProfitLoss, PLComparisonReport,
+    PayrollSummaryReport, PayrollSummaryRow, ProfitLossReport, ProjectProfitabilityReport,
+    ProjectProfitabilityRow, ReportLine, ReportSection, SalesByProductReport, SalesByProductRow,
+    StatementLine, TaxSummaryLine, TaxSummaryReport, TrialBalance, VendorSpendReport,
+    VendorSpendRow, W2Row,
 };
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -1776,6 +1777,181 @@ impl ReportRepo {
             total_gross,
             total_tax,
             total_net,
+        })
+    }
+
+    /// Per-employee annual wages and withholding for W-2 preparation.
+    /// Only includes paid payroll runs.
+    pub async fn w2_data(pool: &PgPool, org_id: &str, year: i32) -> Result<Vec<W2Row>, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            user_id: Uuid,
+            employee_name: String,
+            email: String,
+            wages: i64,
+            federal_income_tax_withheld: i64,
+            other_deductions: i64,
+            net_pay: i64,
+        }
+
+        let rows: Vec<Row> = sqlx::query_as(
+            "SELECT
+               u.id                                           AS user_id,
+               u.name                                        AS employee_name,
+               u.email,
+               COALESCE(SUM(pe.gross_pay), 0)::BIGINT        AS wages,
+               COALESCE(SUM(pe.tax_withheld), 0)::BIGINT     AS federal_income_tax_withheld,
+               COALESCE(SUM(pe.other_deductions), 0)::BIGINT AS other_deductions,
+               COALESCE(SUM(pe.net_pay), 0)::BIGINT          AS net_pay
+             FROM payroll_entries pe
+             JOIN payroll_runs pr ON pr.id = pe.payroll_run_id
+             JOIN users u ON u.id = pe.user_id
+             WHERE pr.organization_id = $1
+               AND EXTRACT(YEAR FROM pr.period_start) = $2
+               AND pr.status = 'paid'
+             GROUP BY u.id, u.name, u.email
+             ORDER BY u.name",
+        )
+        .bind(org_uuid)
+        .bind(year)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| W2Row {
+                user_id: r.user_id.to_string(),
+                employee_name: r.employee_name,
+                email: r.email,
+                year,
+                wages: r.wages,
+                federal_income_tax_withheld: r.federal_income_tax_withheld,
+                other_deductions: r.other_deductions,
+                net_pay: r.net_pay,
+            })
+            .collect())
+    }
+
+    /// Quarterly payroll tax aggregates for Form 941 preparation.
+    pub async fn form_941_data(
+        pool: &PgPool,
+        org_id: &str,
+        year: i32,
+        quarter: i32,
+    ) -> Result<Form941Quarter, DbError> {
+        if !(1..=4).contains(&quarter) {
+            return Err(DbError::Conflict("quarter must be 1-4".into()));
+        }
+        let org_uuid = parse_uuid(org_id)?;
+
+        // Employee count and total wages from payroll entries.
+        let (employee_count, wages): (i64, i64) = sqlx::query_as(
+            "SELECT
+               COUNT(DISTINCT pe.user_id)::BIGINT,
+               COALESCE(SUM(pe.gross_pay), 0)::BIGINT
+             FROM payroll_entries pe
+             JOIN payroll_runs pr ON pr.id = pe.payroll_run_id
+             WHERE pr.organization_id = $1
+               AND EXTRACT(YEAR FROM pr.period_start) = $2
+               AND EXTRACT(QUARTER FROM pr.period_start) = $3
+               AND pr.status = 'paid'",
+        )
+        .bind(org_uuid)
+        .bind(year)
+        .bind(quarter)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        // Per-type tax amounts from payroll_tax_liabilities.
+        #[derive(sqlx::FromRow)]
+        struct TaxRow {
+            tax_type: String,
+            employee_amount: i64,
+            employer_amount: i64,
+        }
+
+        let tax_rows: Vec<TaxRow> = sqlx::query_as(
+            "SELECT
+               ptl.tax_type,
+               COALESCE(SUM(ptl.employee_amount), 0)::BIGINT AS employee_amount,
+               COALESCE(SUM(ptl.employer_amount), 0)::BIGINT AS employer_amount
+             FROM payroll_tax_liabilities ptl
+             JOIN payroll_runs pr ON pr.id = ptl.payroll_run_id
+             WHERE ptl.organization_id = $1
+               AND EXTRACT(YEAR FROM pr.period_start) = $2
+               AND EXTRACT(QUARTER FROM pr.period_start) = $3
+             GROUP BY ptl.tax_type",
+        )
+        .bind(org_uuid)
+        .bind(year)
+        .bind(quarter)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let mut federal_income_tax = 0i64;
+        let mut social_security_employee = 0i64;
+        let mut social_security_employer = 0i64;
+        let mut medicare_employee = 0i64;
+        let mut medicare_employer = 0i64;
+        let mut total_deposits = 0i64;
+
+        for row in &tax_rows {
+            match row.tax_type.as_str() {
+                "federal_income" => federal_income_tax += row.employee_amount,
+                "social_security" => {
+                    social_security_employee += row.employee_amount;
+                    social_security_employer += row.employer_amount;
+                }
+                "medicare" => {
+                    medicare_employee += row.employee_amount;
+                    medicare_employer += row.employer_amount;
+                }
+                _ => {}
+            }
+            total_deposits += row.employee_amount + row.employer_amount;
+        }
+
+        Ok(Form941Quarter {
+            year,
+            quarter,
+            employee_count,
+            wages,
+            federal_income_tax,
+            social_security_employee,
+            social_security_employer,
+            medicare_employee,
+            medicare_employer,
+            total_deposits,
+        })
+    }
+
+    /// Side-by-side P&L comparison between two periods.
+    pub async fn pl_comparison(
+        pool: &PgPool,
+        org_id: &str,
+        current_from: Date,
+        current_to: Date,
+        prior_from: Date,
+        prior_to: Date,
+    ) -> Result<PLComparisonReport, DbError> {
+        let current = Self::profit_loss(pool, org_id, current_from, current_to).await?;
+        let prior = Self::profit_loss(pool, org_id, prior_from, prior_to).await?;
+        let net_income_change = current.net_income - prior.net_income;
+        let net_income_change_bps = if prior.net_income == 0 {
+            0
+        } else {
+            net_income_change * 10_000 / prior.net_income
+        };
+        Ok(PLComparisonReport {
+            current,
+            prior,
+            net_income_change,
+            net_income_change_bps,
         })
     }
 }

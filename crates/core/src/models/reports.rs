@@ -354,6 +354,58 @@ pub struct PayrollSummaryReport {
     pub total_net: MinorUnits,
 }
 
+// ── W-2 / 941 payroll tax exports ────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct W2Row {
+    pub user_id: String,
+    pub employee_name: String,
+    pub email: String,
+    pub year: i32,
+    /// Box 1: wages, tips, other compensation
+    pub wages: MinorUnits,
+    /// Box 2: federal income tax withheld
+    pub federal_income_tax_withheld: MinorUnits,
+    /// Sum of other_deductions across all pay runs
+    pub other_deductions: MinorUnits,
+    pub net_pay: MinorUnits,
+}
+
+/// Aggregated payroll tax totals for a given quarter (Form 941 inputs).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Form941Quarter {
+    pub year: i32,
+    pub quarter: i32,
+    /// Number of employees who received wages this quarter.
+    pub employee_count: i64,
+    /// Total wages, tips and other compensation (Line 2).
+    pub wages: MinorUnits,
+    /// Federal income tax withheld (Line 3).
+    pub federal_income_tax: MinorUnits,
+    /// Employee social security tax (Line 5a × 6.2%).
+    pub social_security_employee: MinorUnits,
+    /// Employer social security tax (Line 5a × 6.2%).
+    pub social_security_employer: MinorUnits,
+    /// Employee Medicare tax (Line 5c × 1.45%).
+    pub medicare_employee: MinorUnits,
+    /// Employer Medicare tax (Line 5c × 1.45%).
+    pub medicare_employer: MinorUnits,
+    /// Total deposits made for the quarter.
+    pub total_deposits: MinorUnits,
+}
+
+// ── P&L Comparison ────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PLComparisonReport {
+    pub current: ProfitLossReport,
+    pub prior: ProfitLossReport,
+    /// current.net_income - prior.net_income
+    pub net_income_change: MinorUnits,
+    /// net_income_change as basis points of prior net_income (0 if prior is zero)
+    pub net_income_change_bps: i64,
+}
+
 // ── Global Search ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
