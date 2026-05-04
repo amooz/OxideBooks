@@ -267,6 +267,64 @@ pub struct CashFlowForecast {
     pub closing_balance: i64,
 }
 
+// ── Job Costing ───────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobCostingCostCodeRow {
+    pub cost_code_id: String,
+    pub cost_code: String,
+    pub cost_code_name: String,
+    pub cost_type: String,
+    pub actual_cost: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobCostingRow {
+    pub project_id: String,
+    pub project_name: String,
+    pub budget: MinorUnits,
+    pub time_cost: MinorUnits,
+    pub expense_cost: MinorUnits,
+    pub bill_cost: MinorUnits,
+    pub total_actual: MinorUnits,
+    pub variance: MinorUnits,
+    pub cost_codes: Vec<JobCostingCostCodeRow>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobCostingReport {
+    pub from: Date,
+    pub to: Date,
+    pub rows: Vec<JobCostingRow>,
+    pub total_budget: MinorUnits,
+    pub total_actual: MinorUnits,
+    pub total_variance: MinorUnits,
+}
+
+// ── Vendor Spend ──────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VendorSpendRow {
+    pub contact_id: String,
+    pub vendor_name: String,
+    pub bill_count: i64,
+    pub subtotal: MinorUnits,
+    pub tax_amount: MinorUnits,
+    pub total_paid: MinorUnits,
+    pub outstanding: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VendorSpendReport {
+    pub from: Date,
+    pub to: Date,
+    pub rows: Vec<VendorSpendRow>,
+    pub total_bills: i64,
+    pub total_subtotal: MinorUnits,
+    pub total_paid: MinorUnits,
+    pub total_outstanding: MinorUnits,
+}
+
 // ── Global Search ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,10 +1,11 @@
 use oxidebooks_core::models::{
     AccountBalance, AccountLedger, AccountType, AgingReport, AgingRow, BalanceSheetReport,
     CashFlowForecast, CashFlowForecastBucket, CashFlowReport, CashFlowSection,
-    ConsolidatedProfitLoss, ContactStatement, DashboardKpis, LedgerLine, OrgProfitLoss,
-    ProfitLossReport, ProjectProfitabilityReport, ProjectProfitabilityRow, ReportLine,
-    ReportSection, SalesByProductReport, SalesByProductRow, StatementLine, TaxSummaryLine,
-    TaxSummaryReport, TrialBalance,
+    ConsolidatedProfitLoss, ContactStatement, DashboardKpis, JobCostingCostCodeRow,
+    JobCostingReport, JobCostingRow, LedgerLine, OrgProfitLoss, ProfitLossReport,
+    ProjectProfitabilityReport, ProjectProfitabilityRow, ReportLine, ReportSection,
+    SalesByProductReport, SalesByProductRow, StatementLine, TaxSummaryLine, TaxSummaryReport,
+    TrialBalance, VendorSpendReport, VendorSpendRow,
 };
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -1450,6 +1451,255 @@ impl ReportRepo {
             opening_balance,
             buckets,
             closing_balance: running,
+        })
+    }
+
+    /// Job costing report — actual time/expense/bill costs vs project budget,
+    /// broken down by cost code.
+    pub async fn job_costing(
+        pool: &PgPool,
+        org_id: &str,
+        from: Date,
+        to: Date,
+        project_id: Option<&str>,
+    ) -> Result<JobCostingReport, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let proj_uuid: Option<Uuid> = project_id.map(parse_uuid).transpose()?;
+
+        #[derive(sqlx::FromRow)]
+        struct ProjRow {
+            project_id: Uuid,
+            project_name: String,
+            budget: i64,
+        }
+
+        let projects: Vec<ProjRow> = if let Some(pid) = proj_uuid {
+            sqlx::query_as(
+                "SELECT id AS project_id, name AS project_name, \
+                 COALESCE(budget, 0) AS budget \
+                 FROM projects WHERE organization_id = $1 AND id = $2",
+            )
+            .bind(org_uuid)
+            .bind(pid)
+            .fetch_all(pool)
+            .await
+            .map_err(map_sqlx_err)?
+        } else {
+            sqlx::query_as(
+                "SELECT id AS project_id, name AS project_name, \
+                 COALESCE(budget, 0) AS budget \
+                 FROM projects WHERE organization_id = $1 ORDER BY name ASC",
+            )
+            .bind(org_uuid)
+            .fetch_all(pool)
+            .await
+            .map_err(map_sqlx_err)?
+        };
+
+        #[derive(sqlx::FromRow)]
+        struct TimeCostRow {
+            project_id: Uuid,
+            cost_code_id: Option<Uuid>,
+            cost_code: Option<String>,
+            cost_code_name: Option<String>,
+            cost_type: Option<String>,
+            total: i64,
+        }
+
+        // Time cost = hours * hourly_rate from time_entries.
+        let time_costs: Vec<TimeCostRow> = sqlx::query_as(
+            "SELECT te.project_id, te.cost_code_id, \
+                    cc.code AS cost_code, cc.name AS cost_code_name, cc.cost_type, \
+                    COALESCE(SUM(te.duration_minutes * te.hourly_rate / 60), 0)::BIGINT AS total \
+             FROM time_entries te \
+             LEFT JOIN cost_codes cc ON cc.id = te.cost_code_id \
+             WHERE te.organization_id = $1 \
+               AND te.date BETWEEN $2 AND $3 \
+               AND te.project_id IS NOT NULL \
+             GROUP BY te.project_id, te.cost_code_id, cc.code, cc.name, cc.cost_type",
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        // Expense cost per project/cost_code.
+        let expense_costs: Vec<TimeCostRow> = sqlx::query_as(
+            "SELECT e.project_id, e.cost_code_id, \
+                    cc.code AS cost_code, cc.name AS cost_code_name, cc.cost_type, \
+                    COALESCE(SUM(e.amount), 0)::BIGINT AS total \
+             FROM expenses e \
+             LEFT JOIN cost_codes cc ON cc.id = e.cost_code_id \
+             WHERE e.organization_id = $1 \
+               AND e.expense_date BETWEEN $2 AND $3 \
+               AND e.project_id IS NOT NULL \
+             GROUP BY e.project_id, e.cost_code_id, cc.code, cc.name, cc.cost_type",
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let mut rows: Vec<JobCostingRow> = projects
+            .into_iter()
+            .map(|p| {
+                let tc: i64 = time_costs
+                    .iter()
+                    .filter(|r| r.project_id == p.project_id)
+                    .map(|r| r.total)
+                    .sum();
+                let ec: i64 = expense_costs
+                    .iter()
+                    .filter(|r| r.project_id == p.project_id)
+                    .map(|r| r.total)
+                    .sum();
+                let total_actual = tc + ec;
+                let variance = p.budget - total_actual;
+
+                let mut cc_map: std::collections::HashMap<Option<Uuid>, JobCostingCostCodeRow> =
+                    std::collections::HashMap::new();
+
+                for r in time_costs
+                    .iter()
+                    .filter(|r| r.project_id == p.project_id)
+                    .chain(
+                        expense_costs
+                            .iter()
+                            .filter(|r| r.project_id == p.project_id),
+                    )
+                {
+                    let entry =
+                        cc_map
+                            .entry(r.cost_code_id)
+                            .or_insert_with(|| JobCostingCostCodeRow {
+                                cost_code_id: r
+                                    .cost_code_id
+                                    .map(|u| u.to_string())
+                                    .unwrap_or_default(),
+                                cost_code: r.cost_code.clone().unwrap_or_else(|| "uncoded".into()),
+                                cost_code_name: r
+                                    .cost_code_name
+                                    .clone()
+                                    .unwrap_or_else(|| "Uncoded".into()),
+                                cost_type: r.cost_type.clone().unwrap_or_else(|| "other".into()),
+                                actual_cost: 0,
+                            });
+                    entry.actual_cost += r.total;
+                }
+
+                let mut cost_codes: Vec<JobCostingCostCodeRow> = cc_map.into_values().collect();
+                cost_codes.sort_by(|a, b| a.cost_code.cmp(&b.cost_code));
+
+                JobCostingRow {
+                    project_id: p.project_id.to_string(),
+                    project_name: p.project_name,
+                    budget: p.budget,
+                    time_cost: tc,
+                    expense_cost: ec,
+                    bill_cost: 0,
+                    total_actual,
+                    variance,
+                    cost_codes,
+                }
+            })
+            .collect();
+
+        rows.retain(|r| r.total_actual > 0 || r.budget > 0);
+
+        let total_budget: i64 = rows.iter().map(|r| r.budget).sum();
+        let total_actual: i64 = rows.iter().map(|r| r.total_actual).sum();
+
+        Ok(JobCostingReport {
+            from,
+            to,
+            rows,
+            total_budget,
+            total_actual,
+            total_variance: total_budget - total_actual,
+        })
+    }
+
+    /// Vendor spend report — bills by vendor aggregated over a period.
+    pub async fn vendor_spend(
+        pool: &PgPool,
+        org_id: &str,
+        from: Date,
+        to: Date,
+    ) -> Result<VendorSpendReport, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            contact_id: Option<Uuid>,
+            vendor_name: String,
+            bill_count: i64,
+            subtotal: i64,
+            amount_paid: i64,
+        }
+
+        let rows: Vec<Row> = sqlx::query_as(
+            r#"
+            SELECT
+                vb.contact_id,
+                COALESCE(c.name, 'No Vendor') AS vendor_name,
+                COUNT(vb.id)::BIGINT           AS bill_count,
+                COALESCE(SUM(
+                    (SELECT COALESCE(SUM(quantity * unit_price), 0)
+                     FROM bill_lines WHERE bill_id = vb.id)
+                ), 0)::BIGINT                  AS subtotal,
+                COALESCE(SUM(
+                    (SELECT COALESCE(SUM(amount), 0)
+                     FROM bill_payments WHERE bill_id = vb.id)
+                ), 0)::BIGINT                  AS amount_paid
+            FROM vendor_bills vb
+            LEFT JOIN contacts c ON c.id = vb.contact_id
+            WHERE vb.organization_id = $1
+              AND vb.bill_date BETWEEN $2 AND $3
+              AND vb.status NOT IN ('voided')
+            GROUP BY vb.contact_id, c.name
+            ORDER BY subtotal DESC
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let spend_rows: Vec<VendorSpendRow> = rows
+            .iter()
+            .map(|r| {
+                let outstanding = (r.subtotal - r.amount_paid).max(0);
+                VendorSpendRow {
+                    contact_id: r.contact_id.map(|u| u.to_string()).unwrap_or_default(),
+                    vendor_name: r.vendor_name.clone(),
+                    bill_count: r.bill_count,
+                    subtotal: r.subtotal,
+                    tax_amount: 0,
+                    total_paid: r.amount_paid,
+                    outstanding,
+                }
+            })
+            .collect();
+
+        let total_bills: i64 = spend_rows.iter().map(|r| r.bill_count).sum();
+        let total_subtotal: i64 = spend_rows.iter().map(|r| r.subtotal).sum();
+        let total_paid: i64 = spend_rows.iter().map(|r| r.total_paid).sum();
+        let total_outstanding: i64 = spend_rows.iter().map(|r| r.outstanding).sum();
+
+        Ok(VendorSpendReport {
+            from,
+            to,
+            rows: spend_rows,
+            total_bills,
+            total_subtotal,
+            total_paid,
+            total_outstanding,
         })
     }
 }

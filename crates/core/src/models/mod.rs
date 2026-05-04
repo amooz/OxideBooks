@@ -236,10 +236,11 @@ pub use recurring_journal_entry::{
 };
 pub use reports::{
     AccountBalance, AccountLedger, AgingReport, AgingRow, BalanceSheetReport, CashFlowForecast,
-    CashFlowForecastBucket, CashFlowReport, CashFlowSection, DashboardKpis, LedgerLine,
-    ProfitLossReport, ProjectProfitabilityReport, ProjectProfitabilityRow, ReportLine,
-    ReportSection, SalesByProductReport, SalesByProductRow, SearchHit, Summary1099, TaxSummaryLine,
-    TaxSummaryReport, TrialBalance, Vendor1099Row,
+    CashFlowForecastBucket, CashFlowReport, CashFlowSection, DashboardKpis, JobCostingCostCodeRow,
+    JobCostingReport, JobCostingRow, LedgerLine, ProfitLossReport, ProjectProfitabilityReport,
+    ProjectProfitabilityRow, ReportLine, ReportSection, SalesByProductReport, SalesByProductRow,
+    SearchHit, Summary1099, TaxSummaryLine, TaxSummaryReport, TrialBalance, Vendor1099Row,
+    VendorSpendReport, VendorSpendRow,
 };
 pub use retainer::{ApplyRetainer, CreateRetainer, DepositRetainer, Retainer, RetainerTransaction};
 pub use role::{AssignPermission, CreateRole, Permission, Role};

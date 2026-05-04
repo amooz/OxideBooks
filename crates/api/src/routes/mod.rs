@@ -1075,6 +1075,8 @@ pub fn build(state: AppState) -> Router {
         )
         // Spend analysis
         .route("/reports/spend-analysis", get(price_lists::spend_analysis))
+        .route("/reports/job-costing", get(reports::job_costing))
+        .route("/reports/vendor-spend", get(reports::vendor_spend))
         // Employees
         .route(
             "/employees",
