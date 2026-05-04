@@ -1,17 +1,18 @@
 use oxidebooks_core::models::{
     AccountBalance, AccountLedger, AccountType, AgingReport, AgingRow, ApAgingDetailReport,
     ApAgingDetailRow, ArAgingDetailReport, ArAgingDetailRow, BalanceSheetComparisonReport,
-    BalanceSheetComparisonSection, BalanceSheetReport, CashFlowForecast, CashFlowForecastBucket,
-    CashFlowIndirectLine, CashFlowIndirectReport, CashFlowIndirectSection, CashFlowReport,
-    CashFlowSection, ConsolidatedProfitLoss, ContactStatement, CurrencyExposureReport,
-    CurrencyExposureRow, DashboardKpis, Form941Quarter, GrniReport, GrniRow, JobCostingCostCodeRow,
-    JobCostingReport, JobCostingRow, LedgerLine, OrgProfitLoss, OutstandingQuoteRow,
-    OutstandingQuotesReport, PLComparisonReport, PayrollSummaryReport, PayrollSummaryRow,
-    PoSpendingReport, PoSpendingRow, ProfitLossReport, ProjectProfitabilityReport,
-    ProjectProfitabilityRow, ReportLine, ReportSection, SalesByCustomerReport, SalesByCustomerRow,
-    SalesByProductReport, SalesByProductRow, SalesTaxByNexusReport, SalesTaxByNexusRow,
-    StatementLine, TaxSummaryLine, TaxSummaryReport, TrialBalance, VatReturnLine, VatReturnReport,
-    VendorSpendReport, VendorSpendRow, W2Row,
+    BalanceSheetComparisonSection, BalanceSheetReport, CashDisbursementsJournal,
+    CashDisbursementsJournalRow, CashFlowForecast, CashFlowForecastBucket, CashFlowIndirectLine,
+    CashFlowIndirectReport, CashFlowIndirectSection, CashFlowReport, CashFlowSection,
+    CashReceiptsJournal, CashReceiptsJournalRow, ConsolidatedProfitLoss, ContactStatement,
+    CurrencyExposureReport, CurrencyExposureRow, DashboardKpis, Form941Quarter, GrniReport,
+    GrniRow, JobCostingCostCodeRow, JobCostingReport, JobCostingRow, LedgerLine, OrgProfitLoss,
+    OutstandingQuoteRow, OutstandingQuotesReport, PLComparisonReport, PayrollSummaryReport,
+    PayrollSummaryRow, PoSpendingReport, PoSpendingRow, ProfitLossReport,
+    ProjectProfitabilityReport, ProjectProfitabilityRow, ReportLine, ReportSection,
+    SalesByCustomerReport, SalesByCustomerRow, SalesByProductReport, SalesByProductRow,
+    SalesTaxByNexusReport, SalesTaxByNexusRow, StatementLine, TaxSummaryLine, TaxSummaryReport,
+    TrialBalance, VatReturnLine, VatReturnReport, VendorSpendReport, VendorSpendRow, W2Row,
 };
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -2879,5 +2880,136 @@ impl ReportRepo {
             .collect();
 
         Ok(CurrencyExposureReport { as_of, rows })
+    }
+
+    pub async fn cash_receipts_journal(
+        pool: &PgPool,
+        org_id: &str,
+        from: Date,
+        to: Date,
+    ) -> Result<CashReceiptsJournal, DbError> {
+        let org_uuid =
+            Uuid::parse_str(org_id).map_err(|_| DbError::Internal("invalid org_id UUID".into()))?;
+
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            date: Date,
+            contact_name: String,
+            reference: Option<String>,
+            payment_method: Option<String>,
+            account_name: String,
+            amount: i64,
+        }
+
+        let rows = sqlx::query_as::<_, Row>(
+            r#"
+            SELECT p.payment_date AS date,
+                   COALESCE(c.name, 'Unknown') AS contact_name,
+                   p.reference,
+                   p.method AS payment_method,
+                   COALESCE(a.name, 'Accounts Receivable') AS account_name,
+                   p.amount
+            FROM payments p
+            LEFT JOIN contacts c ON c.id::text = p.contact_id
+            LEFT JOIN accounts a ON a.organization_id = p.organization_id
+                                 AND a.account_type = 'accounts_receivable'
+            WHERE p.organization_id = $1
+              AND p.invoice_id IS NOT NULL
+              AND p.payment_date BETWEEN $2 AND $3
+              AND p.status = 'recorded'
+            ORDER BY p.payment_date, p.id
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let total: i64 = rows.iter().map(|r| r.amount).sum();
+        let rows = rows
+            .into_iter()
+            .map(|r| CashReceiptsJournalRow {
+                date: r.date,
+                contact_name: r.contact_name,
+                reference: r.reference,
+                payment_method: r.payment_method,
+                account_name: r.account_name,
+                amount: r.amount,
+            })
+            .collect();
+
+        Ok(CashReceiptsJournal {
+            from_date: from,
+            to_date: to,
+            rows,
+            total,
+        })
+    }
+
+    pub async fn cash_disbursements_journal(
+        pool: &PgPool,
+        org_id: &str,
+        from: Date,
+        to: Date,
+    ) -> Result<CashDisbursementsJournal, DbError> {
+        let org_uuid =
+            Uuid::parse_str(org_id).map_err(|_| DbError::Internal("invalid org_id UUID".into()))?;
+
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            date: Date,
+            contact_name: String,
+            reference: Option<String>,
+            payment_method: Option<String>,
+            account_name: String,
+            amount: i64,
+        }
+
+        let rows = sqlx::query_as::<_, Row>(
+            r#"
+            SELECT bp.payment_date AS date,
+                   COALESCE(c.name, 'Unknown') AS contact_name,
+                   bp.reference,
+                   bp.method AS payment_method,
+                   COALESCE(a.name, 'Accounts Payable') AS account_name,
+                   bp.amount
+            FROM bill_payments bp
+            LEFT JOIN contacts c ON c.id::text = bp.contact_id
+            LEFT JOIN accounts a ON a.organization_id = bp.organization_id
+                                 AND a.account_type = 'accounts_payable'
+            WHERE bp.organization_id = $1
+              AND bp.payment_date BETWEEN $2 AND $3
+              AND bp.status = 'recorded'
+            ORDER BY bp.payment_date, bp.id
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let total: i64 = rows.iter().map(|r| r.amount).sum();
+        let rows = rows
+            .into_iter()
+            .map(|r| CashDisbursementsJournalRow {
+                date: r.date,
+                contact_name: r.contact_name,
+                reference: r.reference,
+                payment_method: r.payment_method,
+                account_name: r.account_name,
+                amount: r.amount,
+            })
+            .collect();
+
+        Ok(CashDisbursementsJournal {
+            from_date: from,
+            to_date: to,
+            rows,
+            total,
+        })
     }
 }

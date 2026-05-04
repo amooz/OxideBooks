@@ -29,10 +29,11 @@ use crate::{
         payment_links, payment_plans, payment_terms, payments, payroll, payroll_tax, payslips,
         prepaid_expenses, prepayments, price_lists, product_categories, product_variants, products,
         project_phases, projects, purchase_orders, purchase_requisitions, recurring,
-        recurring_bills, recurring_journal_entries, reports, retainers, roles, sales_orders,
-        sales_tax_nexus, scim, service_territories, sessions, stripe_webhook, subscriptions, tags,
-        tax_groups, tax_periods, tax_rates, tax_rules, time_entries, totp, tracking_categories,
-        transactions, users, vendor_credits, vendor_portal, warehouses, webhooks, work_orders,
+        recurring_bills, recurring_invoices, recurring_journal_entries, reports, retainers, roles,
+        sales_orders, sales_tax_nexus, scim, service_territories, sessions, stripe_webhook,
+        subscriptions, tags, tax_groups, tax_periods, tax_rates, tax_rules, time_entries, totp,
+        tracking_categories, transactions, users, vendor_credits, vendor_portal, warehouses,
+        webhooks, work_orders,
     },
     middleware::require_auth,
     state::AppState,
@@ -493,6 +494,21 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/recurring-bills/:id/generate",
             post(recurring_bills::generate_recurring_bill),
+        )
+        .route(
+            "/recurring-invoices",
+            get(recurring_invoices::list_recurring_invoices)
+                .post(recurring_invoices::create_recurring_invoice),
+        )
+        .route(
+            "/recurring-invoices/:id",
+            get(recurring_invoices::get_recurring_invoice)
+                .patch(recurring_invoices::update_recurring_invoice)
+                .delete(recurring_invoices::delete_recurring_invoice),
+        )
+        .route(
+            "/recurring-invoices/:id/generate",
+            post(recurring_invoices::generate_recurring_invoice),
         )
         // Approval workflow rules
         .route(
@@ -1560,6 +1576,14 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/reports/currency-exposure",
             get(reports::currency_exposure),
+        )
+        .route(
+            "/reports/cash-receipts-journal",
+            get(reports::cash_receipts_journal),
+        )
+        .route(
+            "/reports/cash-disbursements-journal",
+            get(reports::cash_disbursements_journal),
         )
         // Inventory serial number tracking
         .route(

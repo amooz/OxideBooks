@@ -76,6 +76,7 @@ pub mod purchase_order;
 pub mod purchase_requisition;
 pub mod recurring;
 pub mod recurring_bill;
+pub mod recurring_invoice;
 pub mod recurring_journal_entry;
 pub mod reports;
 pub mod retainer;
@@ -258,6 +259,10 @@ pub use recurring_bill::{
     CreateRecurringBill, CreateRecurringBillLine, RecurringBill, RecurringBillLine,
     UpdateRecurringBill,
 };
+pub use recurring_invoice::{
+    CreateRecurringInvoice, CreateRecurringInvoiceLine, RecurringInvoice, RecurringInvoiceLine,
+    UpdateRecurringInvoice,
+};
 pub use recurring_journal_entry::{
     CreateRecurringJournalEntry, CreateRecurringJournalEntryLine, RecurringJournalEntry,
     RecurringJournalEntryLine, UpdateRecurringJournalEntry,
@@ -265,12 +270,13 @@ pub use recurring_journal_entry::{
 pub use reports::{
     AccountBalance, AccountLedger, AgingReport, AgingRow, ApAgingDetailReport, ApAgingDetailRow,
     ArAgingDetailReport, ArAgingDetailRow, AutoReversalResult, BalanceSheetComparisonReport,
-    BalanceSheetComparisonSection, BalanceSheetReport, CashFlowForecast, CashFlowForecastBucket,
-    CashFlowIndirectLine, CashFlowIndirectReport, CashFlowIndirectSection, CashFlowReport,
-    CashFlowSection, CurrencyExposureReport, CurrencyExposureRow, DashboardKpis, Form941Quarter,
-    GrniReport, GrniRow, JobCostingCostCodeRow, JobCostingReport, JobCostingRow, LedgerLine,
-    OutstandingQuoteRow, OutstandingQuotesReport, PLComparisonReport, PayrollSummaryReport,
-    PayrollSummaryRow, PoSpendingReport, PoSpendingRow, ProfitLossReport,
+    BalanceSheetComparisonSection, BalanceSheetReport, CashDisbursementsJournal,
+    CashDisbursementsJournalRow, CashFlowForecast, CashFlowForecastBucket, CashFlowIndirectLine,
+    CashFlowIndirectReport, CashFlowIndirectSection, CashFlowReport, CashFlowSection,
+    CashReceiptsJournal, CashReceiptsJournalRow, CurrencyExposureReport, CurrencyExposureRow,
+    DashboardKpis, Form941Quarter, GrniReport, GrniRow, JobCostingCostCodeRow, JobCostingReport,
+    JobCostingRow, LedgerLine, OutstandingQuoteRow, OutstandingQuotesReport, PLComparisonReport,
+    PayrollSummaryReport, PayrollSummaryRow, PoSpendingReport, PoSpendingRow, ProfitLossReport,
     ProjectProfitabilityReport, ProjectProfitabilityRow, RemittanceAdvice, RemittanceLine,
     ReportLine, ReportSection, SalesByCustomerReport, SalesByCustomerRow, SalesByProductReport,
     SalesByProductRow, SalesTaxByNexusReport, SalesTaxByNexusRow, SearchHit, Summary1099,
