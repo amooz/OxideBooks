@@ -283,13 +283,13 @@ pub use reports::{
     EquityStatementLine, Form941Quarter, GrniReport, GrniRow, InventoryAgingReport,
     InventoryAgingRow, JobCostingCostCodeRow, JobCostingReport, JobCostingRow, LedgerLine,
     OutstandingQuoteRow, OutstandingQuotesReport, PLComparisonReport, PayrollSummaryReport,
-    PayrollSummaryRow, PoSpendingReport, PoSpendingRow, ProfitLossReport,
-    ProjectProfitabilityReport, ProjectProfitabilityRow, RemittanceAdvice, RemittanceLine,
-    ReportLine, ReportSection, SalesByCustomerReport, SalesByCustomerRow, SalesByProductReport,
-    SalesByProductRow, SalesByRepReport, SalesByRepRow, SalesTaxByNexusReport, SalesTaxByNexusRow,
-    SearchHit, Summary1099, TaxSummaryLine, TaxSummaryReport, TrackingPLReport, TrackingPLRow,
-    TrialBalance, VatReturnLine, VatReturnReport, Vendor1099Row, VendorBalancesReport,
-    VendorSpendReport, VendorSpendRow, W2Row,
+    PayrollSummaryRow, PoSpendingReport, PoSpendingRow, ProfitLossReport, ProjectBurnReport,
+    ProjectBurnRow, ProjectProfitabilityReport, ProjectProfitabilityRow, RemittanceAdvice,
+    RemittanceLine, ReportLine, ReportSection, SalesByCustomerReport, SalesByCustomerRow,
+    SalesByProductReport, SalesByProductRow, SalesByRepReport, SalesByRepRow,
+    SalesTaxByNexusReport, SalesTaxByNexusRow, SearchHit, Summary1099, TaxSummaryLine,
+    TaxSummaryReport, TrackingPLReport, TrackingPLRow, TrialBalance, VatReturnLine,
+    VatReturnReport, Vendor1099Row, VendorBalancesReport, VendorSpendReport, VendorSpendRow, W2Row,
 };
 pub use retainer::{ApplyRetainer, CreateRetainer, DepositRetainer, Retainer, RetainerTransaction};
 pub use role::{AssignPermission, CreateRole, Permission, Role};
@@ -309,7 +309,7 @@ pub use tax_period::{CreateTaxPeriod, FileTaxPeriod, TaxPeriod};
 pub use tax_rate::{CreateTaxRate, TaxRate, UpdateTaxRate};
 pub use tax_rule::{CreateTaxRule, SuggestedTaxRate, TaxRule, UpdateTaxRule};
 pub use time_entry::{
-    BillTimeEntries, CreateTimeEntry, TimeEntry, TimeSummaryRow, UpdateTimeEntry,
+    BillTimeEntries, CreateTimeEntry, RejectTimeEntry, TimeEntry, TimeSummaryRow, UpdateTimeEntry,
 };
 pub use tracking_category::{
     CreateTrackingCategory, CreateTrackingOption, TrackingCategory, TrackingOption,

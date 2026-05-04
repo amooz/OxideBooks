@@ -1,5 +1,5 @@
 use oxidebooks_core::models::{
-    BillTimeEntries, CreateTimeEntry, TimeEntry, TimeSummaryRow, UpdateTimeEntry,
+    BillTimeEntries, CreateTimeEntry, RejectTimeEntry, TimeEntry, TimeSummaryRow, UpdateTimeEntry,
 };
 use sqlx::PgPool;
 use time::{Date, OffsetDateTime};
@@ -20,6 +20,10 @@ struct TimeEntryRow {
     hourly_rate: i64,
     is_billable: bool,
     invoice_line_id: Option<Uuid>,
+    approval_status: String,
+    approved_by: Option<Uuid>,
+    approved_at: Option<OffsetDateTime>,
+    rejection_reason: Option<String>,
     created_at: OffsetDateTime,
     updated_at: OffsetDateTime,
 }
@@ -46,6 +50,10 @@ fn from_row(r: TimeEntryRow) -> TimeEntry {
         hourly_rate: r.hourly_rate,
         is_billable: r.is_billable,
         invoice_line_id: r.invoice_line_id.map(|u| u.to_string()),
+        approval_status: r.approval_status,
+        approved_by: r.approved_by.map(|u| u.to_string()),
+        approved_at: r.approved_at,
+        rejection_reason: r.rejection_reason,
         created_at: r.created_at,
         updated_at: r.updated_at,
     }
@@ -57,6 +65,7 @@ fn parse_uuid(s: &str) -> Result<Uuid, DbError> {
 
 const COLS: &str = "id, organization_id, user_id, project_id, contact_id, entry_date, \
                     minutes, description, hourly_rate, is_billable, invoice_line_id, \
+                    approval_status, approved_by, approved_at, rejection_reason, \
                     created_at, updated_at";
 
 pub struct TimeEntryRepo;
@@ -195,6 +204,61 @@ impl TimeEntryRepo {
             return Err(DbError::NotFound);
         }
         Ok(())
+    }
+
+    pub async fn approve(
+        pool: &PgPool,
+        org_id: &str,
+        id: &str,
+        approver_id: &str,
+    ) -> Result<TimeEntry, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let id_uuid = parse_uuid(id)?;
+        let approver_uuid = parse_uuid(approver_id)?;
+        let n = sqlx::query(
+            "UPDATE time_entries \
+             SET approval_status = 'approved', approved_by = $1, approved_at = NOW(), \
+                 rejection_reason = NULL, updated_at = NOW() \
+             WHERE id = $2 AND organization_id = $3 AND approval_status = 'pending'",
+        )
+        .bind(approver_uuid)
+        .bind(id_uuid)
+        .bind(org_uuid)
+        .execute(pool)
+        .await
+        .map_err(map_sqlx_err)?
+        .rows_affected();
+        if n == 0 {
+            return Err(DbError::NotFound);
+        }
+        Self::get_by_id(pool, org_id, id).await
+    }
+
+    pub async fn reject(
+        pool: &PgPool,
+        org_id: &str,
+        id: &str,
+        input: RejectTimeEntry,
+    ) -> Result<TimeEntry, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let id_uuid = parse_uuid(id)?;
+        let n = sqlx::query(
+            "UPDATE time_entries \
+             SET approval_status = 'rejected', approved_by = NULL, approved_at = NULL, \
+                 rejection_reason = $1, updated_at = NOW() \
+             WHERE id = $2 AND organization_id = $3 AND approval_status = 'pending'",
+        )
+        .bind(input.reason)
+        .bind(id_uuid)
+        .bind(org_uuid)
+        .execute(pool)
+        .await
+        .map_err(map_sqlx_err)?
+        .rows_affected();
+        if n == 0 {
+            return Err(DbError::NotFound);
+        }
+        Self::get_by_id(pool, org_id, id).await
     }
 
     /// Convert unbilled time entries into invoice lines on an existing invoice.

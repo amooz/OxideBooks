@@ -87,3 +87,16 @@ pub async fn cancel_reorder_request(
     let item = InventoryReorderRequestRepo::cancel(&state.db, &claims.org, &id).await?;
     Ok(Json(serde_json::json!({ "data": item })))
 }
+
+/// POST /api/v1/inventory-reorder-requests/trigger
+/// Scans inventory items below reorder_point and auto-creates pending requests.
+pub async fn trigger_reorders(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let created = InventoryReorderRequestRepo::trigger_reorders(&state.db, &claims.org).await?;
+    Ok(Json(serde_json::json!({ "data": created })))
+}

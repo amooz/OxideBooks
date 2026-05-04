@@ -843,6 +843,25 @@ pub struct SalesByRepReport {
     pub grand_total: MinorUnits,
 }
 
+// ── Project Burn Report ────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectBurnRow {
+    pub project_id: String,
+    pub project_name: String,
+    pub budget_amount: MinorUnits,
+    pub actual_cost: MinorUnits,
+    pub variance: MinorUnits,
+    pub burn_pct: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectBurnReport {
+    #[serde(with = "crate::models::date_serde")]
+    pub as_of: Date,
+    pub rows: Vec<ProjectBurnRow>,
+}
+
 // ── Global Search ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

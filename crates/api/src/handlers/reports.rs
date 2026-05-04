@@ -770,3 +770,17 @@ pub async fn sales_by_rep(
     let report = ReportRepo::sales_by_rep(&state.db, &claims.org, from, to).await?;
     Ok(Json(serde_json::json!({ "data": report })))
 }
+
+/// GET /api/v1/reports/project-burn?as_of=YYYY-MM-DD
+pub async fn project_burn(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<AsOfQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let as_of = parse_date(&q.as_of)?;
+    let report = ReportRepo::project_burn(&state.db, &claims.org, as_of).await?;
+    Ok(Json(serde_json::json!({ "data": report })))
+}

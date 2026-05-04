@@ -10,11 +10,12 @@ use oxidebooks_core::models::{
     InventoryAgingReport, InventoryAgingRow, JobCostingCostCodeRow, JobCostingReport,
     JobCostingRow, LedgerLine, OrgProfitLoss, OutstandingQuoteRow, OutstandingQuotesReport,
     PLComparisonReport, PayrollSummaryReport, PayrollSummaryRow, PoSpendingReport, PoSpendingRow,
-    ProfitLossReport, ProjectProfitabilityReport, ProjectProfitabilityRow, ReportLine,
-    ReportSection, SalesByCustomerReport, SalesByCustomerRow, SalesByProductReport,
-    SalesByProductRow, SalesByRepReport, SalesByRepRow, SalesTaxByNexusReport, SalesTaxByNexusRow,
-    StatementLine, TaxSummaryLine, TaxSummaryReport, TrackingPLReport, TrackingPLRow, TrialBalance,
-    VatReturnLine, VatReturnReport, VendorBalancesReport, VendorSpendReport, VendorSpendRow, W2Row,
+    ProfitLossReport, ProjectBurnReport, ProjectBurnRow, ProjectProfitabilityReport,
+    ProjectProfitabilityRow, ReportLine, ReportSection, SalesByCustomerReport, SalesByCustomerRow,
+    SalesByProductReport, SalesByProductRow, SalesByRepReport, SalesByRepRow,
+    SalesTaxByNexusReport, SalesTaxByNexusRow, StatementLine, TaxSummaryLine, TaxSummaryReport,
+    TrackingPLReport, TrackingPLRow, TrialBalance, VatReturnLine, VatReturnReport,
+    VendorBalancesReport, VendorSpendReport, VendorSpendRow, W2Row,
 };
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -3587,6 +3588,72 @@ impl ReportRepo {
             to_date: to,
             rows,
             grand_total,
+        })
+    }
+
+    pub async fn project_burn(
+        pool: &PgPool,
+        org_id: &str,
+        as_of: Date,
+    ) -> Result<ProjectBurnReport, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        #[derive(sqlx::FromRow)]
+        struct BurnRow {
+            project_id: Uuid,
+            project_name: String,
+            budget_amount: i64,
+            actual_cost: i64,
+        }
+
+        let rows: Vec<BurnRow> = sqlx::query_as(
+            r#"
+            SELECT
+                p.id       AS project_id,
+                p.name     AS project_name,
+                COALESCE(p.budget_amount, 0) AS budget_amount,
+                COALESCE(
+                    SUM(te.minutes::BIGINT * te.hourly_rate / 60)
+                    FILTER (WHERE te.entry_date <= $2 AND te.approval_status = 'approved'),
+                    0
+                ) AS actual_cost
+            FROM projects p
+            LEFT JOIN time_entries te
+                ON te.project_id = p.id AND te.organization_id = p.organization_id
+            WHERE p.organization_id = $1
+            GROUP BY p.id, p.name, p.budget_amount
+            ORDER BY p.name
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(as_of)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let report_rows = rows
+            .into_iter()
+            .map(|r| {
+                let variance = r.budget_amount - r.actual_cost;
+                let burn_pct = if r.budget_amount == 0 {
+                    0.0
+                } else {
+                    (r.actual_cost as f64 / r.budget_amount as f64) * 100.0
+                };
+                ProjectBurnRow {
+                    project_id: r.project_id.to_string(),
+                    project_name: r.project_name,
+                    budget_amount: r.budget_amount,
+                    actual_cost: r.actual_cost,
+                    variance,
+                    burn_pct,
+                }
+            })
+            .collect();
+
+        Ok(ProjectBurnReport {
+            as_of,
+            rows: report_rows,
         })
     }
 }
