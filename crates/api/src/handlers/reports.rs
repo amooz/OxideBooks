@@ -308,3 +308,47 @@ pub async fn sales_by_product(
     let report = ReportRepo::sales_by_product(&state.db, &claims.org, from, to).await?;
     Ok(Json(serde_json::json!({ "data": report })))
 }
+
+#[derive(Deserialize)]
+pub struct JobCostingQuery {
+    pub from: String,
+    pub to: String,
+    pub project_id: Option<String>,
+}
+
+/// GET /api/v1/reports/job-costing?from=YYYY-MM-DD&to=YYYY-MM-DD[&project_id=UUID]
+pub async fn job_costing(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<JobCostingQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let from = parse_date(&q.from)?;
+    let to = parse_date(&q.to)?;
+    if to < from {
+        return Err(ApiError::BadRequest("to must be >= from".into()));
+    }
+    let report =
+        ReportRepo::job_costing(&state.db, &claims.org, from, to, q.project_id.as_deref()).await?;
+    Ok(Json(serde_json::json!({ "data": report })))
+}
+
+/// GET /api/v1/reports/vendor-spend?from=YYYY-MM-DD&to=YYYY-MM-DD
+pub async fn vendor_spend(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<DateRangeQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let from = parse_date(&q.from)?;
+    let to = parse_date(&q.to)?;
+    if to < from {
+        return Err(ApiError::BadRequest("to must be >= from".into()));
+    }
+    let report = ReportRepo::vendor_spend(&state.db, &claims.org, from, to).await?;
+    Ok(Json(serde_json::json!({ "data": report })))
+}
