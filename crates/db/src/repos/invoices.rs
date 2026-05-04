@@ -654,6 +654,35 @@ impl InvoiceRepo {
             })
             .collect())
     }
+
+    /// Returns the sum of outstanding invoice balances (total - paid) for a contact.
+    /// Used for credit limit enforcement before creating a new invoice.
+    pub async fn contact_ar_balance(
+        pool: &PgPool,
+        org_id: &str,
+        contact_id: &str,
+    ) -> Result<i64, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let balance: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(SUM(
+                il.quantity * il.unit_price
+                * (100 - il.discount_pct) / 100
+                * (100 + il.tax_rate) / 100
+             ), 0)::BIGINT
+             FROM invoices i
+             JOIN invoice_lines il ON il.invoice_id = i.id
+             WHERE i.organization_id = $1
+               AND i.contact_id = $2
+               AND i.invoice_type = 'invoice'
+               AND i.status NOT IN ('draft','voided','paid')",
+        )
+        .bind(org_uuid)
+        .bind(contact_id)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+        Ok(balance)
+    }
 }
 
 async fn generate_invoice_number(

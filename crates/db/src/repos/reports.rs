@@ -9,8 +9,8 @@ use oxidebooks_core::models::{
     PayrollSummaryReport, PayrollSummaryRow, PoSpendingReport, PoSpendingRow, ProfitLossReport,
     ProjectProfitabilityReport, ProjectProfitabilityRow, ReportLine, ReportSection,
     SalesByCustomerReport, SalesByCustomerRow, SalesByProductReport, SalesByProductRow,
-    StatementLine, TaxSummaryLine, TaxSummaryReport, TrialBalance, VatReturnLine, VatReturnReport,
-    VendorSpendReport, VendorSpendRow, W2Row,
+    SalesTaxByNexusReport, SalesTaxByNexusRow, StatementLine, TaxSummaryLine, TaxSummaryReport,
+    TrialBalance, VatReturnLine, VatReturnReport, VendorSpendReport, VendorSpendRow, W2Row,
 };
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -2730,6 +2730,75 @@ impl ReportRepo {
             total_output_tax,
             total_input_tax,
             net_vat_payable: total_output_tax - total_input_tax,
+        })
+    }
+
+    /// Sales collected per nexus jurisdiction for a date range.
+    pub async fn sales_tax_by_nexus(
+        pool: &PgPool,
+        org_id: &str,
+        from: Date,
+        to: Date,
+    ) -> Result<SalesTaxByNexusReport, DbError> {
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            jurisdiction_code: String,
+            jurisdiction_name: String,
+            taxable_sales: i64,
+            tax_collected: i64,
+        }
+
+        let org_uuid =
+            Uuid::from_str(org_id).map_err(|_| DbError::Internal("invalid org_id UUID".into()))?;
+
+        let rows: Vec<Row> = sqlx::query_as(
+            r#"
+            SELECT
+                n.jurisdiction_code,
+                n.jurisdiction_name,
+                COALESCE(SUM(il.quantity * il.unit_price), 0)::BIGINT       AS taxable_sales,
+                COALESCE(SUM(il.quantity * il.unit_price
+                    * il.tax_rate / 10000), 0)::BIGINT                      AS tax_collected
+            FROM sales_tax_nexus n
+            LEFT JOIN invoices i
+                ON  i.organization_id = n.organization_id
+                AND i.invoice_type    = 'invoice'
+                AND i.status NOT IN ('draft','voided')
+                AND i.date BETWEEN $2 AND $3
+            LEFT JOIN invoice_lines il
+                ON  il.invoice_id = i.id
+                AND il.tax_rate   > 0
+            WHERE n.organization_id = $1
+            GROUP BY n.jurisdiction_code, n.jurisdiction_name
+            ORDER BY taxable_sales DESC
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let rows: Vec<SalesTaxByNexusRow> = rows
+            .into_iter()
+            .map(|r| SalesTaxByNexusRow {
+                jurisdiction_code: r.jurisdiction_code,
+                jurisdiction_name: r.jurisdiction_name,
+                taxable_sales: r.taxable_sales,
+                tax_collected: r.tax_collected,
+            })
+            .collect();
+
+        let total_taxable_sales: i64 = rows.iter().map(|r| r.taxable_sales).sum();
+        let total_tax_collected: i64 = rows.iter().map(|r| r.tax_collected).sum();
+
+        Ok(SalesTaxByNexusReport {
+            from,
+            to,
+            rows,
+            total_taxable_sales,
+            total_tax_collected,
         })
     }
 }

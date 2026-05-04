@@ -266,9 +266,9 @@ pub use reports::{
     PLComparisonReport, PayrollSummaryReport, PayrollSummaryRow, PoSpendingReport, PoSpendingRow,
     ProfitLossReport, ProjectProfitabilityReport, ProjectProfitabilityRow, RemittanceAdvice,
     RemittanceLine, ReportLine, ReportSection, SalesByCustomerReport, SalesByCustomerRow,
-    SalesByProductReport, SalesByProductRow, SearchHit, Summary1099, TaxSummaryLine,
-    TaxSummaryReport, TrialBalance, VatReturnLine, VatReturnReport, Vendor1099Row,
-    VendorSpendReport, VendorSpendRow, W2Row,
+    SalesByProductReport, SalesByProductRow, SalesTaxByNexusReport, SalesTaxByNexusRow, SearchHit,
+    Summary1099, TaxSummaryLine, TaxSummaryReport, TrialBalance, VatReturnLine, VatReturnReport,
+    Vendor1099Row, VendorSpendReport, VendorSpendRow, W2Row,
 };
 pub use retainer::{ApplyRetainer, CreateRetainer, DepositRetainer, Retainer, RetainerTransaction};
 pub use role::{AssignPermission, CreateRole, Permission, Role};

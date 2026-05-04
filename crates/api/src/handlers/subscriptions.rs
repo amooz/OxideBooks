@@ -6,7 +6,7 @@ use axum::{
 use oxidebooks_core::models::{
     CreateSubscription, CreateSubscriptionPlan, UpdateSubscription, UpdateSubscriptionPlan,
 };
-use oxidebooks_db::repos::SubscriptionRepo;
+use oxidebooks_db::repos::{BillingRunResult, SubscriptionRepo};
 use serde::Deserialize;
 
 use crate::{
@@ -167,4 +167,31 @@ pub async fn bill_subscription(
         StatusCode::CREATED,
         Json(serde_json::json!({ "data": invoice })),
     ))
+}
+
+#[derive(Deserialize)]
+pub struct BillingRunQuery {
+    pub as_of: Option<String>,
+}
+
+/// POST /api/v1/subscriptions/billing-run
+/// Generate invoices for all active subscriptions due on or before `as_of` (defaults to today).
+pub async fn billing_run(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<BillingRunQuery>,
+) -> ApiResult<axum::Json<serde_json::Value>> {
+    if !claims.is_admin() {
+        return Err(ApiError::Forbidden);
+    }
+    let as_of = if let Some(s) = q.as_of.as_deref() {
+        let fmt = time::macros::format_description!("[year]-[month]-[day]");
+        time::Date::parse(s, fmt)
+            .map_err(|_| ApiError::BadRequest(format!("invalid date '{s}'; expected YYYY-MM-DD")))?
+    } else {
+        time::OffsetDateTime::now_utc().date()
+    };
+    let result: BillingRunResult =
+        SubscriptionRepo::bill_due(&state.db, &claims.org, as_of).await?;
+    Ok(axum::Json(serde_json::json!({ "data": result })))
 }

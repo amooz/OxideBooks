@@ -1509,6 +1509,10 @@ pub fn build(state: AppState) -> Router {
             "/subscriptions/:id/bill",
             post(subscriptions::bill_subscription),
         )
+        .route(
+            "/subscriptions/billing-run",
+            post(subscriptions::billing_run),
+        )
         // Payroll summary report
         .route("/reports/payroll-summary", get(reports::payroll_summary))
         // GRNI accrual report
@@ -1531,6 +1535,10 @@ pub fn build(state: AppState) -> Router {
             get(reports::cash_flow_indirect),
         )
         .route("/reports/vat-return", get(reports::vat_return))
+        .route(
+            "/reports/sales-tax-by-nexus",
+            get(reports::sales_tax_by_nexus),
+        )
         // Inventory stocktakes
         .route(
             "/inventory-stocktakes",
