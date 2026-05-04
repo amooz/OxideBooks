@@ -9,6 +9,7 @@ pub mod batch_payment;
 pub mod bill;
 pub mod budget;
 pub mod cash_sale;
+pub mod check_run;
 pub mod client_portal;
 pub mod closed_period;
 pub mod commission;
@@ -66,6 +67,7 @@ pub mod reports;
 pub mod retainer;
 pub mod role;
 pub mod sales_order;
+pub mod sales_tax_nexus;
 pub mod session;
 pub mod subscription;
 pub mod tag;
@@ -101,6 +103,7 @@ pub use budget::{
     UpsertBudgetLine,
 };
 pub use cash_sale::CreateCashSale;
+pub use check_run::{CheckRun, CheckRunItem, CreateCheckRun, CreateCheckRunItem};
 pub use client_portal::{ClientPortalToken, CreateClientPortalToken};
 pub use closed_period::{ClosedPeriod, CreateClosedPeriod};
 pub use commission::{CreateSalesCommission, PayCommission, SalesCommission};
@@ -218,6 +221,7 @@ pub use role::{AssignPermission, CreateRole, Permission, Role};
 pub use sales_order::{
     ConvertSoToInvoice, CreateSalesOrder, CreateSoLine, SalesOrder, SoLine, UpdateSalesOrder,
 };
+pub use sales_tax_nexus::{CreateSalesTaxNexus, SalesTaxNexus, UpdateSalesTaxNexus};
 pub use session::Session;
 pub use subscription::{
     CreateSubscription, CreateSubscriptionPlan, Subscription, SubscriptionPlan, UpdateSubscription,
