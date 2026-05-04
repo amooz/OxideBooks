@@ -59,6 +59,7 @@ pub struct Account {
     pub sub_type: Option<String>,
     pub description: Option<String>,
     pub is_active: bool,
+    pub cash_flow_category: Option<String>,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
@@ -82,6 +83,7 @@ pub struct UpdateAccount {
     pub sub_type: Option<String>,
     pub description: Option<String>,
     pub is_active: Option<bool>,
+    pub cash_flow_category: Option<String>,
 }
 
 #[cfg(test)]

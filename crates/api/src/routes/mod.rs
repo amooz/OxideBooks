@@ -1526,6 +1526,11 @@ pub fn build(state: AppState) -> Router {
             get(reports::outstanding_quotes),
         )
         .route("/reports/po-spending", get(reports::po_spending))
+        .route(
+            "/reports/cash-flow-indirect",
+            get(reports::cash_flow_indirect),
+        )
+        .route("/reports/vat-return", get(reports::vat_return))
         // Inventory stocktakes
         .route(
             "/inventory-stocktakes",
