@@ -72,3 +72,19 @@ pub async fn create_batch_payment(
         })),
     ))
 }
+
+/// GET /api/v1/batch-payments/:id/remittance
+///
+/// Returns a remittance advice document for the batch payment: lists each invoice
+/// paid, with original amount, amount paid in this run, and remaining balance.
+pub async fn remittance_advice(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let advice = BatchPaymentRepo::remittance_advice(&state.db, &claims.org, &id).await?;
+    Ok(Json(serde_json::json!({ "data": advice })))
+}

@@ -73,6 +73,7 @@ pub mod prepaid_expenses;
 pub mod prepayments;
 pub mod price_lists;
 pub mod product_categories;
+pub mod product_variants;
 pub mod products;
 pub mod project_phases;
 pub mod projects;

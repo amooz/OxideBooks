@@ -66,6 +66,7 @@ pub mod prepayment;
 pub mod price_list;
 pub mod product;
 pub mod product_category;
+pub mod product_variant;
 pub mod project;
 pub mod project_phase;
 pub mod purchase_order;
@@ -227,6 +228,7 @@ pub use product::{
     UpdateProduct,
 };
 pub use product_category::{CreateProductCategory, ProductCategory, UpdateProductCategory};
+pub use product_variant::{CreateProductVariant, ProductVariant, UpdateProductVariant};
 pub use project::{CreateProject, Project, ProjectSummary, UpdateProject};
 pub use project_phase::{CreateProjectPhase, ProjectPhase, UpdateProjectPhase};
 pub use purchase_order::{
@@ -249,9 +251,10 @@ pub use reports::{
     CashFlowForecastBucket, CashFlowReport, CashFlowSection, DashboardKpis, Form941Quarter,
     GrniReport, GrniRow, JobCostingCostCodeRow, JobCostingReport, JobCostingRow, LedgerLine,
     PLComparisonReport, PayrollSummaryReport, PayrollSummaryRow, ProfitLossReport,
-    ProjectProfitabilityReport, ProjectProfitabilityRow, ReportLine, ReportSection,
-    SalesByProductReport, SalesByProductRow, SearchHit, Summary1099, TaxSummaryLine,
-    TaxSummaryReport, TrialBalance, Vendor1099Row, VendorSpendReport, VendorSpendRow, W2Row,
+    ProjectProfitabilityReport, ProjectProfitabilityRow, RemittanceAdvice, RemittanceLine,
+    ReportLine, ReportSection, SalesByProductReport, SalesByProductRow, SearchHit, Summary1099,
+    TaxSummaryLine, TaxSummaryReport, TrialBalance, Vendor1099Row, VendorSpendReport,
+    VendorSpendRow, W2Row,
 };
 pub use retainer::{ApplyRetainer, CreateRetainer, DepositRetainer, Retainer, RetainerTransaction};
 pub use role::{AssignPermission, CreateRole, Permission, Role};
