@@ -5,6 +5,7 @@ use axum::{
 };
 use oxidebooks_core::models::{CreatePayment, CreateRefund, VALID_METHODS};
 use oxidebooks_db::repos::PaymentRepo;
+use serde::Deserialize;
 
 use crate::{
     error::{ApiError, ApiResult},
@@ -80,6 +81,34 @@ pub async fn create_refund(
         StatusCode::CREATED,
         Json(serde_json::json!({ "data": refund })),
     ))
+}
+
+#[derive(Deserialize)]
+pub struct PostFxJournalBody {
+    pub ar_account_id: String,
+    pub fx_account_id: String,
+}
+
+/// POST /api/v1/payments/:id/fx-journal
+/// Post the realized FX gain/loss journal entry for a payment.
+pub async fn post_fx_journal(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(payment_id): Path<String>,
+    Json(body): Json<PostFxJournalBody>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("invoices:write") {
+        return Err(ApiError::Forbidden);
+    }
+    let payment = PaymentRepo::post_fx_journal(
+        &state.db,
+        &claims.org,
+        &payment_id,
+        &body.ar_account_id,
+        &body.fx_account_id,
+    )
+    .await?;
+    Ok(Json(serde_json::json!({ "data": payment })))
 }
 
 /// GET /api/v1/payments/:id/refunds

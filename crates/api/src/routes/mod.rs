@@ -16,18 +16,19 @@ use tower_http::{
 use crate::{
     handlers::{
         accounts, api_keys, approval_rules, assembly_orders, attachments, audit, auth, auth_sso,
-        bank, bank_deposits, bank_rules, batch_payments, bills, budgets, bulk, check_runs,
-        client_portal, closed_periods, commissions, consolidated, consolidation_eliminations,
-        contact_groups, contacts, contractor_tax_info, cost_codes, credit_notes, custom_fields,
-        deferred_charges, deferred_revenue, departments, doc_sequences, dunning, email,
-        employee_bank_accounts, employee_loans, employees, exchange_rates, expense_categories,
-        expense_claims, expense_policies, expense_reports, expenses, export, fixed_assets, fx,
-        fx_revaluations, grn, health, identity, import, intercompany, inventory, inventory_lots,
-        inventory_reorder_requests, inventory_stocktakes, invoice_templates, invoices,
-        landed_costs, late_fees, leave, mileage, notes, notifications, opening_balances,
-        organizations, payment_links, payment_plans, payment_terms, payments, payroll, payroll_tax,
-        payslips, prepaid_expenses, prepayments, price_lists, product_categories, product_variants,
-        products, project_phases, projects, purchase_orders, purchase_requisitions, recurring,
+        bank, bank_deposits, bank_reconciliation, bank_rules, batch_payments, bills, budgets, bulk,
+        check_runs, client_portal, closed_periods, commissions, consolidated,
+        consolidation_eliminations, contact_groups, contacts, contractor_tax_info, cost_codes,
+        credit_notes, custom_fields, deferred_charges, deferred_revenue, departments,
+        doc_sequences, dunning, email, employee_bank_accounts, employee_loans, employees,
+        exchange_rates, expense_categories, expense_claims, expense_policies, expense_reports,
+        expenses, export, fixed_assets, fx, fx_revaluations, grn, health, identity, import,
+        intercompany, inventory, inventory_lots, inventory_reorder_requests,
+        inventory_serial_numbers, inventory_stocktakes, invoice_templates, invoices, landed_costs,
+        late_fees, leave, mileage, notes, notifications, opening_balances, organizations,
+        payment_links, payment_plans, payment_terms, payments, payroll, payroll_tax, payslips,
+        prepaid_expenses, prepayments, price_lists, product_categories, product_variants, products,
+        project_phases, projects, purchase_orders, purchase_requisitions, recurring,
         recurring_bills, recurring_journal_entries, reports, retainers, roles, sales_orders,
         sales_tax_nexus, scim, service_territories, sessions, stripe_webhook, subscriptions, tags,
         tax_groups, tax_periods, tax_rates, tax_rules, time_entries, totp, tracking_categories,
@@ -223,12 +224,13 @@ pub fn build(state: AppState) -> Router {
             "/invoices/:id/payments",
             post(payments::create_payment).get(payments::list_payments),
         )
-        // Payment void and refunds
+        // Payment void, refunds, and FX journal
         .route("/payments/:id/void", post(payments::void_payment))
         .route(
             "/payments/:id/refunds",
             post(payments::create_refund).get(payments::list_refunds),
         )
+        .route("/payments/:id/fx-journal", post(payments::post_fx_journal))
         .route("/invoices/:id/convert", post(invoices::convert_quote))
         // Quote workflow
         .route("/quotes/:id/accept", post(invoices::accept_quote))
@@ -780,6 +782,17 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/bank-deposits/:id/clear",
             post(bank_deposits::clear_bank_deposit),
+        )
+        // Bank reconciliation statements
+        .route(
+            "/bank-reconciliation-statements",
+            get(bank_reconciliation::list_reconciliation_statements)
+                .post(bank_reconciliation::create_reconciliation_statement),
+        )
+        .route(
+            "/bank-reconciliation-statements/:id",
+            get(bank_reconciliation::get_reconciliation_statement)
+                .delete(bank_reconciliation::delete_reconciliation_statement),
         )
         // Inventory
         .route(
@@ -1538,6 +1551,18 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/reports/sales-tax-by-nexus",
             get(reports::sales_tax_by_nexus),
+        )
+        // Inventory serial number tracking
+        .route(
+            "/inventory-serial-numbers",
+            get(inventory_serial_numbers::list_serial_numbers)
+                .post(inventory_serial_numbers::create_serial_number),
+        )
+        .route(
+            "/inventory-serial-numbers/:id",
+            get(inventory_serial_numbers::get_serial_number)
+                .patch(inventory_serial_numbers::update_serial_number)
+                .delete(inventory_serial_numbers::delete_serial_number),
         )
         // Inventory stocktakes
         .route(

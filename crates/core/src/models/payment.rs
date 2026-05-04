@@ -12,6 +12,8 @@ pub struct Payment {
     pub reference: Option<String>,
     pub notes: Option<String>,
     pub status: String,
+    pub realized_fx_amount: i64,
+    pub fx_journal_entry_id: Option<String>,
     pub voided_at: Option<OffsetDateTime>,
     pub created_at: OffsetDateTime,
 }
@@ -45,6 +47,10 @@ pub struct CreatePayment {
     pub method: String,
     pub reference: Option<String>,
     pub notes: Option<String>,
+    /// Exchange rate at time of payment (base-currency units per 1 foreign unit, scaled ×10000).
+    /// Provide when the invoice currency differs from the org base currency to trigger
+    /// realized FX gain/loss calculation.
+    pub exchange_rate: Option<rust_decimal::Decimal>,
 }
 
 fn default_method() -> String {

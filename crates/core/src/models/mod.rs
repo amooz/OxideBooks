@@ -5,6 +5,7 @@ pub mod assembly_order;
 pub mod attachment;
 pub mod bank;
 pub mod bank_deposit;
+pub mod bank_reconciliation;
 pub mod bank_rule;
 pub mod batch_payment;
 pub mod bill;
@@ -45,6 +46,7 @@ pub mod intercompany;
 pub mod inventory;
 pub mod inventory_lot;
 pub mod inventory_reorder_request;
+pub mod inventory_serial_number;
 pub mod inventory_stocktake;
 pub mod invoice;
 pub mod invoice_template;
@@ -111,6 +113,7 @@ pub use bank::{
 pub use bank_deposit::{
     BankDeposit, BankDepositItem, ClearBankDeposit, CreateBankDeposit, CreateDepositItem,
 };
+pub use bank_reconciliation::{BankReconciliationStatement, CreateBankReconciliationStatement};
 pub use bank_rule::{BankRule, CreateBankRule};
 pub use batch_payment::{BatchPayment, BatchPaymentLine, CreateBatchPayment};
 pub use bill::{
@@ -191,6 +194,9 @@ pub use inventory::{
 pub use inventory_lot::{CreateInventoryLot, InventoryLot, UpdateInventoryLot};
 pub use inventory_reorder_request::{
     CreateInventoryReorderRequest, InventoryReorderRequest, SubmitInventoryReorderRequest,
+};
+pub use inventory_serial_number::{
+    CreateInventorySerialNumber, InventorySerialNumber, UpdateInventorySerialNumber,
 };
 pub use inventory_stocktake::{
     CreateInventoryStocktake, InventoryStocktake, InventoryStocktakeLine, UpdateStocktakeLine,
