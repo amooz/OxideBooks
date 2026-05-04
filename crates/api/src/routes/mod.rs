@@ -19,15 +19,16 @@ use crate::{
         bank_deposits, bank_rules, batch_payments, bills, budgets, bulk, client_portal,
         closed_periods, commissions, consolidated, contact_groups, contacts, credit_notes,
         custom_fields, deferred_charges, deferred_revenue, departments, doc_sequences, dunning,
-        email, employees, exchange_rates, expense_categories, expense_policies, expense_reports,
-        expenses, export, fixed_assets, fx, fx_revaluations, grn, health, identity, import,
-        intercompany, inventory, inventory_lots, invoice_templates, invoices, landed_costs,
-        late_fees, leave, mileage, notes, notifications, opening_balances, organizations,
-        payment_links, payment_plans, payment_terms, payments, payroll, payslips, prepaid_expenses,
-        prepayments, price_lists, product_categories, products, projects, purchase_orders,
-        purchase_requisitions, recurring, reports, retainers, roles, sales_orders, scim, sessions,
-        stripe_webhook, subscriptions, tags, tax_groups, tax_periods, tax_rates, time_entries,
-        totp, tracking_categories, transactions, users, vendor_credits, warehouses, webhooks,
+        email, employee_loans, employees, exchange_rates, expense_categories, expense_policies,
+        expense_reports, expenses, export, fixed_assets, fx, fx_revaluations, grn, health,
+        identity, import, intercompany, inventory, inventory_lots, invoice_templates, invoices,
+        landed_costs, late_fees, leave, mileage, notes, notifications, opening_balances,
+        organizations, payment_links, payment_plans, payment_terms, payments, payroll, payroll_tax,
+        payslips, prepaid_expenses, prepayments, price_lists, product_categories, products,
+        projects, purchase_orders, purchase_requisitions, recurring, reports, retainers, roles,
+        sales_orders, scim, sessions, stripe_webhook, subscriptions, tags, tax_groups, tax_periods,
+        tax_rates, time_entries, totp, tracking_categories, transactions, users, vendor_credits,
+        warehouses, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -811,6 +812,27 @@ pub fn build(state: AppState) -> Router {
             post(payroll::approve_payroll_run),
         )
         .route("/payroll-runs/:id/pay", post(payroll::pay_payroll_run))
+        .route(
+            "/payroll-runs/:id/tax-liabilities",
+            get(payroll_tax::list_run_liabilities),
+        )
+        // Payroll tax liabilities
+        .route(
+            "/payroll-tax-liabilities",
+            get(payroll_tax::list_liabilities).post(payroll_tax::create_liability),
+        )
+        .route(
+            "/payroll-tax-liabilities/:id",
+            get(payroll_tax::get_liability),
+        )
+        .route(
+            "/payroll-tax-liabilities/:id/pay",
+            post(payroll_tax::pay_liability),
+        )
+        .route(
+            "/payroll-tax-liabilities/:id/void",
+            post(payroll_tax::void_liability),
+        )
         // CSV exports
         .route("/export/invoices", get(export::export_invoices))
         .route("/export/expenses", get(export::export_expenses))
@@ -966,6 +988,27 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/employees/:id/leave-balance",
             get(leave::employee_leave_balance),
+        )
+        .route(
+            "/employees/:id/loans",
+            get(employee_loans::list_employee_loans),
+        )
+        // Employee loans
+        .route(
+            "/employee-loans",
+            get(employee_loans::list_loans).post(employee_loans::create_loan),
+        )
+        .route(
+            "/employee-loans/:id",
+            get(employee_loans::get_loan).patch(employee_loans::update_loan),
+        )
+        .route(
+            "/employee-loans/:id/repayments",
+            get(employee_loans::list_repayments).post(employee_loans::create_repayment),
+        )
+        .route(
+            "/employee-loans/:id/write-off",
+            post(employee_loans::write_off_loan),
         )
         // Vendor bills (AP)
         .route("/bills", get(bills::list_bills).post(bills::create_bill))
