@@ -683,6 +683,50 @@ pub struct AutoReversalResult {
     pub reversal_ids: Vec<String>,
 }
 
+// ── Cash Journals ─────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CashReceiptsJournalRow {
+    #[serde(with = "crate::models::date_serde")]
+    pub date: Date,
+    pub contact_name: String,
+    pub reference: Option<String>,
+    pub payment_method: Option<String>,
+    pub account_name: String,
+    pub amount: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CashReceiptsJournal {
+    #[serde(with = "crate::models::date_serde")]
+    pub from_date: Date,
+    #[serde(with = "crate::models::date_serde")]
+    pub to_date: Date,
+    pub rows: Vec<CashReceiptsJournalRow>,
+    pub total: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CashDisbursementsJournalRow {
+    #[serde(with = "crate::models::date_serde")]
+    pub date: Date,
+    pub contact_name: String,
+    pub reference: Option<String>,
+    pub payment_method: Option<String>,
+    pub account_name: String,
+    pub amount: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CashDisbursementsJournal {
+    #[serde(with = "crate::models::date_serde")]
+    pub from_date: Date,
+    #[serde(with = "crate::models::date_serde")]
+    pub to_date: Date,
+    pub rows: Vec<CashDisbursementsJournalRow>,
+    pub total: MinorUnits,
+}
+
 // ── Global Search ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
