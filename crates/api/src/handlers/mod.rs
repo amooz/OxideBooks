@@ -29,6 +29,7 @@ pub mod custom_fields;
 pub mod deferred_charges;
 pub mod deferred_revenue;
 pub mod departments;
+pub mod direct_deposit;
 pub mod doc_sequences;
 pub mod dunning;
 pub mod email;

@@ -117,7 +117,7 @@ pub async fn delete_contact(
     Extension(claims): Extension<Claims>,
     Path(id): Path<String>,
 ) -> ApiResult<StatusCode> {
-    if !claims.has("contacts:delete") {
+    if !claims.is_admin() {
         return Err(ApiError::Forbidden);
     }
     ContactRepo::delete(&state.db, &claims.org, &id).await?;

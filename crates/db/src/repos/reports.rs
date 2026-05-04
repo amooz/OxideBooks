@@ -4,17 +4,17 @@ use oxidebooks_core::models::{
     BalanceSheetComparisonSection, BalanceSheetReport, CashDisbursementsJournal,
     CashDisbursementsJournalRow, CashFlowForecast, CashFlowForecastBucket, CashFlowIndirectLine,
     CashFlowIndirectReport, CashFlowIndirectSection, CashFlowReport, CashFlowSection,
-    CashReceiptsJournal, CashReceiptsJournalRow, ConsolidatedProfitLoss, ContactStatement,
-    CurrencyExposureReport, CurrencyExposureRow, DashboardKpis, EquityStatement,
-    EquityStatementLine, Form941Quarter, GrniReport, GrniRow, InventoryAgingReport,
-    InventoryAgingRow, JobCostingCostCodeRow, JobCostingReport, JobCostingRow, LedgerLine,
-    OrgProfitLoss, OutstandingQuoteRow, OutstandingQuotesReport, PLComparisonReport,
-    PayrollSummaryReport, PayrollSummaryRow, PoSpendingReport, PoSpendingRow, ProfitLossReport,
-    ProjectProfitabilityReport, ProjectProfitabilityRow, ReportLine, ReportSection,
-    SalesByCustomerReport, SalesByCustomerRow, SalesByProductReport, SalesByProductRow,
-    SalesTaxByNexusReport, SalesTaxByNexusRow, StatementLine, TaxSummaryLine, TaxSummaryReport,
-    TrackingPLReport, TrackingPLRow, TrialBalance, VatReturnLine, VatReturnReport,
-    VendorSpendReport, VendorSpendRow, W2Row,
+    CashReceiptsJournal, CashReceiptsJournalRow, ConsolidatedProfitLoss, ContactBalanceRow,
+    ContactStatement, CurrencyExposureReport, CurrencyExposureRow, CustomerBalancesReport,
+    DashboardKpis, EquityStatement, EquityStatementLine, Form941Quarter, GrniReport, GrniRow,
+    InventoryAgingReport, InventoryAgingRow, JobCostingCostCodeRow, JobCostingReport,
+    JobCostingRow, LedgerLine, OrgProfitLoss, OutstandingQuoteRow, OutstandingQuotesReport,
+    PLComparisonReport, PayrollSummaryReport, PayrollSummaryRow, PoSpendingReport, PoSpendingRow,
+    ProfitLossReport, ProjectProfitabilityReport, ProjectProfitabilityRow, ReportLine,
+    ReportSection, SalesByCustomerReport, SalesByCustomerRow, SalesByProductReport,
+    SalesByProductRow, SalesByRepReport, SalesByRepRow, SalesTaxByNexusReport, SalesTaxByNexusRow,
+    StatementLine, TaxSummaryLine, TaxSummaryReport, TrackingPLReport, TrackingPLRow, TrialBalance,
+    VatReturnLine, VatReturnReport, VendorBalancesReport, VendorSpendReport, VendorSpendRow, W2Row,
 };
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -3346,6 +3346,247 @@ impl ReportRepo {
             as_of,
             rows: aging_rows,
             grand_total_cost,
+        })
+    }
+
+    pub async fn customer_balances(
+        pool: &PgPool,
+        org_id: &str,
+        as_of: Date,
+    ) -> Result<CustomerBalancesReport, DbError> {
+        let org_uuid =
+            Uuid::parse_str(org_id).map_err(|_| DbError::Internal("invalid org_id UUID".into()))?;
+
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            contact_id: String,
+            contact_name: String,
+            total_invoiced: i64,
+            total_paid: i64,
+            currency: String,
+        }
+
+        let rows = sqlx::query_as::<_, Row>(
+            r#"
+            SELECT c.id::text AS contact_id,
+                   c.name     AS contact_name,
+                   COALESCE(SUM(
+                       il.quantity * il.unit_price
+                       + il.quantity * il.unit_price * COALESCE(il.tax_rate, 0) / 10000
+                   ), 0)::BIGINT AS total_invoiced,
+                   COALESCE((
+                       SELECT SUM(p.amount)
+                       FROM payments p
+                       WHERE p.organization_id = i.organization_id
+                         AND p.invoice_id = i.id
+                         AND p.status = 'recorded'
+                   ), 0)::BIGINT AS total_paid,
+                   COALESCE(i.currency, 'USD') AS currency
+            FROM invoices i
+            JOIN contacts c ON c.id::text = i.contact_id
+            JOIN invoice_lines il ON il.invoice_id = i.id
+            WHERE i.organization_id = $1
+              AND i.invoice_type = 'invoice'
+              AND i.status NOT IN ('draft', 'voided')
+              AND i.date <= $2
+            GROUP BY c.id, c.name, i.currency, i.organization_id, i.id
+            ORDER BY c.name
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(as_of)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let mut totals: std::collections::HashMap<String, (i64, i64, i64, String)> =
+            std::collections::HashMap::new();
+        for r in &rows {
+            let e = totals
+                .entry(r.contact_id.clone())
+                .or_insert((0, 0, 0, r.currency.clone()));
+            e.0 += r.total_invoiced;
+            e.1 += r.total_paid;
+            e.2 = e.0 - e.1;
+        }
+
+        let mut balance_rows: Vec<ContactBalanceRow> = totals
+            .into_iter()
+            .filter_map(|(cid, (inv, paid, bal, cur))| {
+                rows.iter()
+                    .find(|r| r.contact_id == cid)
+                    .map(|r| ContactBalanceRow {
+                        contact_id: cid,
+                        contact_name: r.contact_name.clone(),
+                        total_invoiced: inv,
+                        total_paid: paid,
+                        balance: bal,
+                        currency: cur,
+                    })
+            })
+            .collect();
+        balance_rows.sort_by(|a, b| a.contact_name.cmp(&b.contact_name));
+        let total_balance: i64 = balance_rows.iter().map(|r| r.balance).sum();
+
+        Ok(CustomerBalancesReport {
+            as_of,
+            rows: balance_rows,
+            total_balance,
+        })
+    }
+
+    pub async fn vendor_balances(
+        pool: &PgPool,
+        org_id: &str,
+        as_of: Date,
+    ) -> Result<VendorBalancesReport, DbError> {
+        let org_uuid =
+            Uuid::parse_str(org_id).map_err(|_| DbError::Internal("invalid org_id UUID".into()))?;
+
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            contact_id: String,
+            contact_name: String,
+            total_invoiced: i64,
+            total_paid: i64,
+            currency: String,
+        }
+
+        let rows = sqlx::query_as::<_, Row>(
+            r#"
+            SELECT COALESCE(vb.contact_id, 'unknown') AS contact_id,
+                   COALESCE(c.name, 'Unknown')       AS contact_name,
+                   COALESCE(SUM(
+                       bl.quantity * bl.unit_price
+                       + bl.quantity * bl.unit_price * COALESCE(bl.tax_rate, 0) / 10000
+                   ), 0)::BIGINT AS total_invoiced,
+                   COALESCE((
+                       SELECT SUM(bp.amount)
+                       FROM bill_payments bp
+                       WHERE bp.bill_id = vb.id AND bp.status = 'recorded'
+                   ), 0)::BIGINT AS total_paid,
+                   COALESCE(vb.currency_code, 'USD') AS currency
+            FROM vendor_bills vb
+            LEFT JOIN contacts c ON c.id::text = vb.contact_id
+            JOIN bill_lines bl ON bl.bill_id = vb.id
+            WHERE vb.organization_id = $1
+              AND vb.status NOT IN ('draft', 'voided')
+              AND vb.bill_date <= $2
+            GROUP BY vb.contact_id, c.name, vb.currency_code, vb.id
+            ORDER BY c.name
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(as_of)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let mut totals: std::collections::HashMap<String, (i64, i64, i64, String)> =
+            std::collections::HashMap::new();
+        for r in &rows {
+            let e = totals
+                .entry(r.contact_id.clone())
+                .or_insert((0, 0, 0, r.currency.clone()));
+            e.0 += r.total_invoiced;
+            e.1 += r.total_paid;
+            e.2 = e.0 - e.1;
+        }
+
+        let mut balance_rows: Vec<ContactBalanceRow> = totals
+            .into_iter()
+            .filter_map(|(cid, (inv, paid, bal, cur))| {
+                rows.iter()
+                    .find(|r| r.contact_id == cid)
+                    .map(|r| ContactBalanceRow {
+                        contact_id: cid,
+                        contact_name: r.contact_name.clone(),
+                        total_invoiced: inv,
+                        total_paid: paid,
+                        balance: bal,
+                        currency: cur,
+                    })
+            })
+            .collect();
+        balance_rows.sort_by(|a, b| a.contact_name.cmp(&b.contact_name));
+        let total_balance: i64 = balance_rows.iter().map(|r| r.balance).sum();
+
+        Ok(VendorBalancesReport {
+            as_of,
+            rows: balance_rows,
+            total_balance,
+        })
+    }
+
+    pub async fn sales_by_rep(
+        pool: &PgPool,
+        org_id: &str,
+        from: Date,
+        to: Date,
+    ) -> Result<SalesByRepReport, DbError> {
+        let org_uuid =
+            Uuid::parse_str(org_id).map_err(|_| DbError::Internal("invalid org_id UUID".into()))?;
+
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            salesperson_id: String,
+            salesperson_name: String,
+            invoice_count: i64,
+            total_sales: i64,
+            total_commission: i64,
+        }
+
+        let rows = sqlx::query_as::<_, Row>(
+            r#"
+            SELECT u.id::text AS salesperson_id,
+                   u.name     AS salesperson_name,
+                   COUNT(DISTINCT i.id) AS invoice_count,
+                   COALESCE(SUM(
+                       il.quantity * il.unit_price
+                       + il.quantity * il.unit_price * COALESCE(il.tax_rate, 0) / 10000
+                   ), 0)::BIGINT AS total_sales,
+                   COALESCE((
+                       SELECT SUM(sc.amount)
+                       FROM sales_commissions sc
+                       WHERE sc.salesperson_id = u.id
+                         AND sc.organization_id = i.organization_id
+                         AND sc.invoice_id = i.id
+                   ), 0)::BIGINT AS total_commission
+            FROM invoices i
+            JOIN users u ON u.id::text = i.created_by
+            JOIN invoice_lines il ON il.invoice_id = i.id
+            WHERE i.organization_id = $1
+              AND i.invoice_type = 'invoice'
+              AND i.status NOT IN ('draft', 'voided')
+              AND i.date BETWEEN $2 AND $3
+            GROUP BY u.id, u.name
+            ORDER BY total_sales DESC
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let grand_total: i64 = rows.iter().map(|r| r.total_sales).sum();
+        let rows = rows
+            .into_iter()
+            .map(|r| SalesByRepRow {
+                salesperson_id: r.salesperson_id,
+                salesperson_name: r.salesperson_name,
+                invoice_count: r.invoice_count,
+                total_sales: r.total_sales,
+                total_commission: r.total_commission,
+            })
+            .collect();
+
+        Ok(SalesByRepReport {
+            from_date: from,
+            to_date: to,
+            rows,
+            grand_total,
         })
     }
 }

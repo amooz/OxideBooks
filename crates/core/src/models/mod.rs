@@ -26,6 +26,7 @@ pub mod custom_field;
 pub mod deferred_charge;
 pub mod deferred_revenue;
 pub mod department;
+pub mod direct_deposit;
 pub mod doc_sequence;
 pub mod dunning;
 pub mod email;
@@ -151,6 +152,10 @@ pub use deferred_revenue::{
     CreateDeferredRevenueSchedule, DeferredRevenueEntry, DeferredRevenueSchedule, RecognizeRevenue,
 };
 pub use department::{CreateDepartment, Department, DepartmentPlReport, UpdateDepartment};
+pub use direct_deposit::{
+    CreateDirectDepositBatch, CreateDirectDepositEntry, DirectDepositBatch, DirectDepositEntry,
+    MarkBatchSent,
+};
 pub use doc_sequence::{DocSequence, ResetDocSequence, UpsertDocSequence};
 pub use dunning::{CreateDunningRule, DunningRule, InvoiceReminder, OverdueInvoice};
 pub use email::{EmailLog, EmailSettings, SendEmailRequest, UpsertEmailSettings};
@@ -273,16 +278,18 @@ pub use reports::{
     BalanceSheetComparisonSection, BalanceSheetReport, CashDisbursementsJournal,
     CashDisbursementsJournalRow, CashFlowForecast, CashFlowForecastBucket, CashFlowIndirectLine,
     CashFlowIndirectReport, CashFlowIndirectSection, CashFlowReport, CashFlowSection,
-    CashReceiptsJournal, CashReceiptsJournalRow, CurrencyExposureReport, CurrencyExposureRow,
-    DashboardKpis, EquityStatement, EquityStatementLine, Form941Quarter, GrniReport, GrniRow,
-    InventoryAgingReport, InventoryAgingRow, JobCostingCostCodeRow, JobCostingReport,
-    JobCostingRow, LedgerLine, OutstandingQuoteRow, OutstandingQuotesReport, PLComparisonReport,
-    PayrollSummaryReport, PayrollSummaryRow, PoSpendingReport, PoSpendingRow, ProfitLossReport,
+    CashReceiptsJournal, CashReceiptsJournalRow, ContactBalanceRow, CurrencyExposureReport,
+    CurrencyExposureRow, CustomerBalancesReport, DashboardKpis, EquityStatement,
+    EquityStatementLine, Form941Quarter, GrniReport, GrniRow, InventoryAgingReport,
+    InventoryAgingRow, JobCostingCostCodeRow, JobCostingReport, JobCostingRow, LedgerLine,
+    OutstandingQuoteRow, OutstandingQuotesReport, PLComparisonReport, PayrollSummaryReport,
+    PayrollSummaryRow, PoSpendingReport, PoSpendingRow, ProfitLossReport,
     ProjectProfitabilityReport, ProjectProfitabilityRow, RemittanceAdvice, RemittanceLine,
     ReportLine, ReportSection, SalesByCustomerReport, SalesByCustomerRow, SalesByProductReport,
-    SalesByProductRow, SalesTaxByNexusReport, SalesTaxByNexusRow, SearchHit, Summary1099,
-    TaxSummaryLine, TaxSummaryReport, TrackingPLReport, TrackingPLRow, TrialBalance, VatReturnLine,
-    VatReturnReport, Vendor1099Row, VendorSpendReport, VendorSpendRow, W2Row,
+    SalesByProductRow, SalesByRepReport, SalesByRepRow, SalesTaxByNexusReport, SalesTaxByNexusRow,
+    SearchHit, Summary1099, TaxSummaryLine, TaxSummaryReport, TrackingPLReport, TrackingPLRow,
+    TrialBalance, VatReturnLine, VatReturnReport, Vendor1099Row, VendorBalancesReport,
+    VendorSpendReport, VendorSpendRow, W2Row,
 };
 pub use retainer::{ApplyRetainer, CreateRetainer, DepositRetainer, Retainer, RetainerTransaction};
 pub use role::{AssignPermission, CreateRole, Permission, Role};
