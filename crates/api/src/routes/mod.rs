@@ -22,15 +22,16 @@ use crate::{
         deferred_charges, deferred_revenue, departments, doc_sequences, dunning, email,
         employee_bank_accounts, employee_loans, employees, exchange_rates, expense_categories,
         expense_policies, expense_reports, expenses, export, fixed_assets, fx, fx_revaluations,
-        grn, health, identity, import, intercompany, inventory, inventory_lots, invoice_templates,
-        invoices, landed_costs, late_fees, leave, mileage, notes, notifications, opening_balances,
-        organizations, payment_links, payment_plans, payment_terms, payments, payroll, payroll_tax,
-        payslips, prepaid_expenses, prepayments, price_lists, product_categories, products,
-        project_phases, projects, purchase_orders, purchase_requisitions, recurring,
-        recurring_journal_entries, reports, retainers, roles, sales_orders, sales_tax_nexus, scim,
-        sessions, stripe_webhook, subscriptions, tags, tax_groups, tax_periods, tax_rates,
-        time_entries, totp, tracking_categories, transactions, users, vendor_credits,
-        vendor_portal, warehouses, webhooks, work_orders,
+        grn, health, identity, import, intercompany, inventory, inventory_lots,
+        inventory_reorder_requests, invoice_templates, invoices, landed_costs, late_fees, leave,
+        mileage, notes, notifications, opening_balances, organizations, payment_links,
+        payment_plans, payment_terms, payments, payroll, payroll_tax, payslips, prepaid_expenses,
+        prepayments, price_lists, product_categories, products, project_phases, projects,
+        purchase_orders, purchase_requisitions, recurring, recurring_journal_entries, reports,
+        retainers, roles, sales_orders, sales_tax_nexus, scim, sessions, stripe_webhook,
+        subscriptions, tags, tax_groups, tax_periods, tax_rates, tax_rules, time_entries, totp,
+        tracking_categories, transactions, users, vendor_credits, vendor_portal, warehouses,
+        webhooks, work_orders,
     },
     middleware::require_auth,
     state::AppState,
@@ -1394,6 +1395,36 @@ pub fn build(state: AppState) -> Router {
             get(cost_codes::get_cost_code)
                 .patch(cost_codes::update_cost_code)
                 .delete(cost_codes::delete_cost_code),
+        )
+        // Inventory reorder requests
+        .route(
+            "/inventory-reorder-requests",
+            get(inventory_reorder_requests::list_reorder_requests)
+                .post(inventory_reorder_requests::create_reorder_request),
+        )
+        .route(
+            "/inventory-reorder-requests/:id",
+            get(inventory_reorder_requests::get_reorder_request),
+        )
+        .route(
+            "/inventory-reorder-requests/:id/submit",
+            post(inventory_reorder_requests::submit_reorder_request),
+        )
+        .route(
+            "/inventory-reorder-requests/:id/cancel",
+            post(inventory_reorder_requests::cancel_reorder_request),
+        )
+        // Tax rules (jurisdiction → tax rate mapping)
+        .route(
+            "/tax-rules",
+            get(tax_rules::list_tax_rules).post(tax_rules::create_tax_rule),
+        )
+        .route("/tax-rules/suggest", get(tax_rules::suggest_tax_rate))
+        .route(
+            "/tax-rules/:id",
+            get(tax_rules::get_tax_rule)
+                .patch(tax_rules::update_tax_rule)
+                .delete(tax_rules::delete_tax_rule),
         )
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
