@@ -933,6 +933,8 @@ pub fn build(state: AppState) -> Router {
         .route("/export/profit-loss", get(export::export_profit_loss))
         .route("/export/trial-balance", get(export::export_trial_balance))
         .route("/export/accounts", get(export::export_accounts))
+        .route("/export/w2-data", get(export::export_w2_data))
+        .route("/export/941-data", get(export::export_941_data))
         // Consolidated (multi-entity) reports
         .route(
             "/reports/consolidated",
@@ -1078,6 +1080,7 @@ pub fn build(state: AppState) -> Router {
         .route("/reports/spend-analysis", get(price_lists::spend_analysis))
         .route("/reports/job-costing", get(reports::job_costing))
         .route("/reports/vendor-spend", get(reports::vendor_spend))
+        .route("/reports/pl-comparison", get(reports::pl_comparison))
         // Employees
         .route(
             "/employees",

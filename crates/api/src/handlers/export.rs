@@ -249,3 +249,70 @@ pub async fn export_accounts(
     }
     Ok(csv_response("accounts.csv", finish(wtr)?))
 }
+
+#[derive(Deserialize)]
+pub struct YearQuery {
+    pub year: i32,
+}
+
+#[derive(Deserialize)]
+pub struct Year941Query {
+    pub year: i32,
+    pub quarter: i32,
+}
+
+/// GET /api/v1/export/w2-data?year=YYYY
+/// Returns a CSV with per-employee annual wages and federal income tax withheld.
+pub async fn export_w2_data(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<YearQuery>,
+) -> ApiResult<Response> {
+    if !claims.is_admin() {
+        return Err(ApiError::Forbidden);
+    }
+    let rows = ReportRepo::w2_data(&state.db, &claims.org, q.year).await?;
+    let mut wtr = csv::Writer::from_writer(vec![]);
+    wtr.write_record([
+        "user_id",
+        "employee_name",
+        "email",
+        "year",
+        "box1_wages",
+        "box2_federal_income_tax_withheld",
+        "other_deductions",
+        "net_pay",
+    ])
+    .map_err(csv_err)?;
+    for r in &rows {
+        wtr.write_record([
+            &r.user_id,
+            &r.employee_name,
+            &r.email,
+            &r.year.to_string(),
+            &r.wages.to_string(),
+            &r.federal_income_tax_withheld.to_string(),
+            &r.other_deductions.to_string(),
+            &r.net_pay.to_string(),
+        ])
+        .map_err(csv_err)?;
+    }
+    Ok(csv_response(
+        &format!("w2-data-{}.csv", q.year),
+        finish(wtr)?,
+    ))
+}
+
+/// GET /api/v1/export/941-data?year=YYYY&quarter=N
+/// Returns JSON with quarterly payroll tax aggregates for Form 941 preparation.
+pub async fn export_941_data(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<Year941Query>,
+) -> ApiResult<axum::Json<serde_json::Value>> {
+    if !claims.is_admin() {
+        return Err(ApiError::Forbidden);
+    }
+    let data = ReportRepo::form_941_data(&state.db, &claims.org, q.year, q.quarter).await?;
+    Ok(axum::Json(serde_json::json!({ "data": data })))
+}
