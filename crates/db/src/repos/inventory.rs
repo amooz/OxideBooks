@@ -15,6 +15,7 @@ struct ItemRow {
     product_id: Uuid,
     quantity_on_hand: i64,
     reorder_point: i64,
+    reorder_qty: i64,
     cost_per_unit: i64,
     valuation_method: String,
 }
@@ -39,6 +40,7 @@ struct LowStockRow {
     product_name: String,
     quantity_on_hand: i64,
     reorder_point: i64,
+    reorder_qty: i64,
 }
 
 fn item_from_row(r: ItemRow) -> InventoryItem {
@@ -48,6 +50,7 @@ fn item_from_row(r: ItemRow) -> InventoryItem {
         product_id: r.product_id.to_string(),
         quantity_on_hand: r.quantity_on_hand,
         reorder_point: r.reorder_point,
+        reorder_qty: r.reorder_qty,
         cost_per_unit: r.cost_per_unit,
         valuation_method: r.valuation_method,
     }
@@ -78,7 +81,7 @@ impl InventoryRepo {
     pub async fn list(pool: &PgPool, org_id: &str) -> Result<Vec<InventoryItem>, DbError> {
         let org_uuid = parse_uuid(org_id)?;
         let rows: Vec<ItemRow> = sqlx::query_as(
-            "SELECT id, organization_id, product_id, quantity_on_hand, reorder_point, \
+            "SELECT id, organization_id, product_id, quantity_on_hand, reorder_point, reorder_qty, \
              cost_per_unit, valuation_method \
              FROM inventory_items WHERE organization_id = $1",
         )
@@ -97,7 +100,7 @@ impl InventoryRepo {
         let org_uuid = parse_uuid(org_id)?;
         let prod_uuid = parse_uuid(product_id)?;
         let row: ItemRow = sqlx::query_as(
-            "SELECT id, organization_id, product_id, quantity_on_hand, reorder_point, \
+            "SELECT id, organization_id, product_id, quantity_on_hand, reorder_point, reorder_qty, \
              cost_per_unit, valuation_method \
              FROM inventory_items WHERE organization_id = $1 AND product_id = $2",
         )
@@ -119,10 +122,12 @@ impl InventoryRepo {
         let prod_uuid = parse_uuid(&input.product_id)?;
         sqlx::query(
             "INSERT INTO inventory_items \
-             (organization_id, product_id, quantity_on_hand, reorder_point, cost_per_unit, valuation_method) \
-             VALUES ($1,$2,$3,$4,$5,$6) \
+             (organization_id, product_id, quantity_on_hand, reorder_point, reorder_qty, \
+              cost_per_unit, valuation_method) \
+             VALUES ($1,$2,$3,$4,$5,$6,$7) \
              ON CONFLICT (organization_id, product_id) DO UPDATE SET \
              reorder_point = EXCLUDED.reorder_point, \
+             reorder_qty   = EXCLUDED.reorder_qty, \
              cost_per_unit = EXCLUDED.cost_per_unit, \
              valuation_method = EXCLUDED.valuation_method",
         )
@@ -130,6 +135,7 @@ impl InventoryRepo {
         .bind(prod_uuid)
         .bind(input.quantity_on_hand)
         .bind(input.reorder_point)
+        .bind(input.reorder_qty)
         .bind(input.cost_per_unit)
         .bind(&input.valuation_method)
         .execute(pool)
@@ -166,11 +172,13 @@ impl InventoryRepo {
         let n = sqlx::query(
             "UPDATE inventory_items SET \
              reorder_point    = COALESCE($1, reorder_point), \
-             cost_per_unit    = COALESCE($2, cost_per_unit), \
-             valuation_method = COALESCE($3, valuation_method) \
-             WHERE organization_id = $4 AND product_id = $5",
+             reorder_qty      = COALESCE($2, reorder_qty), \
+             cost_per_unit    = COALESCE($3, cost_per_unit), \
+             valuation_method = COALESCE($4, valuation_method) \
+             WHERE organization_id = $5 AND product_id = $6",
         )
         .bind(input.reorder_point)
+        .bind(input.reorder_qty)
         .bind(input.cost_per_unit)
         .bind(input.valuation_method)
         .bind(org_uuid)
@@ -256,10 +264,11 @@ impl InventoryRepo {
         let org_uuid = parse_uuid(org_id)?;
         let rows: Vec<LowStockRow> = sqlx::query_as(
             "SELECT i.product_id, p.name AS product_name, \
-             i.quantity_on_hand, i.reorder_point \
+             i.quantity_on_hand, i.reorder_point, i.reorder_qty \
              FROM inventory_items i \
              JOIN products p ON p.id = i.product_id \
              WHERE i.organization_id = $1 \
+               AND i.reorder_point > 0 \
                AND i.quantity_on_hand <= i.reorder_point \
              ORDER BY (i.quantity_on_hand - i.reorder_point) ASC",
         )
@@ -269,11 +278,16 @@ impl InventoryRepo {
         .map_err(map_sqlx_err)?;
         Ok(rows
             .into_iter()
-            .map(|r| LowStockItem {
-                product_id: r.product_id.to_string(),
-                product_name: r.product_name,
-                quantity_on_hand: r.quantity_on_hand,
-                reorder_point: r.reorder_point,
+            .map(|r| {
+                let shortfall = (r.reorder_point - r.quantity_on_hand).max(0);
+                LowStockItem {
+                    product_id: r.product_id.to_string(),
+                    product_name: r.product_name,
+                    quantity_on_hand: r.quantity_on_hand,
+                    reorder_point: r.reorder_point,
+                    reorder_qty: r.reorder_qty,
+                    shortfall,
+                }
             })
             .collect())
     }

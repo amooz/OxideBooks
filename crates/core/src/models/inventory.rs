@@ -8,6 +8,7 @@ pub struct InventoryItem {
     pub product_id: String,
     pub quantity_on_hand: i64,
     pub reorder_point: i64,
+    pub reorder_qty: i64,
     pub cost_per_unit: i64,
     pub valuation_method: String,
 }
@@ -19,6 +20,8 @@ pub struct CreateInventoryItem {
     pub quantity_on_hand: i64,
     #[serde(default)]
     pub reorder_point: i64,
+    #[serde(default)]
+    pub reorder_qty: i64,
     #[serde(default)]
     pub cost_per_unit: i64,
     #[serde(default = "default_valuation")]
@@ -32,6 +35,7 @@ fn default_valuation() -> String {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UpdateInventoryItem {
     pub reorder_point: Option<i64>,
+    pub reorder_qty: Option<i64>,
     pub cost_per_unit: Option<i64>,
     pub valuation_method: Option<String>,
 }
@@ -64,6 +68,8 @@ pub struct LowStockItem {
     pub product_name: String,
     pub quantity_on_hand: i64,
     pub reorder_point: i64,
+    pub reorder_qty: i64,
+    pub shortfall: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -104,6 +104,33 @@ impl BillRepo {
         Self::assemble(pool, org_uuid, row).await
     }
 
+    pub async fn list_for_contact(
+        pool: &PgPool,
+        org_id: &str,
+        contact_id: &str,
+    ) -> Result<Vec<VendorBill>, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let contact_uuid = parse_uuid(contact_id)?;
+        let rows: Vec<BillRow> = sqlx::query_as(
+            "SELECT id, contact_id, bill_date, due_date, reference, \
+             description, status, doc_number, currency_code, exchange_rate, \
+             created_at, updated_at \
+             FROM vendor_bills WHERE organization_id = $1 AND contact_id = $2 \
+             ORDER BY bill_date DESC, created_at DESC",
+        )
+        .bind(org_uuid)
+        .bind(contact_uuid)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let mut bills = Vec::with_capacity(rows.len());
+        for r in rows {
+            bills.push(Self::assemble(pool, org_uuid, r).await?);
+        }
+        Ok(bills)
+    }
+
     pub async fn create(
         pool: &PgPool,
         org_id: &str,

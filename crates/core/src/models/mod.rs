@@ -82,6 +82,7 @@ pub mod time_entry;
 pub mod tracking_category;
 pub mod transaction;
 pub mod vendor_credit;
+pub mod vendor_portal;
 pub mod warehouse;
 pub mod webhook;
 
@@ -257,6 +258,7 @@ pub use vendor_credit::{
     ApplyVendorCredit, CreateVendorCredit, CreateVendorCreditLine, VendorCredit,
     VendorCreditApplication, VendorCreditLine,
 };
+pub use vendor_portal::{CreateVendorPortalToken, VendorPortalToken};
 pub use warehouse::{
     CreateWarehouse, InventoryTransfer, TransferStock, UpdateWarehouse, Warehouse, WarehouseStock,
 };
