@@ -3,9 +3,12 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use oxidebooks_core::models::{CreateInvoice, InvoiceFilters, ProgressInvoiceInput, UpdateInvoice};
+use oxidebooks_core::models::{
+    CreateCashSale, CreateInvoice, CreatePayment, InvoiceFilters, InvoiceType,
+    ProgressInvoiceInput, UpdateInvoice,
+};
 use oxidebooks_core::pagination::PageParams;
-use oxidebooks_db::repos::{AuditRepo, InvoiceRepo};
+use oxidebooks_db::repos::{AuditRepo, InvoiceRepo, PaymentRepo};
 use serde::Deserialize;
 use tracing::info;
 
@@ -228,4 +231,47 @@ pub async fn expire_quote(
     }
     let invoice = InvoiceRepo::update_quote_status(&state.db, &claims.org, &id, "expired").await?;
     Ok(Json(serde_json::json!({ "data": invoice })))
+}
+
+/// POST /api/v1/invoices/cash-sale
+/// Creates an invoice and a full payment in one atomic step (no AR created).
+pub async fn create_cash_sale(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Json(body): Json<CreateCashSale>,
+) -> ApiResult<(StatusCode, Json<serde_json::Value>)> {
+    if !claims.has("invoices:write") {
+        return Err(ApiError::Forbidden);
+    }
+
+    let sale_date = body.date;
+    let payment_method = body.payment_method.clone();
+    let invoice_input = CreateInvoice {
+        contact_id: body.contact_id,
+        invoice_type: InvoiceType::Invoice,
+        date: sale_date,
+        due_date: sale_date,
+        currency: body.currency,
+        exchange_rate: body.exchange_rate,
+        notes: body.notes,
+        global_discount_pct: 0,
+        lines: body.lines,
+    };
+
+    let invoice = InvoiceRepo::create(&state.db, &claims.org, invoice_input).await?;
+
+    let payment_input = CreatePayment {
+        amount: invoice.total(),
+        payment_date: sale_date,
+        method: payment_method,
+        reference: None,
+        notes: None,
+    };
+
+    let payment = PaymentRepo::create(&state.db, &claims.org, &invoice.id, payment_input).await?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({ "data": { "invoice": invoice, "payment": payment } })),
+    ))
 }

@@ -41,6 +41,8 @@ pub struct RecurringSchedule {
     pub id: String,
     pub organization_id: String,
     pub template: serde_json::Value,
+    #[serde(default = "default_template_type")]
+    pub template_type: String,
     pub frequency: Frequency,
     pub interval_count: i32,
     #[serde(with = "crate::models::date_serde")]
@@ -60,6 +62,8 @@ pub struct RecurringSchedule {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateRecurringSchedule {
     pub template: serde_json::Value,
+    #[serde(default = "default_template_type")]
+    pub template_type: String,
     pub frequency: Frequency,
     #[serde(default = "one")]
     pub interval_count: i32,
@@ -73,6 +77,10 @@ pub struct CreateRecurringSchedule {
 
 fn one() -> i32 {
     1
+}
+
+fn default_template_type() -> String {
+    "invoice".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
