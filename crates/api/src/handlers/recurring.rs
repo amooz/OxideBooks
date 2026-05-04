@@ -4,10 +4,10 @@ use axum::{
     Json,
 };
 use oxidebooks_core::models::{
-    CreateRecurringSchedule, Frequency, InvoiceStatus, RecurringSchedule, UpdateInvoice,
-    UpdateRecurringSchedule,
+    CreateRecurringSchedule, CreateVendorBill, Frequency, InvoiceStatus, RecurringSchedule,
+    UpdateInvoice, UpdateRecurringSchedule,
 };
-use oxidebooks_db::repos::{InvoiceRepo, RecurringRepo};
+use oxidebooks_db::repos::{BillRepo, InvoiceRepo, RecurringRepo};
 use time::Date;
 
 use crate::{
@@ -49,30 +49,39 @@ async fn run_schedule_inner(
     org_id: &str,
     schedule: &RecurringSchedule,
 ) -> ApiResult<String> {
-    let mut input =
-        serde_json::from_value::<oxidebooks_core::models::CreateInvoice>(schedule.template.clone())
-            .map_err(|e| ApiError::BadRequest(format!("invalid template: {e}")))?;
-
     let today = time::OffsetDateTime::now_utc().date();
-    input.date = today;
 
-    let invoice = InvoiceRepo::create(&state.db, org_id, input).await?;
-
-    if schedule.auto_send {
-        let _ = InvoiceRepo::update(
-            &state.db,
-            org_id,
-            &invoice.id,
-            UpdateInvoice {
-                status: Some(InvoiceStatus::Sent),
-                due_date: None,
-                expiry_date: None,
-                notes: None,
-                global_discount_pct: None,
-            },
+    let generated_id = if schedule.template_type == "bill" {
+        let mut input = serde_json::from_value::<CreateVendorBill>(schedule.template.clone())
+            .map_err(|e| ApiError::BadRequest(format!("invalid bill template: {e}")))?;
+        input.bill_date = today;
+        let bill = BillRepo::create(&state.db, org_id, input).await?;
+        bill.id
+    } else {
+        let mut input = serde_json::from_value::<oxidebooks_core::models::CreateInvoice>(
+            schedule.template.clone(),
         )
-        .await;
-    }
+        .map_err(|e| ApiError::BadRequest(format!("invalid template: {e}")))?;
+        input.date = today;
+        let invoice = InvoiceRepo::create(&state.db, org_id, input).await?;
+
+        if schedule.auto_send {
+            let _ = InvoiceRepo::update(
+                &state.db,
+                org_id,
+                &invoice.id,
+                UpdateInvoice {
+                    status: Some(InvoiceStatus::Sent),
+                    due_date: None,
+                    expiry_date: None,
+                    notes: None,
+                    global_discount_pct: None,
+                },
+            )
+            .await;
+        }
+        invoice.id
+    };
 
     // Increment occurrences counter and check if we've hit the max.
     let new_count = RecurringRepo::increment_occurrences(&state.db, &schedule.id)
@@ -120,7 +129,7 @@ async fn run_schedule_inner(
         }
     }
 
-    Ok(invoice.id)
+    Ok(generated_id)
 }
 
 /// GET /api/v1/recurring-schedules

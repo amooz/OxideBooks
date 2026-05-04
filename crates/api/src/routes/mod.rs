@@ -197,6 +197,7 @@ pub fn build(state: AppState) -> Router {
             "/invoices",
             get(invoices::list_invoices).post(invoices::create_invoice),
         )
+        .route("/invoices/cash-sale", post(invoices::create_cash_sale))
         .route(
             "/invoices/:id",
             get(invoices::get_invoice).patch(invoices::update_invoice),

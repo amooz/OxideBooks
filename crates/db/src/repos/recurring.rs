@@ -13,6 +13,7 @@ struct ScheduleRow {
     id: Uuid,
     organization_id: Uuid,
     template: serde_json::Value,
+    template_type: String,
     frequency: String,
     interval_count: i32,
     next_due_date: Date,
@@ -30,6 +31,7 @@ fn from_row(r: ScheduleRow) -> RecurringSchedule {
         id: r.id.to_string(),
         organization_id: r.organization_id.to_string(),
         template: r.template,
+        template_type: r.template_type,
         frequency: Frequency::from_str(&r.frequency).unwrap_or(Frequency::Monthly),
         interval_count: r.interval_count,
         next_due_date: r.next_due_date,
@@ -43,9 +45,9 @@ fn from_row(r: ScheduleRow) -> RecurringSchedule {
     }
 }
 
-const COLS: &str = "id, organization_id, template, frequency, interval_count, next_due_date, \
-                    end_date, auto_send, is_active, max_occurrences, occurrences_count, \
-                    created_at, updated_at";
+const COLS: &str = "id, organization_id, template, template_type, frequency, interval_count, \
+                    next_due_date, end_date, auto_send, is_active, max_occurrences, \
+                    occurrences_count, created_at, updated_at";
 
 pub struct RecurringRepo;
 
@@ -90,11 +92,13 @@ impl RecurringRepo {
         let org_uuid = parse_uuid(org_id)?;
         let id: Uuid = sqlx::query_scalar(
             "INSERT INTO recurring_schedules \
-             (organization_id, template, frequency, interval_count, next_due_date, end_date, auto_send) \
-             VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id",
+             (organization_id, template, template_type, frequency, interval_count, \
+              next_due_date, end_date, auto_send) \
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id",
         )
         .bind(org_uuid)
         .bind(&input.template)
+        .bind(&input.template_type)
         .bind(input.frequency.to_string())
         .bind(input.interval_count)
         .bind(input.next_due_date)

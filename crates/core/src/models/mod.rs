@@ -8,6 +8,7 @@ pub mod bank_rule;
 pub mod batch_payment;
 pub mod bill;
 pub mod budget;
+pub mod cash_sale;
 pub mod client_portal;
 pub mod closed_period;
 pub mod consolidated;
@@ -95,6 +96,7 @@ pub use budget::{
     Budget, BudgetLine, BudgetVsActualLine, BudgetVsActualReport, CreateBudget, UpdateBudget,
     UpsertBudgetLine,
 };
+pub use cash_sale::CreateCashSale;
 pub use client_portal::{ClientPortalToken, CreateClientPortalToken};
 pub use closed_period::{ClosedPeriod, CreateClosedPeriod};
 pub use consolidated::{ConsolidatedProfitLoss, OrgProfitLoss};
