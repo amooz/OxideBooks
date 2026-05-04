@@ -527,6 +527,51 @@ pub struct RemittanceAdvice {
     pub lines: Vec<RemittanceLine>,
 }
 
+// ── Outstanding Quotes ────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OutstandingQuoteRow {
+    pub invoice_id: String,
+    pub doc_number: Option<String>,
+    pub contact_id: String,
+    pub contact_name: Option<String>,
+    #[serde(with = "crate::models::date_serde")]
+    pub quote_date: Date,
+    #[serde(with = "crate::models::opt_date_serde")]
+    pub expiry_date: Option<Date>,
+    pub status: String,
+    pub total: MinorUnits,
+    pub days_open: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OutstandingQuotesReport {
+    pub as_of: Date,
+    pub rows: Vec<OutstandingQuoteRow>,
+    pub total_value: MinorUnits,
+}
+
+// ── PO Spending by Vendor ─────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PoSpendingRow {
+    pub contact_id: String,
+    pub vendor_name: Option<String>,
+    pub po_count: i64,
+    pub total_ordered: MinorUnits,
+    pub total_received: MinorUnits,
+    pub total_billed: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PoSpendingReport {
+    pub from: Date,
+    pub to: Date,
+    pub rows: Vec<PoSpendingRow>,
+    pub total_ordered: MinorUnits,
+    pub total_billed: MinorUnits,
+}
+
 // ── Global Search ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

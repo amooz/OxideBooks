@@ -473,3 +473,45 @@ pub async fn sales_by_customer(
     let report = ReportRepo::sales_by_customer(&state.db, &claims.org, from, to).await?;
     Ok(Json(serde_json::json!({ "data": report })))
 }
+
+#[derive(Deserialize)]
+pub struct OptAsOfQuery {
+    pub as_of: Option<String>,
+}
+
+/// GET /api/v1/reports/outstanding-quotes?as_of=YYYY-MM-DD
+pub async fn outstanding_quotes(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<OptAsOfQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let as_of = match q.as_of.as_deref() {
+        Some(s) => parse_date(s)?,
+        None => OffsetDateTime::now_utc().date(),
+    };
+    let report = ReportRepo::outstanding_quotes(&state.db, &claims.org, as_of).await?;
+    Ok(Json(serde_json::json!({ "data": report })))
+}
+
+/// GET /api/v1/reports/po-spending?from=YYYY-MM-DD&to=YYYY-MM-DD
+pub async fn po_spending(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<DateRangeQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let from = parse_date(&q.from)?;
+    let to = parse_date(&q.to)?;
+    if from > to {
+        return Err(ApiError::BadRequest(
+            "'from' must be on or before 'to'".into(),
+        ));
+    }
+    let report = ReportRepo::po_spending(&state.db, &claims.org, from, to).await?;
+    Ok(Json(serde_json::json!({ "data": report })))
+}

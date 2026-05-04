@@ -3,8 +3,9 @@ use oxidebooks_core::models::{
     ApAgingDetailRow, ArAgingDetailReport, ArAgingDetailRow, BalanceSheetReport, CashFlowForecast,
     CashFlowForecastBucket, CashFlowReport, CashFlowSection, ConsolidatedProfitLoss,
     ContactStatement, DashboardKpis, Form941Quarter, GrniReport, GrniRow, JobCostingCostCodeRow,
-    JobCostingReport, JobCostingRow, LedgerLine, OrgProfitLoss, PLComparisonReport,
-    PayrollSummaryReport, PayrollSummaryRow, ProfitLossReport, ProjectProfitabilityReport,
+    JobCostingReport, JobCostingRow, LedgerLine, OrgProfitLoss, OutstandingQuoteRow,
+    OutstandingQuotesReport, PLComparisonReport, PayrollSummaryReport, PayrollSummaryRow,
+    PoSpendingReport, PoSpendingRow, ProfitLossReport, ProjectProfitabilityReport,
     ProjectProfitabilityRow, ReportLine, ReportSection, SalesByCustomerReport, SalesByCustomerRow,
     SalesByProductReport, SalesByProductRow, StatementLine, TaxSummaryLine, TaxSummaryReport,
     TrialBalance, VendorSpendReport, VendorSpendRow, W2Row,
@@ -2283,6 +2284,156 @@ impl ReportRepo {
             rows: customer_rows,
             total_invoiced,
             total_paid,
+        })
+    }
+
+    pub async fn outstanding_quotes(
+        pool: &PgPool,
+        org_id: &str,
+        as_of: Date,
+    ) -> Result<OutstandingQuotesReport, DbError> {
+        let org_uuid =
+            Uuid::from_str(org_id).map_err(|_| DbError::Conflict("bad org id".into()))?;
+
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            invoice_id: Uuid,
+            doc_number: Option<String>,
+            contact_id: String,
+            contact_name: Option<String>,
+            quote_date: time::Date,
+            expiry_date: Option<time::Date>,
+            status: String,
+            total: i64,
+        }
+
+        let rows = sqlx::query_as::<_, Row>(
+            "SELECT i.id AS invoice_id, i.doc_number, i.contact_id,
+                    c.name AS contact_name, i.date AS quote_date,
+                    i.due_date AS expiry_date, i.status,
+                    COALESCE(SUM(
+                        il.quantity * il.unit_price
+                        * (100 - il.discount_pct) / 100
+                        * (100 + il.tax_rate) / 100
+                    ), 0) AS total
+             FROM invoices i
+             LEFT JOIN contacts c ON c.id::text = i.contact_id
+                 AND c.organization_id = i.organization_id
+             LEFT JOIN invoice_lines il ON il.invoice_id = i.id
+             WHERE i.organization_id = $1
+               AND i.invoice_type = 'quote'
+               AND i.status NOT IN ('declined','expired','converted')
+               AND i.date <= $2
+             GROUP BY i.id, i.doc_number, i.contact_id, c.name,
+                      i.date, i.due_date, i.status
+             ORDER BY i.date",
+        )
+        .bind(org_uuid)
+        .bind(as_of)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let quote_rows: Vec<OutstandingQuoteRow> = rows
+            .iter()
+            .map(|r| {
+                let days_open = (as_of - r.quote_date).whole_days().max(0);
+                OutstandingQuoteRow {
+                    invoice_id: r.invoice_id.to_string(),
+                    doc_number: r.doc_number.clone(),
+                    contact_id: r.contact_id.clone(),
+                    contact_name: r.contact_name.clone(),
+                    quote_date: r.quote_date,
+                    expiry_date: r.expiry_date,
+                    status: r.status.clone(),
+                    total: r.total,
+                    days_open,
+                }
+            })
+            .collect();
+
+        let total_value = quote_rows.iter().map(|r| r.total).sum();
+        Ok(OutstandingQuotesReport {
+            as_of,
+            rows: quote_rows,
+            total_value,
+        })
+    }
+
+    pub async fn po_spending(
+        pool: &PgPool,
+        org_id: &str,
+        from: Date,
+        to: Date,
+    ) -> Result<PoSpendingReport, DbError> {
+        let org_uuid =
+            Uuid::from_str(org_id).map_err(|_| DbError::Conflict("bad org id".into()))?;
+
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            contact_id: String,
+            vendor_name: Option<String>,
+            po_count: i64,
+            total_ordered: i64,
+            total_received: i64,
+            total_billed: i64,
+        }
+
+        let rows = sqlx::query_as::<_, Row>(
+            "SELECT po.contact_id,
+                    c.name AS vendor_name,
+                    COUNT(DISTINCT po.id) AS po_count,
+                    COALESCE(SUM(
+                        pol.quantity * pol.unit_price
+                    ), 0) AS total_ordered,
+                    COALESCE(SUM(
+                        pol.quantity_received * pol.unit_price
+                    ), 0) AS total_received,
+                    COALESCE(SUM(
+                        CASE WHEN vb.id IS NOT NULL
+                             THEN pol.quantity_received * pol.unit_price
+                             ELSE 0 END
+                    ), 0) AS total_billed
+             FROM purchase_orders po
+             JOIN purchase_order_lines pol ON pol.purchase_order_id = po.id
+             LEFT JOIN contacts c ON c.id::text = po.contact_id
+                 AND c.organization_id = po.organization_id
+             LEFT JOIN vendor_bills vb ON vb.purchase_order_id = po.id
+                 AND vb.organization_id = po.organization_id
+                 AND vb.status NOT IN ('draft','voided')
+             WHERE po.organization_id = $1
+               AND po.order_date >= $2
+               AND po.order_date <= $3
+             GROUP BY po.contact_id, c.name
+             ORDER BY total_ordered DESC",
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let spend_rows: Vec<PoSpendingRow> = rows
+            .into_iter()
+            .map(|r| PoSpendingRow {
+                contact_id: r.contact_id,
+                vendor_name: r.vendor_name,
+                po_count: r.po_count,
+                total_ordered: r.total_ordered,
+                total_received: r.total_received,
+                total_billed: r.total_billed,
+            })
+            .collect();
+
+        let total_ordered = spend_rows.iter().map(|r| r.total_ordered).sum();
+        let total_billed = spend_rows.iter().map(|r| r.total_billed).sum();
+        Ok(PoSpendingReport {
+            from,
+            to,
+            rows: spend_rows,
+            total_ordered,
+            total_billed,
         })
     }
 }

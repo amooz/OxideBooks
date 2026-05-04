@@ -21,8 +21,8 @@ use crate::{
         contact_groups, contacts, contractor_tax_info, cost_codes, credit_notes, custom_fields,
         deferred_charges, deferred_revenue, departments, doc_sequences, dunning, email,
         employee_bank_accounts, employee_loans, employees, exchange_rates, expense_categories,
-        expense_policies, expense_reports, expenses, export, fixed_assets, fx, fx_revaluations,
-        grn, health, identity, import, intercompany, inventory, inventory_lots,
+        expense_claims, expense_policies, expense_reports, expenses, export, fixed_assets, fx,
+        fx_revaluations, grn, health, identity, import, intercompany, inventory, inventory_lots,
         inventory_reorder_requests, inventory_stocktakes, invoice_templates, invoices,
         landed_costs, late_fees, leave, mileage, notes, notifications, opening_balances,
         organizations, payment_links, payment_plans, payment_terms, payments, payroll, payroll_tax,
@@ -600,6 +600,31 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/expense-reports/:id/reimburse",
             post(expense_reports::reimburse_expense_report),
+        )
+        // Expense claims
+        .route(
+            "/expense-claims",
+            get(expense_claims::list_expense_claims).post(expense_claims::create_expense_claim),
+        )
+        .route(
+            "/expense-claims/:id",
+            get(expense_claims::get_expense_claim).patch(expense_claims::update_expense_claim),
+        )
+        .route(
+            "/expense-claims/:id/submit",
+            post(expense_claims::submit_expense_claim),
+        )
+        .route(
+            "/expense-claims/:id/approve",
+            post(expense_claims::approve_expense_claim),
+        )
+        .route(
+            "/expense-claims/:id/reject",
+            post(expense_claims::reject_expense_claim),
+        )
+        .route(
+            "/expense-claims/:id/reimburse",
+            post(expense_claims::reimburse_expense_claim),
         )
         // Fixed assets
         .route(
@@ -1473,6 +1498,11 @@ pub fn build(state: AppState) -> Router {
             "/reports/sales-by-customer",
             get(reports::sales_by_customer),
         )
+        .route(
+            "/reports/outstanding-quotes",
+            get(reports::outstanding_quotes),
+        )
+        .route("/reports/po-spending", get(reports::po_spending))
         // Inventory stocktakes
         .route(
             "/inventory-stocktakes",

@@ -32,6 +32,7 @@ pub mod employee;
 pub mod employee_bank_account;
 pub mod employee_loan;
 pub mod expense;
+pub mod expense_claim;
 pub mod expense_policy;
 pub mod expense_report;
 pub mod fixed_asset;
@@ -159,6 +160,10 @@ pub use expense::{
     BillableExpenseRef, CreateExpense, CreateExpenseCategory, Expense, ExpenseCategory,
     ExpenseStatus, UpdateExpense, UpdateExpenseCategory,
 };
+pub use expense_claim::{
+    CreateExpenseClaim, CreateExpenseClaimLine, ExpenseClaim, ExpenseClaimLine, ReviewExpenseClaim,
+    UpdateExpenseClaim,
+};
 pub use expense_policy::{ContactStatement, ExpensePolicy, StatementLine, UpsertExpensePolicy};
 pub use expense_report::{
     AddExpenseToReport, CreateExpenseReport, ExpenseReport, UpdateExpenseReport,
@@ -251,7 +256,8 @@ pub use reports::{
     ArAgingDetailReport, ArAgingDetailRow, BalanceSheetReport, CashFlowForecast,
     CashFlowForecastBucket, CashFlowReport, CashFlowSection, DashboardKpis, Form941Quarter,
     GrniReport, GrniRow, JobCostingCostCodeRow, JobCostingReport, JobCostingRow, LedgerLine,
-    PLComparisonReport, PayrollSummaryReport, PayrollSummaryRow, ProfitLossReport,
+    OutstandingQuoteRow, OutstandingQuotesReport, PLComparisonReport, PayrollSummaryReport,
+    PayrollSummaryRow, PoSpendingReport, PoSpendingRow, ProfitLossReport,
     ProjectProfitabilityReport, ProjectProfitabilityRow, RemittanceAdvice, RemittanceLine,
     ReportLine, ReportSection, SalesByCustomerReport, SalesByCustomerRow, SalesByProductReport,
     SalesByProductRow, SearchHit, Summary1099, TaxSummaryLine, TaxSummaryReport, TrialBalance,
