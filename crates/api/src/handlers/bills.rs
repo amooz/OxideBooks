@@ -149,6 +149,7 @@ pub async fn create_spend_money(
         currency_code: body.currency_code,
         exchange_rate: body.exchange_rate,
         lines: body.lines,
+        purchase_order_id: None,
     };
 
     let bill = BillRepo::create(&state.db, &claims.org, bill_input).await?;

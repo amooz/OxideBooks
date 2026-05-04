@@ -138,6 +138,11 @@ impl BillRepo {
     ) -> Result<VendorBill, DbError> {
         let org_uuid = parse_uuid(org_id)?;
         let contact_uuid = input.contact_id.as_deref().map(parse_uuid).transpose()?;
+        let po_uuid = input
+            .purchase_order_id
+            .as_deref()
+            .map(parse_uuid)
+            .transpose()?;
         let id = Uuid::new_v4();
 
         let mut tx = pool.begin().await.map_err(map_sqlx_err)?;
@@ -145,8 +150,8 @@ impl BillRepo {
         sqlx::query(
             "INSERT INTO vendor_bills \
              (id, organization_id, contact_id, bill_date, due_date, reference, description, \
-              currency_code, exchange_rate) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+              currency_code, exchange_rate, purchase_order_id) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
         )
         .bind(id)
         .bind(org_uuid)
@@ -157,6 +162,7 @@ impl BillRepo {
         .bind(&input.description)
         .bind(&input.currency_code)
         .bind(input.exchange_rate)
+        .bind(po_uuid)
         .execute(&mut *tx)
         .await
         .map_err(map_sqlx_err)?;

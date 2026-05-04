@@ -23,15 +23,15 @@ use crate::{
         employee_bank_accounts, employee_loans, employees, exchange_rates, expense_categories,
         expense_policies, expense_reports, expenses, export, fixed_assets, fx, fx_revaluations,
         grn, health, identity, import, intercompany, inventory, inventory_lots,
-        inventory_reorder_requests, invoice_templates, invoices, landed_costs, late_fees, leave,
-        mileage, notes, notifications, opening_balances, organizations, payment_links,
-        payment_plans, payment_terms, payments, payroll, payroll_tax, payslips, prepaid_expenses,
-        prepayments, price_lists, product_categories, products, project_phases, projects,
-        purchase_orders, purchase_requisitions, recurring, recurring_journal_entries, reports,
-        retainers, roles, sales_orders, sales_tax_nexus, scim, service_territories, sessions,
-        stripe_webhook, subscriptions, tags, tax_groups, tax_periods, tax_rates, tax_rules,
-        time_entries, totp, tracking_categories, transactions, users, vendor_credits,
-        vendor_portal, warehouses, webhooks, work_orders,
+        inventory_reorder_requests, inventory_stocktakes, invoice_templates, invoices,
+        landed_costs, late_fees, leave, mileage, notes, notifications, opening_balances,
+        organizations, payment_links, payment_plans, payment_terms, payments, payroll, payroll_tax,
+        payslips, prepaid_expenses, prepayments, price_lists, product_categories, products,
+        project_phases, projects, purchase_orders, purchase_requisitions, recurring,
+        recurring_journal_entries, reports, retainers, roles, sales_orders, sales_tax_nexus, scim,
+        service_territories, sessions, stripe_webhook, subscriptions, tags, tax_groups,
+        tax_periods, tax_rates, tax_rules, time_entries, totp, tracking_categories, transactions,
+        users, vendor_credits, vendor_portal, warehouses, webhooks, work_orders,
     },
     middleware::require_auth,
     state::AppState,
@@ -1448,6 +1448,29 @@ pub fn build(state: AppState) -> Router {
         )
         // Payroll summary report
         .route("/reports/payroll-summary", get(reports::payroll_summary))
+        // GRNI accrual report
+        .route("/reports/grni-accrual", get(reports::grni_accrual))
+        // Inventory stocktakes
+        .route(
+            "/inventory-stocktakes",
+            get(inventory_stocktakes::list_stocktakes).post(inventory_stocktakes::create_stocktake),
+        )
+        .route(
+            "/inventory-stocktakes/:id",
+            get(inventory_stocktakes::get_stocktake),
+        )
+        .route(
+            "/inventory-stocktakes/:id/lines/:line_id",
+            axum::routing::patch(inventory_stocktakes::update_stocktake_line),
+        )
+        .route(
+            "/inventory-stocktakes/:id/submit",
+            post(inventory_stocktakes::submit_stocktake),
+        )
+        .route(
+            "/inventory-stocktakes/:id/post",
+            post(inventory_stocktakes::post_stocktake),
+        )
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     // SCIM 2.0 endpoints (separate bearer-token auth, not JWT)

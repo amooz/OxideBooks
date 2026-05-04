@@ -354,6 +354,31 @@ pub struct PayrollSummaryReport {
     pub total_net: MinorUnits,
 }
 
+// ── GRNI (Goods Received Not Invoiced) accrual ───────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GrniRow {
+    pub po_id: String,
+    pub po_number: String,
+    pub contact_id: String,
+    pub contact_name: String,
+    pub grn_id: String,
+    #[serde(with = "crate::models::date_serde")]
+    pub receipt_date: Date,
+    pub product_description: String,
+    pub quantity_received: i64,
+    pub unit_cost: MinorUnits,
+    pub accrual_amount: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GrniReport {
+    #[serde(with = "crate::models::date_serde")]
+    pub as_of: Date,
+    pub rows: Vec<GrniRow>,
+    pub total_accrual: MinorUnits,
+}
+
 // ── W-2 / 941 payroll tax exports ────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -44,6 +44,7 @@ pub mod intercompany;
 pub mod inventory;
 pub mod inventory_lot;
 pub mod inventory_reorder_request;
+pub mod inventory_stocktake;
 pub mod invoice;
 pub mod invoice_template;
 pub mod landed_cost;
@@ -184,6 +185,9 @@ pub use inventory_lot::{CreateInventoryLot, InventoryLot, UpdateInventoryLot};
 pub use inventory_reorder_request::{
     CreateInventoryReorderRequest, InventoryReorderRequest, SubmitInventoryReorderRequest,
 };
+pub use inventory_stocktake::{
+    CreateInventoryStocktake, InventoryStocktake, InventoryStocktakeLine, UpdateStocktakeLine,
+};
 pub use invoice::{
     CreateInvoice, CreateInvoiceLine, Invoice, InvoiceFilters, InvoiceLine, InvoiceStatus,
     InvoiceType, UpdateInvoice,
@@ -243,11 +247,11 @@ pub use recurring_journal_entry::{
 pub use reports::{
     AccountBalance, AccountLedger, AgingReport, AgingRow, BalanceSheetReport, CashFlowForecast,
     CashFlowForecastBucket, CashFlowReport, CashFlowSection, DashboardKpis, Form941Quarter,
-    JobCostingCostCodeRow, JobCostingReport, JobCostingRow, LedgerLine, PLComparisonReport,
-    PayrollSummaryReport, PayrollSummaryRow, ProfitLossReport, ProjectProfitabilityReport,
-    ProjectProfitabilityRow, ReportLine, ReportSection, SalesByProductReport, SalesByProductRow,
-    SearchHit, Summary1099, TaxSummaryLine, TaxSummaryReport, TrialBalance, Vendor1099Row,
-    VendorSpendReport, VendorSpendRow, W2Row,
+    GrniReport, GrniRow, JobCostingCostCodeRow, JobCostingReport, JobCostingRow, LedgerLine,
+    PLComparisonReport, PayrollSummaryReport, PayrollSummaryRow, ProfitLossReport,
+    ProjectProfitabilityReport, ProjectProfitabilityRow, ReportLine, ReportSection,
+    SalesByProductReport, SalesByProductRow, SearchHit, Summary1099, TaxSummaryLine,
+    TaxSummaryReport, TrialBalance, Vendor1099Row, VendorSpendReport, VendorSpendRow, W2Row,
 };
 pub use retainer::{ApplyRetainer, CreateRetainer, DepositRetainer, Retainer, RetainerTransaction};
 pub use role::{AssignPermission, CreateRole, Permission, Role};

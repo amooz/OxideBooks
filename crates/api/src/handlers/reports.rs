@@ -403,3 +403,25 @@ pub async fn pl_comparison(
     .await?;
     Ok(Json(serde_json::json!({ "data": report })))
 }
+
+#[derive(Deserialize)]
+pub struct GrniQuery {
+    pub as_of: Option<String>,
+}
+
+/// GET /api/v1/reports/grni-accrual
+pub async fn grni_accrual(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<GrniQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let as_of = match q.as_of.as_deref() {
+        Some(s) => parse_date(s)?,
+        None => OffsetDateTime::now_utc().date(),
+    };
+    let report = ReportRepo::grni_accrual(&state.db, &claims.org, as_of).await?;
+    Ok(Json(serde_json::json!({ "data": report })))
+}
