@@ -428,4 +428,50 @@ impl SubscriptionRepo {
 
         Self::get_by_id(pool, org_id, id).await
     }
+
+    /// Create a draft invoice for the subscription's current billing period,
+    /// then advance the period (same as `renew`).
+    pub async fn bill(
+        pool: &PgPool,
+        org_id: &str,
+        id: &str,
+    ) -> Result<oxidebooks_core::models::Invoice, DbError> {
+        use oxidebooks_core::models::{CreateInvoice, CreateInvoiceLine, InvoiceType};
+
+        let sub = Self::get_by_id(pool, org_id, id).await?;
+        if !matches!(sub.status.as_str(), "active" | "trialing") {
+            return Err(DbError::Conflict(
+                "subscription must be active or trialing to bill".into(),
+            ));
+        }
+
+        let description = format!(
+            "{} \u{2014} {} to {}",
+            sub.plan_name, sub.current_period_start, sub.current_period_end,
+        );
+
+        let input = CreateInvoice {
+            contact_id: sub.contact_id.clone(),
+            invoice_type: InvoiceType::Invoice,
+            date: time::OffsetDateTime::now_utc().date(),
+            due_date: sub.current_period_end,
+            currency: None,
+            exchange_rate: None,
+            notes: None,
+            global_discount_pct: 0,
+            lines: vec![CreateInvoiceLine {
+                description,
+                account_id: None,
+                product_id: None,
+                quantity: sub.quantity as i64 * 100,
+                unit_price: sub.unit_price,
+                tax_rate: None,
+                discount_pct: 0,
+            }],
+        };
+
+        let invoice = super::invoices::InvoiceRepo::create(pool, org_id, input).await?;
+        Self::renew(pool, org_id, id).await?;
+        Ok(invoice)
+    }
 }

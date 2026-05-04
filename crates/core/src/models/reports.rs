@@ -325,6 +325,35 @@ pub struct VendorSpendReport {
     pub total_outstanding: MinorUnits,
 }
 
+// ── Payroll Summary ───────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PayrollSummaryRow {
+    pub run_id: String,
+    #[serde(with = "crate::models::date_serde")]
+    pub period_start: Date,
+    #[serde(with = "crate::models::date_serde")]
+    pub period_end: Date,
+    pub status: String,
+    pub employee_count: i64,
+    pub total_gross: MinorUnits,
+    pub total_tax: MinorUnits,
+    pub total_deductions: MinorUnits,
+    pub total_net: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PayrollSummaryReport {
+    #[serde(with = "crate::models::date_serde")]
+    pub from: Date,
+    #[serde(with = "crate::models::date_serde")]
+    pub to: Date,
+    pub rows: Vec<PayrollSummaryRow>,
+    pub total_gross: MinorUnits,
+    pub total_tax: MinorUnits,
+    pub total_net: MinorUnits,
+}
+
 // ── Global Search ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
