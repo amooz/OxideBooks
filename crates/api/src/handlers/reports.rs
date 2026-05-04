@@ -563,6 +563,23 @@ pub async fn outstanding_quotes(
     Ok(Json(serde_json::json!({ "data": report })))
 }
 
+/// GET /api/v1/reports/currency-exposure?as_of=YYYY-MM-DD
+pub async fn currency_exposure(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<OptAsOfQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let as_of = match q.as_of.as_deref() {
+        Some(s) => parse_date(s)?,
+        None => OffsetDateTime::now_utc().date(),
+    };
+    let report = ReportRepo::currency_exposure(&state.db, &claims.org, as_of).await?;
+    Ok(Json(serde_json::json!({ "data": report })))
+}
+
 /// GET /api/v1/reports/po-spending?from=YYYY-MM-DD&to=YYYY-MM-DD
 pub async fn po_spending(
     State(state): State<AppState>,

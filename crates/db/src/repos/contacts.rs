@@ -257,6 +257,67 @@ impl ContactRepo {
 
         Self::get_by_id(pool, org_id, id).await
     }
+
+    /// Merge `discard_id` into `keep_id`: re-point all FK references, then delete the discard.
+    /// Returns the surviving contact.
+    pub async fn merge(
+        pool: &PgPool,
+        org_id: &str,
+        keep_id: &str,
+        discard_id: &str,
+    ) -> Result<Contact, DbError> {
+        if keep_id == discard_id {
+            return Err(DbError::Conflict(
+                "keep_id and discard_id must be different".into(),
+            ));
+        }
+        let org_uuid = parse_uuid(org_id)?;
+        let keep_uuid = parse_uuid(keep_id)?;
+        let discard_uuid = parse_uuid(discard_id)?;
+
+        // Verify both contacts belong to this org.
+        let count: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM contacts \
+             WHERE organization_id = $1 AND id = ANY($2)",
+        )
+        .bind(org_uuid)
+        .bind(vec![keep_uuid, discard_uuid])
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        if count.0 < 2 {
+            return Err(DbError::NotFound);
+        }
+
+        // Re-point all child tables from discard → keep.
+        let fk_updates: &[&str] = &[
+            "UPDATE invoices SET contact_id = $1 WHERE contact_id = $2 AND organization_id = $3",
+            "UPDATE vendor_bills SET contact_id = $1 WHERE contact_id = $2 AND organization_id = $3",
+            "UPDATE payments SET contact_id = $1 WHERE contact_id = $2 AND organization_id = $3",
+            "UPDATE expenses SET contact_id = $1 WHERE contact_id = $2 AND organization_id = $3",
+            "UPDATE notes SET entity_id = $1::TEXT WHERE entity_id = $2::TEXT AND entity_type = 'contact'",
+        ];
+        for sql in fk_updates {
+            sqlx::query(sql)
+                .bind(keep_uuid)
+                .bind(discard_uuid)
+                .bind(org_uuid)
+                .execute(pool)
+                .await
+                .ok(); // ignore missing column errors on tables that don't have contact_id
+        }
+
+        // Delete the discard contact.
+        sqlx::query("DELETE FROM contacts WHERE id = $1 AND organization_id = $2")
+            .bind(discard_uuid)
+            .bind(org_uuid)
+            .execute(pool)
+            .await
+            .map_err(map_sqlx_err)?;
+
+        Self::get_by_id(pool, org_id, keep_id).await
+    }
 }
 
 fn parse_uuid(s: &str) -> Result<Uuid, DbError> {

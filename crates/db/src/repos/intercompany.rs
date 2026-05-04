@@ -198,6 +198,7 @@ impl IntercompanyRepo {
                         credit: input.amount,
                     },
                 ],
+                auto_reversal_date: None,
             },
         )
         .await?;
@@ -226,6 +227,7 @@ impl IntercompanyRepo {
                         credit: input.amount,
                     },
                 ],
+                auto_reversal_date: None,
             },
         )
         .await?;

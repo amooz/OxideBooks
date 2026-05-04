@@ -176,6 +176,10 @@ pub fn build(state: AppState) -> Router {
             "/transactions/:id/approve",
             post(transactions::approve_transaction),
         )
+        .route(
+            "/transactions/auto-reversals",
+            post(transactions::process_auto_reversals),
+        )
         // Contact groups
         .route(
             "/contact-groups",
@@ -1036,6 +1040,7 @@ pub fn build(state: AppState) -> Router {
         .route("/mileage/:id", delete(mileage::delete_mileage_trip))
         // Contacts statement
         .route("/contacts/:id/statement", get(contacts::contact_statement))
+        .route("/contacts/:id/merge", post(contacts::merge_contact))
         // Expense policies
         .route(
             "/expense-policies",
@@ -1551,6 +1556,10 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/reports/sales-tax-by-nexus",
             get(reports::sales_tax_by_nexus),
+        )
+        .route(
+            "/reports/currency-exposure",
+            get(reports::currency_exposure),
         )
         // Inventory serial number tracking
         .route(

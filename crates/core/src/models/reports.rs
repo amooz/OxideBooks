@@ -659,6 +659,30 @@ pub struct SalesTaxByNexusReport {
     pub total_tax_collected: MinorUnits,
 }
 
+// ── Currency Exposure ─────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CurrencyExposureRow {
+    pub currency: String,
+    pub ar_outstanding: MinorUnits,
+    pub ap_outstanding: MinorUnits,
+    pub net_exposure: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CurrencyExposureReport {
+    pub as_of: Date,
+    pub rows: Vec<CurrencyExposureRow>,
+}
+
+// ── Auto-Reversal Result ──────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutoReversalResult {
+    pub reversed_count: i64,
+    pub reversal_ids: Vec<String>,
+}
+
 // ── Global Search ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

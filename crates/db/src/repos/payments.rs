@@ -387,6 +387,7 @@ impl PaymentRepo {
                 &payment_id[..8]
             ),
             lines,
+            auto_reversal_date: None,
         };
 
         let je = TransactionRepo::create_posted(pool, org_id, "system", je_input).await?;

@@ -133,3 +133,23 @@ pub async fn delete_contact(
     .await;
     Ok(StatusCode::NO_CONTENT)
 }
+
+#[derive(Deserialize)]
+pub struct MergeContactBody {
+    pub discard_id: String,
+}
+
+/// POST /api/v1/contacts/:id/merge
+/// Merge the `discard_id` contact into the contact at `:id`, re-pointing all references.
+pub async fn merge_contact(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(keep_id): Path<String>,
+    Json(body): Json<MergeContactBody>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_admin() {
+        return Err(ApiError::Forbidden);
+    }
+    let contact = ContactRepo::merge(&state.db, &claims.org, &keep_id, &body.discard_id).await?;
+    Ok(Json(serde_json::json!({ "data": contact })))
+}

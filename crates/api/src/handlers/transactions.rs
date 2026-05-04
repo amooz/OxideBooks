@@ -3,7 +3,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use oxidebooks_core::models::CreateJournalEntry;
+use oxidebooks_core::models::{AutoReversalResult, CreateJournalEntry};
 use oxidebooks_core::pagination::PageParams;
 use oxidebooks_db::repos::{AuditRepo, TransactionRepo};
 use serde::Deserialize;
@@ -193,4 +193,35 @@ pub async fn reverse_transaction(
         StatusCode::CREATED,
         Json(serde_json::json!({ "data": entry })),
     ))
+}
+
+#[derive(Deserialize)]
+pub struct AutoReversalQuery {
+    pub as_of: Option<String>,
+}
+
+/// POST /api/v1/transactions/auto-reversals
+/// Process all scheduled auto-reversals due on or before `as_of` (defaults to today).
+pub async fn process_auto_reversals(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<AutoReversalQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_admin() {
+        return Err(ApiError::Forbidden);
+    }
+    let as_of = if let Some(s) = q.as_of.as_deref() {
+        let fmt = time::format_description::parse("[year]-[month]-[day]")
+            .map_err(|_| ApiError::BadRequest("invalid date format".into()))?;
+        Date::parse(s, &fmt).map_err(|_| ApiError::BadRequest("as_of must be YYYY-MM-DD".into()))?
+    } else {
+        time::OffsetDateTime::now_utc().date()
+    };
+    let (reversal_ids, reversed_count) =
+        TransactionRepo::process_auto_reversals(&state.db, &claims.org, as_of).await?;
+    let result = AutoReversalResult {
+        reversed_count,
+        reversal_ids,
+    };
+    Ok(Json(serde_json::json!({ "data": result })))
 }

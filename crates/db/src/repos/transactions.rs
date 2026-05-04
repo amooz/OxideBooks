@@ -7,8 +7,8 @@ use uuid::Uuid;
 use crate::error::{map_sqlx_err, DbError};
 
 const ENTRY_COLS: &str = "id, organization_id, date, reference, description, status, \
-                          created_by, reversal_of, submitted_by, submitted_at, \
-                          approved_by, approved_at, created_at, updated_at";
+                          created_by, reversal_of, auto_reversal_date, submitted_by, \
+                          submitted_at, approved_by, approved_at, created_at, updated_at";
 
 #[derive(sqlx::FromRow)]
 struct EntryRow {
@@ -20,6 +20,7 @@ struct EntryRow {
     status: String,
     created_by: Uuid,
     reversal_of: Option<Uuid>,
+    auto_reversal_date: Option<Date>,
     submitted_by: Option<Uuid>,
     submitted_at: Option<OffsetDateTime>,
     approved_by: Option<Uuid>,
@@ -157,8 +158,9 @@ impl TransactionRepo {
 
         sqlx::query(
             "INSERT INTO journal_entries \
-             (id, organization_id, date, reference, description, status, created_by) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7)",
+             (id, organization_id, date, reference, description, status, created_by, \
+              auto_reversal_date) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
         )
         .bind(id)
         .bind(org_uuid)
@@ -167,6 +169,7 @@ impl TransactionRepo {
         .bind(&input.description)
         .bind(status)
         .bind(user_uuid)
+        .bind(input.auto_reversal_date)
         .execute(&mut *tx)
         .await
         .map_err(map_sqlx_err)?;
@@ -442,6 +445,50 @@ impl TransactionRepo {
             })
             .collect())
     }
+
+    /// Process all posted journal entries whose `auto_reversal_date <= as_of` that have not yet
+    /// been reversed. Returns the IDs of newly-created reversal entries.
+    pub async fn process_auto_reversals(
+        pool: &PgPool,
+        org_id: &str,
+        as_of: Date,
+    ) -> Result<(Vec<String>, i64), DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        // Find all entries that need auto-reversal.
+        let due: Vec<(Uuid,)> = sqlx::query_as(
+            "SELECT je.id FROM journal_entries je \
+             WHERE je.organization_id = $1 \
+               AND je.status = 'posted' \
+               AND je.auto_reversal_date IS NOT NULL \
+               AND je.auto_reversal_date <= $2 \
+               AND NOT EXISTS ( \
+                   SELECT 1 FROM journal_entries r \
+                   WHERE r.reversal_of = je.id \
+               )",
+        )
+        .bind(org_uuid)
+        .bind(as_of)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let mut reversal_ids: Vec<String> = Vec::with_capacity(due.len());
+
+        for (entry_uuid,) in due {
+            let entry_id = entry_uuid.to_string();
+            let entry = Self::get_by_id(pool, org_id, &entry_id).await?;
+            let reversal_date = entry.auto_reversal_date;
+            if let Ok(reversal) =
+                Self::reverse(pool, org_id, "system", &entry_id, reversal_date).await
+            {
+                reversal_ids.push(reversal.id);
+            }
+        }
+
+        let count = reversal_ids.len() as i64;
+        Ok((reversal_ids, count))
+    }
 }
 
 fn entry_from_row(r: EntryRow, lines: Vec<JournalLine>) -> JournalEntry {
@@ -460,6 +507,7 @@ fn entry_from_row(r: EntryRow, lines: Vec<JournalLine>) -> JournalEntry {
         lines,
         created_by: r.created_by.to_string(),
         reversal_of: r.reversal_of.map(|u| u.to_string()),
+        auto_reversal_date: r.auto_reversal_date,
         submitted_by: r.submitted_by.map(|u| u.to_string()),
         submitted_at: r.submitted_at,
         approved_by: r.approved_by.map(|u| u.to_string()),

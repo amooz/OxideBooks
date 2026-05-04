@@ -316,6 +316,7 @@ impl PayrollRepo {
             reference: Some(format!("PAYROLL-{}", &id[..8])),
             description,
             lines,
+            auto_reversal_date: None,
         };
 
         let je = TransactionRepo::create_posted(pool, org_id, "system", je_input).await?;

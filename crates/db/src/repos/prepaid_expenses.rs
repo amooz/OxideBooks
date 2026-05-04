@@ -310,6 +310,7 @@ impl PrepaidExpenseRepo {
                     description: None,
                 },
             ],
+            auto_reversal_date: None,
         };
 
         let posted = TransactionRepo::create_posted(pool, org_id, "system", je).await?;
