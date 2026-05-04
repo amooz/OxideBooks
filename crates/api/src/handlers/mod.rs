@@ -1,6 +1,7 @@
 pub mod accounts;
 pub mod api_keys;
 pub mod approval_rules;
+pub mod assembly_orders;
 pub mod attachments;
 pub mod audit;
 pub mod auth;
@@ -69,6 +70,7 @@ pub mod prepayments;
 pub mod price_lists;
 pub mod product_categories;
 pub mod products;
+pub mod project_phases;
 pub mod projects;
 pub mod purchase_orders;
 pub mod purchase_requisitions;

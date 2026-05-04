@@ -15,21 +15,21 @@ use tower_http::{
 
 use crate::{
     handlers::{
-        accounts, api_keys, approval_rules, attachments, audit, auth, auth_sso, bank,
-        bank_deposits, bank_rules, batch_payments, bills, budgets, bulk, check_runs, client_portal,
-        closed_periods, commissions, consolidated, consolidation_eliminations, contact_groups,
-        contacts, contractor_tax_info, credit_notes, custom_fields, deferred_charges,
-        deferred_revenue, departments, doc_sequences, dunning, email, employee_loans, employees,
-        exchange_rates, expense_categories, expense_policies, expense_reports, expenses, export,
-        fixed_assets, fx, fx_revaluations, grn, health, identity, import, intercompany, inventory,
-        inventory_lots, invoice_templates, invoices, landed_costs, late_fees, leave, mileage,
-        notes, notifications, opening_balances, organizations, payment_links, payment_plans,
-        payment_terms, payments, payroll, payroll_tax, payslips, prepaid_expenses, prepayments,
-        price_lists, product_categories, products, projects, purchase_orders,
-        purchase_requisitions, recurring, reports, retainers, roles, sales_orders, sales_tax_nexus,
-        scim, sessions, stripe_webhook, subscriptions, tags, tax_groups, tax_periods, tax_rates,
-        time_entries, totp, tracking_categories, transactions, users, vendor_credits, warehouses,
-        webhooks,
+        accounts, api_keys, approval_rules, assembly_orders, attachments, audit, auth, auth_sso,
+        bank, bank_deposits, bank_rules, batch_payments, bills, budgets, bulk, check_runs,
+        client_portal, closed_periods, commissions, consolidated, consolidation_eliminations,
+        contact_groups, contacts, contractor_tax_info, credit_notes, custom_fields,
+        deferred_charges, deferred_revenue, departments, doc_sequences, dunning, email,
+        employee_loans, employees, exchange_rates, expense_categories, expense_policies,
+        expense_reports, expenses, export, fixed_assets, fx, fx_revaluations, grn, health,
+        identity, import, intercompany, inventory, inventory_lots, invoice_templates, invoices,
+        landed_costs, late_fees, leave, mileage, notes, notifications, opening_balances,
+        organizations, payment_links, payment_plans, payment_terms, payments, payroll, payroll_tax,
+        payslips, prepaid_expenses, prepayments, price_lists, product_categories, products,
+        project_phases, projects, purchase_orders, purchase_requisitions, recurring, reports,
+        retainers, roles, sales_orders, sales_tax_nexus, scim, sessions, stripe_webhook,
+        subscriptions, tags, tax_groups, tax_periods, tax_rates, time_entries, totp,
+        tracking_categories, transactions, users, vendor_credits, warehouses, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -593,6 +593,38 @@ pub fn build(state: AppState) -> Router {
                 .delete(projects::delete_project),
         )
         .route("/projects/:id/summary", get(projects::project_summary))
+        // Project phases
+        .route(
+            "/projects/:id/phases",
+            get(project_phases::list_phases).post(project_phases::create_phase),
+        )
+        .route(
+            "/project-phases/:id",
+            get(project_phases::get_phase)
+                .patch(project_phases::update_phase)
+                .delete(project_phases::delete_phase),
+        )
+        // Assembly orders
+        .route(
+            "/assembly-orders",
+            get(assembly_orders::list_assembly_orders).post(assembly_orders::create_assembly_order),
+        )
+        .route(
+            "/assembly-orders/:id",
+            get(assembly_orders::get_assembly_order),
+        )
+        .route(
+            "/assembly-orders/:id/lines",
+            get(assembly_orders::list_assembly_order_lines),
+        )
+        .route(
+            "/assembly-orders/:id/build",
+            post(assembly_orders::build_assembly_order),
+        )
+        .route(
+            "/assembly-orders/:id/cancel",
+            post(assembly_orders::cancel_assembly_order),
+        )
         // Time entries
         .route(
             "/time-entries",
