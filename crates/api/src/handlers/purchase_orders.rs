@@ -168,6 +168,7 @@ pub async fn po_create_bill(
         currency_code: "USD".into(),
         exchange_rate: rust_decimal::Decimal::ONE,
         lines,
+        purchase_order_id: Some(po.id.clone()),
     };
 
     let bill = BillRepo::create(&state.db, &claims.org, input).await?;

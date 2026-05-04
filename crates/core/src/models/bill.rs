@@ -75,6 +75,7 @@ pub struct CreateVendorBill {
     #[serde(default = "default_rate")]
     pub exchange_rate: rust_decimal::Decimal,
     pub lines: Vec<CreateBillLine>,
+    pub purchase_order_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

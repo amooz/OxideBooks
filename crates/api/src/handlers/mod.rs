@@ -51,6 +51,7 @@ pub mod intercompany;
 pub mod inventory;
 pub mod inventory_lots;
 pub mod inventory_reorder_requests;
+pub mod inventory_stocktakes;
 pub mod invoice_templates;
 pub mod invoices;
 pub mod landed_costs;

@@ -1,12 +1,12 @@
 use oxidebooks_core::models::{
     AccountBalance, AccountLedger, AccountType, AgingReport, AgingRow, BalanceSheetReport,
     CashFlowForecast, CashFlowForecastBucket, CashFlowReport, CashFlowSection,
-    ConsolidatedProfitLoss, ContactStatement, DashboardKpis, Form941Quarter, JobCostingCostCodeRow,
-    JobCostingReport, JobCostingRow, LedgerLine, OrgProfitLoss, PLComparisonReport,
-    PayrollSummaryReport, PayrollSummaryRow, ProfitLossReport, ProjectProfitabilityReport,
-    ProjectProfitabilityRow, ReportLine, ReportSection, SalesByProductReport, SalesByProductRow,
-    StatementLine, TaxSummaryLine, TaxSummaryReport, TrialBalance, VendorSpendReport,
-    VendorSpendRow, W2Row,
+    ConsolidatedProfitLoss, ContactStatement, DashboardKpis, Form941Quarter, GrniReport, GrniRow,
+    JobCostingCostCodeRow, JobCostingReport, JobCostingRow, LedgerLine, OrgProfitLoss,
+    PLComparisonReport, PayrollSummaryReport, PayrollSummaryRow, ProfitLossReport,
+    ProjectProfitabilityReport, ProjectProfitabilityRow, ReportLine, ReportSection,
+    SalesByProductReport, SalesByProductRow, StatementLine, TaxSummaryLine, TaxSummaryReport,
+    TrialBalance, VendorSpendReport, VendorSpendRow, W2Row,
 };
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -1952,6 +1952,93 @@ impl ReportRepo {
             prior,
             net_income_change,
             net_income_change_bps,
+        })
+    }
+
+    /// GRNI (Goods Received Not Invoiced) accrual report.
+    ///
+    /// Returns GRN lines for purchase orders that have been received but not yet
+    /// fully invoiced (i.e., no approved/paid vendor bill linked to the PO).
+    pub async fn grni_accrual(
+        pool: &PgPool,
+        org_id: &str,
+        as_of: Date,
+    ) -> Result<GrniReport, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        #[derive(sqlx::FromRow)]
+        struct GrniRowDb {
+            po_id: Uuid,
+            po_number: String,
+            contact_id: Uuid,
+            contact_name: String,
+            grn_id: Uuid,
+            receipt_date: Date,
+            product_description: String,
+            quantity_received: i64,
+            unit_cost: i64,
+        }
+
+        let rows: Vec<GrniRowDb> = sqlx::query_as(
+            r#"
+            SELECT
+                po.id               AS po_id,
+                po.po_number        AS po_number,
+                c.id                AS contact_id,
+                c.name              AS contact_name,
+                g.id                AS grn_id,
+                g.receipt_date      AS receipt_date,
+                COALESCE(gl.description, p.name, 'Unknown') AS product_description,
+                gl.quantity_received,
+                COALESCE(pol.unit_price, 0)::BIGINT AS unit_cost
+            FROM goods_receipt_notes g
+            JOIN purchase_orders po ON po.id = g.purchase_order_id
+            JOIN contacts c ON c.id = po.contact_id
+            JOIN grn_lines gl ON gl.grn_id = g.id
+            LEFT JOIN purchase_order_lines pol ON pol.id = gl.po_line_id
+            LEFT JOIN products p ON p.id = pol.product_id
+            WHERE po.organization_id = $1
+              AND g.receipt_date <= $2
+              AND gl.quantity_received > 0
+              AND NOT EXISTS (
+                  SELECT 1 FROM vendor_bills vb
+                  WHERE vb.purchase_order_id = po.id
+                    AND vb.status IN ('approved', 'partial', 'paid')
+              )
+            ORDER BY g.receipt_date ASC, po.po_number ASC
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(as_of)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let result_rows: Vec<GrniRow> = rows
+            .iter()
+            .map(|r| {
+                let accrual_amount = r.quantity_received * r.unit_cost;
+                GrniRow {
+                    po_id: r.po_id.to_string(),
+                    po_number: r.po_number.clone(),
+                    contact_id: r.contact_id.to_string(),
+                    contact_name: r.contact_name.clone(),
+                    grn_id: r.grn_id.to_string(),
+                    receipt_date: r.receipt_date,
+                    product_description: r.product_description.clone(),
+                    quantity_received: r.quantity_received,
+                    unit_cost: r.unit_cost,
+                    accrual_amount,
+                }
+            })
+            .collect();
+
+        let total_accrual = result_rows.iter().map(|r| r.accrual_amount).sum();
+
+        Ok(GrniReport {
+            as_of,
+            rows: result_rows,
+            total_accrual,
         })
     }
 }
