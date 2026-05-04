@@ -33,6 +33,12 @@ pub struct AsOfQuery {
     pub as_of: String,
 }
 
+#[derive(Deserialize)]
+pub struct PriorAsOfQuery {
+    pub as_of: String,
+    pub prior_as_of: String,
+}
+
 /// GET /api/v1/reports/trial-balance
 ///
 /// Returns the trial balance for the authenticated organization. Only `posted`
@@ -477,6 +483,27 @@ pub async fn sales_by_customer(
 #[derive(Deserialize)]
 pub struct OptAsOfQuery {
     pub as_of: Option<String>,
+}
+
+/// GET /api/v1/reports/balance-sheet-comparison?as_of=YYYY-MM-DD&prior_as_of=YYYY-MM-DD
+pub async fn balance_sheet_comparison(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<PriorAsOfQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let as_of = parse_date(&q.as_of)?;
+    let prior_as_of = parse_date(&q.prior_as_of)?;
+    if prior_as_of >= as_of {
+        return Err(ApiError::BadRequest(
+            "'prior_as_of' must be before 'as_of'".into(),
+        ));
+    }
+    let report =
+        ReportRepo::balance_sheet_comparison(&state.db, &claims.org, as_of, prior_as_of).await?;
+    Ok(Json(serde_json::json!({ "data": report })))
 }
 
 /// GET /api/v1/reports/outstanding-quotes?as_of=YYYY-MM-DD

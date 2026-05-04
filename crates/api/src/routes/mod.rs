@@ -28,10 +28,10 @@ use crate::{
         organizations, payment_links, payment_plans, payment_terms, payments, payroll, payroll_tax,
         payslips, prepaid_expenses, prepayments, price_lists, product_categories, product_variants,
         products, project_phases, projects, purchase_orders, purchase_requisitions, recurring,
-        recurring_journal_entries, reports, retainers, roles, sales_orders, sales_tax_nexus, scim,
-        service_territories, sessions, stripe_webhook, subscriptions, tags, tax_groups,
-        tax_periods, tax_rates, tax_rules, time_entries, totp, tracking_categories, transactions,
-        users, vendor_credits, vendor_portal, warehouses, webhooks, work_orders,
+        recurring_bills, recurring_journal_entries, reports, retainers, roles, sales_orders,
+        sales_tax_nexus, scim, service_territories, sessions, stripe_webhook, subscriptions, tags,
+        tax_groups, tax_periods, tax_rates, tax_rules, time_entries, totp, tracking_categories,
+        transactions, users, vendor_credits, vendor_portal, warehouses, webhooks, work_orders,
     },
     middleware::require_auth,
     state::AppState,
@@ -308,6 +308,10 @@ pub fn build(state: AppState) -> Router {
         .route("/reports/trial-balance", get(reports::trial_balance))
         .route("/reports/profit-loss", get(reports::profit_loss))
         .route("/reports/balance-sheet", get(reports::balance_sheet))
+        .route(
+            "/reports/balance-sheet-comparison",
+            get(reports::balance_sheet_comparison),
+        )
         .route("/reports/aging", get(reports::aging))
         .route("/reports/tax-summary", get(reports::tax_summary))
         .route("/reports/cash-flow", get(reports::cash_flow))
@@ -468,6 +472,21 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/recurring-journal-entries/:id/post",
             post(recurring_journal_entries::post_recurring_journal_entry),
+        )
+        // Recurring vendor bills
+        .route(
+            "/recurring-bills",
+            get(recurring_bills::list_recurring_bills).post(recurring_bills::create_recurring_bill),
+        )
+        .route(
+            "/recurring-bills/:id",
+            get(recurring_bills::get_recurring_bill)
+                .patch(recurring_bills::update_recurring_bill)
+                .delete(recurring_bills::delete_recurring_bill),
+        )
+        .route(
+            "/recurring-bills/:id/generate",
+            post(recurring_bills::generate_recurring_bill),
         )
         // Approval workflow rules
         .route(
@@ -945,6 +964,10 @@ pub fn build(state: AppState) -> Router {
             post(payroll::approve_payroll_run),
         )
         .route("/payroll-runs/:id/pay", post(payroll::pay_payroll_run))
+        .route(
+            "/payroll-runs/:id/post-journal",
+            post(payroll::post_payroll_journal),
+        )
         .route(
             "/payroll-runs/:id/tax-liabilities",
             get(payroll_tax::list_run_liabilities),
