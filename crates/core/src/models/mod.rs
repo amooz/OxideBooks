@@ -19,6 +19,7 @@ pub mod consolidation_elimination;
 pub mod contact;
 pub mod contact_group;
 pub mod contractor_tax_info;
+pub mod cost_code;
 pub mod credit_note;
 pub mod custom_field;
 pub mod deferred_charge;
@@ -85,6 +86,7 @@ pub mod vendor_credit;
 pub mod vendor_portal;
 pub mod warehouse;
 pub mod webhook;
+pub mod work_order;
 
 pub use account::{Account, AccountType, CreateAccount, UpdateAccount};
 pub use api_key::{ApiKey, CreateApiKey, CreatedApiKey};
@@ -122,6 +124,7 @@ pub use contact_group::{ContactGroup, CreateContactGroup, UpdateContactGroup};
 pub use contractor_tax_info::{
     Contractor1099Summary, ContractorTaxInfo, CreateContractorTaxInfo, UpdateContractorTaxInfo,
 };
+pub use cost_code::{CostCode, CreateCostCode, UpdateCostCode};
 pub use credit_note::{ApplyCreditNote, CreateCreditNote, CreditNote, CreditNoteApplication};
 pub use custom_field::{
     CreateCustomFieldDefinition, CustomFieldDefinition, CustomFieldValue, SetCustomFieldValue,
@@ -264,6 +267,9 @@ pub use warehouse::{
 };
 pub use webhook::{
     CreateWebhookEndpoint, UpdateWebhookEndpoint, WebhookEndpoint, WebhookPayload, ALL_EVENT_TYPES,
+};
+pub use work_order::{
+    CreateWorkOrder, CreateWorkOrderLine, UpdateWorkOrder, WorkOrder, WorkOrderLine,
 };
 
 /// Serde helpers for `Option<time::Date>` as `"YYYY-MM-DD"`.

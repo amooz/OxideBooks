@@ -18,7 +18,7 @@ use crate::{
         accounts, api_keys, approval_rules, assembly_orders, attachments, audit, auth, auth_sso,
         bank, bank_deposits, bank_rules, batch_payments, bills, budgets, bulk, check_runs,
         client_portal, closed_periods, commissions, consolidated, consolidation_eliminations,
-        contact_groups, contacts, contractor_tax_info, credit_notes, custom_fields,
+        contact_groups, contacts, contractor_tax_info, cost_codes, credit_notes, custom_fields,
         deferred_charges, deferred_revenue, departments, doc_sequences, dunning, email,
         employee_loans, employees, exchange_rates, expense_categories, expense_policies,
         expense_reports, expenses, export, fixed_assets, fx, fx_revaluations, grn, health,
@@ -30,7 +30,7 @@ use crate::{
         retainers, roles, sales_orders, sales_tax_nexus, scim, sessions, stripe_webhook,
         subscriptions, tags, tax_groups, tax_periods, tax_rates, time_entries, totp,
         tracking_categories, transactions, users, vendor_credits, vendor_portal, warehouses,
-        webhooks,
+        webhooks, work_orders,
     },
     middleware::require_auth,
     state::AppState,
@@ -1331,6 +1331,41 @@ pub fn build(state: AppState) -> Router {
             "/tracking-categories/:id/options/:option_id",
             axum::routing::patch(tracking_categories::update_tracking_option)
                 .delete(tracking_categories::delete_tracking_option),
+        )
+        // Work orders (service tickets)
+        .route(
+            "/work-orders",
+            get(work_orders::list_work_orders).post(work_orders::create_work_order),
+        )
+        .route(
+            "/work-orders/:id",
+            get(work_orders::get_work_order)
+                .patch(work_orders::update_work_order)
+                .delete(work_orders::delete_work_order),
+        )
+        .route(
+            "/work-orders/:id/start",
+            post(work_orders::start_work_order),
+        )
+        .route("/work-orders/:id/hold", post(work_orders::hold_work_order))
+        .route(
+            "/work-orders/:id/complete",
+            post(work_orders::complete_work_order),
+        )
+        .route(
+            "/work-orders/:id/cancel",
+            post(work_orders::cancel_work_order),
+        )
+        // Cost codes (job costing)
+        .route(
+            "/cost-codes",
+            get(cost_codes::list_cost_codes).post(cost_codes::create_cost_code),
+        )
+        .route(
+            "/cost-codes/:id",
+            get(cost_codes::get_cost_code)
+                .patch(cost_codes::update_cost_code)
+                .delete(cost_codes::delete_cost_code),
         )
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
