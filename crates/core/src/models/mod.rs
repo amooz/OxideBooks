@@ -14,8 +14,10 @@ pub mod client_portal;
 pub mod closed_period;
 pub mod commission;
 pub mod consolidated;
+pub mod consolidation_elimination;
 pub mod contact;
 pub mod contact_group;
+pub mod contractor_tax_info;
 pub mod credit_note;
 pub mod custom_field;
 pub mod deferred_charge;
@@ -108,8 +110,12 @@ pub use client_portal::{ClientPortalToken, CreateClientPortalToken};
 pub use closed_period::{ClosedPeriod, CreateClosedPeriod};
 pub use commission::{CreateSalesCommission, PayCommission, SalesCommission};
 pub use consolidated::{ConsolidatedProfitLoss, OrgProfitLoss};
+pub use consolidation_elimination::{ConsolidationElimination, CreateConsolidationElimination};
 pub use contact::{Contact, ContactType, CreateContact, UpdateContact};
 pub use contact_group::{ContactGroup, CreateContactGroup, UpdateContactGroup};
+pub use contractor_tax_info::{
+    Contractor1099Summary, ContractorTaxInfo, CreateContractorTaxInfo, UpdateContractorTaxInfo,
+};
 pub use credit_note::{ApplyCreditNote, CreateCreditNote, CreditNote, CreditNoteApplication};
 pub use custom_field::{
     CreateCustomFieldDefinition, CustomFieldDefinition, CustomFieldValue, SetCustomFieldValue,

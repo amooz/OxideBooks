@@ -17,18 +17,19 @@ use crate::{
     handlers::{
         accounts, api_keys, approval_rules, attachments, audit, auth, auth_sso, bank,
         bank_deposits, bank_rules, batch_payments, bills, budgets, bulk, check_runs, client_portal,
-        closed_periods, commissions, consolidated, contact_groups, contacts, credit_notes,
-        custom_fields, deferred_charges, deferred_revenue, departments, doc_sequences, dunning,
-        email, employee_loans, employees, exchange_rates, expense_categories, expense_policies,
-        expense_reports, expenses, export, fixed_assets, fx, fx_revaluations, grn, health,
-        identity, import, intercompany, inventory, inventory_lots, invoice_templates, invoices,
-        landed_costs, late_fees, leave, mileage, notes, notifications, opening_balances,
-        organizations, payment_links, payment_plans, payment_terms, payments, payroll, payroll_tax,
-        payslips, prepaid_expenses, prepayments, price_lists, product_categories, products,
-        projects, purchase_orders, purchase_requisitions, recurring, reports, retainers, roles,
-        sales_orders, sales_tax_nexus, scim, sessions, stripe_webhook, subscriptions, tags,
-        tax_groups, tax_periods, tax_rates, time_entries, totp, tracking_categories, transactions,
-        users, vendor_credits, warehouses, webhooks,
+        closed_periods, commissions, consolidated, consolidation_eliminations, contact_groups,
+        contacts, contractor_tax_info, credit_notes, custom_fields, deferred_charges,
+        deferred_revenue, departments, doc_sequences, dunning, email, employee_loans, employees,
+        exchange_rates, expense_categories, expense_policies, expense_reports, expenses, export,
+        fixed_assets, fx, fx_revaluations, grn, health, identity, import, intercompany, inventory,
+        inventory_lots, invoice_templates, invoices, landed_costs, late_fees, leave, mileage,
+        notes, notifications, opening_balances, organizations, payment_links, payment_plans,
+        payment_terms, payments, payroll, payroll_tax, payslips, prepaid_expenses, prepayments,
+        price_lists, product_categories, products, projects, purchase_orders,
+        purchase_requisitions, recurring, reports, retainers, roles, sales_orders, sales_tax_nexus,
+        scim, sessions, stripe_webhook, subscriptions, tags, tax_groups, tax_periods, tax_rates,
+        time_entries, totp, tracking_categories, transactions, users, vendor_credits, warehouses,
+        webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -250,6 +251,35 @@ pub fn build(state: AppState) -> Router {
             "/intercompany/transactions",
             get(intercompany::list_transactions).post(intercompany::create_transaction),
         )
+        // Consolidation eliminations
+        .route(
+            "/consolidation-eliminations",
+            get(consolidation_eliminations::list_eliminations)
+                .post(consolidation_eliminations::create_elimination),
+        )
+        .route(
+            "/consolidation-eliminations/:id",
+            get(consolidation_eliminations::get_elimination),
+        )
+        .route(
+            "/consolidation-eliminations/:id/void",
+            post(consolidation_eliminations::void_elimination),
+        )
+        // Contractor 1099 tax info
+        .route(
+            "/contractor-tax-info",
+            get(contractor_tax_info::list_contractor_tax_info)
+                .post(contractor_tax_info::create_contractor_tax_info),
+        )
+        .route(
+            "/contractor-tax-info/:id",
+            get(contractor_tax_info::get_contractor_tax_info)
+                .patch(contractor_tax_info::update_contractor_tax_info),
+        )
+        .route(
+            "/contacts/:id/contractor-tax-info",
+            get(contractor_tax_info::get_contact_contractor_tax_info),
+        )
         // Organization settings
         .route(
             "/organizations/me",
@@ -276,6 +306,10 @@ pub fn build(state: AppState) -> Router {
         )
         .route("/reports/budget-vs-actual", get(budgets::budget_vs_actual))
         .route("/reports/1099-summary", get(reports::summary_1099))
+        .route(
+            "/reports/1099-payments",
+            get(contractor_tax_info::report_1099_payments),
+        )
         .route("/reports/account-ledger", get(reports::account_ledger))
         .route("/reports/sales-by-product", get(reports::sales_by_product))
         .route(
