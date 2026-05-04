@@ -1,6 +1,7 @@
 pub mod account;
 pub mod api_key;
 pub mod approval_rule;
+pub mod assembly_order;
 pub mod attachment;
 pub mod bank;
 pub mod bank_deposit;
@@ -62,6 +63,7 @@ pub mod price_list;
 pub mod product;
 pub mod product_category;
 pub mod project;
+pub mod project_phase;
 pub mod purchase_order;
 pub mod purchase_requisition;
 pub mod recurring;
@@ -86,6 +88,9 @@ pub mod webhook;
 pub use account::{Account, AccountType, CreateAccount, UpdateAccount};
 pub use api_key::{ApiKey, CreateApiKey, CreatedApiKey};
 pub use approval_rule::{ApprovalRule, CreateApprovalRule, UpdateApprovalRule};
+pub use assembly_order::{
+    AssemblyOrder, AssemblyOrderLine, CreateAssemblyOrder, CreateAssemblyOrderLine,
+};
 pub use attachment::{Attachment, CreateAttachment};
 pub use bank::{
     BankAccount, BankTransaction, CreateBankAccount, ImportBankTransaction, MatchTransaction,
@@ -204,6 +209,7 @@ pub use product::{
 };
 pub use product_category::{CreateProductCategory, ProductCategory, UpdateProductCategory};
 pub use project::{CreateProject, Project, ProjectSummary, UpdateProject};
+pub use project_phase::{CreateProjectPhase, ProjectPhase, UpdateProjectPhase};
 pub use purchase_order::{
     CreatePoLine, CreatePurchaseOrder, PoStatus, PurchaseOrder, PurchaseOrderLine, ReceivePoLine,
     UpdatePurchaseOrder,
