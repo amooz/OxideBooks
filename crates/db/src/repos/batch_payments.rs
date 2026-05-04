@@ -1,4 +1,6 @@
-use oxidebooks_core::models::{BatchPayment, BatchPaymentLine, CreateBatchPayment};
+use oxidebooks_core::models::{
+    BatchPayment, BatchPaymentLine, CreateBatchPayment, RemittanceAdvice, RemittanceLine,
+};
 use sqlx::PgPool;
 use time::{Date, OffsetDateTime};
 use uuid::Uuid;
@@ -154,6 +156,98 @@ impl BatchPaymentRepo {
 
         let batch = Self::get_by_id(pool, org_id, &batch_id.to_string()).await?;
         Ok((batch, succeeded, failed))
+    }
+
+    /// Build a remittance advice for a batch payment: lists each invoice paid,
+    /// with original amount, amount paid in this batch, and remaining balance.
+    pub async fn remittance_advice(
+        pool: &PgPool,
+        org_id: &str,
+        id: &str,
+    ) -> Result<RemittanceAdvice, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let id_uuid = parse_uuid(id)?;
+
+        let hdr: BatchPaymentRow = sqlx::query_as(
+            "SELECT id, organization_id, payment_date, method, reference, total_amount, \
+             created_by, created_at FROM batch_payments WHERE id = $1 AND organization_id = $2",
+        )
+        .bind(id_uuid)
+        .bind(org_uuid)
+        .fetch_optional(pool)
+        .await
+        .map_err(map_sqlx_err)?
+        .ok_or(DbError::NotFound)?;
+
+        #[derive(sqlx::FromRow)]
+        struct LineDetail {
+            invoice_id: Uuid,
+            doc_number: Option<String>,
+            invoice_date: time::Date,
+            invoice_total: i64,
+            batch_amount: i64,
+            contact_name: Option<String>,
+        }
+
+        let details: Vec<LineDetail> = sqlx::query_as(
+            r#"
+            SELECT
+                bpl.invoice_id,
+                i.doc_number,
+                i.invoice_date,
+                COALESCE((
+                    SELECT SUM(il.quantity * il.unit_price
+                           + il.quantity * il.unit_price * il.tax_rate / 1000000)
+                    FROM invoice_lines il WHERE il.invoice_id = i.id
+                ), 0)::BIGINT AS invoice_total,
+                bpl.amount AS batch_amount,
+                c.name AS contact_name
+            FROM batch_payment_lines bpl
+            JOIN invoices i ON i.id = bpl.invoice_id
+            LEFT JOIN contacts c ON c.id = i.contact_id
+            WHERE bpl.batch_payment_id = $1
+            ORDER BY i.invoice_date ASC, i.doc_number ASC
+            "#,
+        )
+        .bind(id_uuid)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        // Derive a single payee from the first line's contact (or None if multi-payee).
+        let payee_name = details
+            .first()
+            .and_then(|d| d.contact_name.clone())
+            .filter(|_| {
+                details
+                    .iter()
+                    .all(|d| d.contact_name == details[0].contact_name)
+            });
+
+        let lines: Vec<RemittanceLine> = details
+            .into_iter()
+            .map(|d| {
+                let balance = (d.invoice_total - d.batch_amount).max(0);
+                RemittanceLine {
+                    bill_id: d.invoice_id.to_string(),
+                    bill_number: d.doc_number,
+                    bill_date: d.invoice_date,
+                    original_amount: d.invoice_total,
+                    amount_paid: d.batch_amount,
+                    balance_remaining: balance,
+                }
+            })
+            .collect();
+
+        Ok(RemittanceAdvice {
+            batch_payment_id: hdr.id.to_string(),
+            payment_date: hdr.payment_date,
+            method: hdr.method,
+            reference: hdr.reference,
+            payee_name,
+            total_amount: hdr.total_amount,
+            lines,
+        })
     }
 
     async fn fetch_lines(pool: &PgPool, batch_id: Uuid) -> Result<Vec<BatchPaymentLine>, DbError> {

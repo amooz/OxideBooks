@@ -431,6 +431,29 @@ pub struct PLComparisonReport {
     pub net_income_change_bps: i64,
 }
 
+// ── Remittance Advice ─────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemittanceLine {
+    pub bill_id: String,
+    pub bill_number: Option<String>,
+    pub bill_date: Date,
+    pub original_amount: MinorUnits,
+    pub amount_paid: MinorUnits,
+    pub balance_remaining: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemittanceAdvice {
+    pub batch_payment_id: String,
+    pub payment_date: Date,
+    pub method: String,
+    pub reference: Option<String>,
+    pub payee_name: Option<String>,
+    pub total_amount: MinorUnits,
+    pub lines: Vec<RemittanceLine>,
+}
+
 // ── Global Search ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

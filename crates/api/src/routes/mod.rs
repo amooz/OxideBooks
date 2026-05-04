@@ -26,8 +26,8 @@ use crate::{
         inventory_reorder_requests, inventory_stocktakes, invoice_templates, invoices,
         landed_costs, late_fees, leave, mileage, notes, notifications, opening_balances,
         organizations, payment_links, payment_plans, payment_terms, payments, payroll, payroll_tax,
-        payslips, prepaid_expenses, prepayments, price_lists, product_categories, products,
-        project_phases, projects, purchase_orders, purchase_requisitions, recurring,
+        payslips, prepaid_expenses, prepayments, price_lists, product_categories, product_variants,
+        products, project_phases, projects, purchase_orders, purchase_requisitions, recurring,
         recurring_journal_entries, reports, retainers, roles, sales_orders, sales_tax_nexus, scim,
         service_territories, sessions, stripe_webhook, subscriptions, tags, tax_groups,
         tax_periods, tax_rates, tax_rules, time_entries, totp, tracking_categories, transactions,
@@ -395,6 +395,17 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/products/:id/bundle-components",
             put(products::set_bundle_components),
+        )
+        // Product variants
+        .route(
+            "/products/:id/variants",
+            get(product_variants::list_variants).post(product_variants::create_variant),
+        )
+        .route(
+            "/products/:id/variants/:vid",
+            get(product_variants::get_variant)
+                .patch(product_variants::update_variant)
+                .delete(product_variants::delete_variant),
         )
         // Product categories
         .route(
@@ -872,6 +883,10 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/batch-payments/:id",
             get(batch_payments::get_batch_payment),
+        )
+        .route(
+            "/batch-payments/:id/remittance",
+            get(batch_payments::remittance_advice),
         )
         // Departments / cost centres
         .route(
