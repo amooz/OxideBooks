@@ -17,17 +17,17 @@ use crate::{
     handlers::{
         accounts, api_keys, approval_rules, attachments, audit, auth, auth_sso, bank,
         bank_deposits, bank_rules, batch_payments, bills, budgets, bulk, client_portal,
-        closed_periods, consolidated, contact_groups, contacts, credit_notes, custom_fields,
-        deferred_charges, deferred_revenue, departments, doc_sequences, dunning, email, employees,
-        exchange_rates, expense_categories, expense_policies, expense_reports, expenses, export,
-        fixed_assets, fx, fx_revaluations, grn, health, identity, import, inventory,
-        inventory_lots, invoice_templates, invoices, landed_costs, late_fees, leave, mileage,
-        notes, notifications, opening_balances, organizations, payment_links, payment_plans,
-        payment_terms, payments, payroll, payslips, prepaid_expenses, prepayments, price_lists,
-        product_categories, products, projects, purchase_orders, purchase_requisitions, recurring,
-        reports, retainers, roles, sales_orders, scim, sessions, stripe_webhook, subscriptions,
-        tags, tax_groups, tax_periods, tax_rates, time_entries, totp, tracking_categories,
-        transactions, users, vendor_credits, warehouses, webhooks,
+        closed_periods, commissions, consolidated, contact_groups, contacts, credit_notes,
+        custom_fields, deferred_charges, deferred_revenue, departments, doc_sequences, dunning,
+        email, employees, exchange_rates, expense_categories, expense_policies, expense_reports,
+        expenses, export, fixed_assets, fx, fx_revaluations, grn, health, identity, import,
+        intercompany, inventory, inventory_lots, invoice_templates, invoices, landed_costs,
+        late_fees, leave, mileage, notes, notifications, opening_balances, organizations,
+        payment_links, payment_plans, payment_terms, payments, payroll, payslips, prepaid_expenses,
+        prepayments, price_lists, product_categories, products, projects, purchase_orders,
+        purchase_requisitions, recurring, reports, retainers, roles, sales_orders, scim, sessions,
+        stripe_webhook, subscriptions, tags, tax_groups, tax_periods, tax_rates, time_entries,
+        totp, tracking_categories, transactions, users, vendor_credits, warehouses, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -226,6 +226,29 @@ pub fn build(state: AppState) -> Router {
             post(invoices::progress_invoice),
         )
         .route("/invoices/:id/apply-credit", post(invoices::apply_credit))
+        // Sales commissions
+        .route("/commissions", get(commissions::list_commissions))
+        .route("/commissions/:id", get(commissions::get_commission))
+        .route(
+            "/commissions/:id/approve",
+            post(commissions::approve_commission),
+        )
+        .route("/commissions/:id/pay", post(commissions::pay_commission))
+        .route("/commissions/:id/void", post(commissions::void_commission))
+        .route(
+            "/invoices/:id/commissions",
+            get(commissions::list_invoice_commissions).post(commissions::create_commission),
+        )
+        // Intercompany (multi-entity)
+        .route(
+            "/intercompany/links",
+            get(intercompany::list_links).post(intercompany::create_link),
+        )
+        .route("/intercompany/links/:id", delete(intercompany::delete_link))
+        .route(
+            "/intercompany/transactions",
+            get(intercompany::list_transactions).post(intercompany::create_transaction),
+        )
         // Organization settings
         .route(
             "/organizations/me",

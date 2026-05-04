@@ -11,6 +11,7 @@ pub mod budget;
 pub mod cash_sale;
 pub mod client_portal;
 pub mod closed_period;
+pub mod commission;
 pub mod consolidated;
 pub mod contact;
 pub mod contact_group;
@@ -32,6 +33,7 @@ pub mod fx_revaluation;
 pub mod grn;
 pub mod identity;
 pub mod import;
+pub mod intercompany;
 pub mod inventory;
 pub mod inventory_lot;
 pub mod invoice;
@@ -99,6 +101,7 @@ pub use budget::{
 pub use cash_sale::CreateCashSale;
 pub use client_portal::{ClientPortalToken, CreateClientPortalToken};
 pub use closed_period::{ClosedPeriod, CreateClosedPeriod};
+pub use commission::{CreateSalesCommission, PayCommission, SalesCommission};
 pub use consolidated::{ConsolidatedProfitLoss, OrgProfitLoss};
 pub use contact::{Contact, ContactType, CreateContact, UpdateContact};
 pub use contact_group::{ContactGroup, CreateContactGroup, UpdateContactGroup};
@@ -138,6 +141,10 @@ pub use identity::{
     ProviderSummary, ProviderType, ScimToken,
 };
 pub use import::{AccountCsvRow, ContactCsvRow, ImportError, ImportResult};
+pub use intercompany::{
+    CreateIntercompanyLink, CreateIntercompanyTransaction, IntercompanyLink,
+    IntercompanyTransaction,
+};
 pub use inventory::{
     CreateInventoryItem, InventoryAdjustment, InventoryItem, InventoryMovement,
     InventoryValuationReport, InventoryValuationRow, LowStockItem, UpdateInventoryItem,
