@@ -4,13 +4,14 @@ use axum::{
     Json,
 };
 use oxidebooks_core::models::{
-    CreateCashSale, CreateInvoice, CreatePayment, InvoiceFilters, InvoiceType,
-    ProgressInvoiceInput, UpdateInvoice,
+    BillableExpenseRef, CreateCashSale, CreateInvoice, CreateInvoiceLine, CreatePayment,
+    InvoiceFilters, InvoiceType, ProgressInvoiceInput, UpdateInvoice,
 };
 use oxidebooks_core::pagination::PageParams;
-use oxidebooks_db::repos::{AuditRepo, InvoiceRepo, PaymentRepo};
+use oxidebooks_db::repos::{AuditRepo, ExpenseRepo, InvoiceRepo, PaymentRepo};
 use serde::Deserialize;
 use tracing::info;
+use uuid::Uuid;
 
 use crate::{
     error::{ApiError, ApiResult},
@@ -273,5 +274,87 @@ pub async fn create_cash_sale(
     Ok((
         StatusCode::CREATED,
         Json(serde_json::json!({ "data": { "invoice": invoice, "payment": payment } })),
+    ))
+}
+
+/// POST /api/v1/invoices/from-expenses
+/// Wraps a set of approved billable expenses into a new invoice and marks them billed.
+pub async fn create_from_expenses(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Json(body): Json<BillableExpenseRef>,
+) -> ApiResult<(StatusCode, Json<serde_json::Value>)> {
+    if !claims.has("invoices:write") {
+        return Err(ApiError::Forbidden);
+    }
+    if body.expense_ids.is_empty() {
+        return Err(ApiError::BadRequest("expense_ids must not be empty".into()));
+    }
+
+    // Fetch and validate every expense.
+    let mut lines: Vec<CreateInvoiceLine> = Vec::with_capacity(body.expense_ids.len());
+    let mut expense_uuids: Vec<Uuid> = Vec::with_capacity(body.expense_ids.len());
+
+    for eid in &body.expense_ids {
+        let exp = ExpenseRepo::get_by_id(&state.db, &claims.org, eid).await?;
+
+        if !exp.is_billable {
+            return Err(ApiError::BadRequest(format!(
+                "expense {eid} is not marked as billable"
+            )));
+        }
+        if exp.billed_invoice_id.is_some() {
+            return Err(ApiError::BadRequest(format!(
+                "expense {eid} has already been billed"
+            )));
+        }
+        if exp.billable_contact_id.as_deref() != Some(&body.contact_id) {
+            return Err(ApiError::BadRequest(format!(
+                "expense {eid} is not billable to contact {}",
+                body.contact_id
+            )));
+        }
+
+        lines.push(CreateInvoiceLine {
+            description: exp.description.clone(),
+            quantity: 100,
+            unit_price: exp.amount,
+            account_id: exp.account_id.clone(),
+            tax_rate: None,
+            discount_pct: 0,
+            product_id: None,
+        });
+
+        expense_uuids.push(
+            Uuid::parse_str(eid)
+                .map_err(|_| ApiError::BadRequest(format!("invalid UUID: {eid}")))?,
+        );
+    }
+
+    let invoice_input = CreateInvoice {
+        contact_id: body.contact_id,
+        invoice_type: InvoiceType::Invoice,
+        date: body.invoice_date,
+        due_date: body.due_date.unwrap_or(body.invoice_date),
+        currency: None,
+        exchange_rate: None,
+        notes: None,
+        global_discount_pct: 0,
+        lines,
+    };
+
+    let invoice = InvoiceRepo::create(&state.db, &claims.org, invoice_input).await?;
+
+    ExpenseRepo::mark_billed(
+        &state.db,
+        &claims.org,
+        &expense_uuids,
+        Uuid::parse_str(&invoice.id).expect("invoice id is valid UUID"),
+    )
+    .await?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({ "data": invoice })),
     ))
 }

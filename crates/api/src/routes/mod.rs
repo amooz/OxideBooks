@@ -199,6 +199,10 @@ pub fn build(state: AppState) -> Router {
         )
         .route("/invoices/cash-sale", post(invoices::create_cash_sale))
         .route(
+            "/invoices/from-expenses",
+            post(invoices::create_from_expenses),
+        )
+        .route(
             "/invoices/:id",
             get(invoices::get_invoice).patch(invoices::update_invoice),
         )
@@ -287,6 +291,7 @@ pub fn build(state: AppState) -> Router {
             "/expenses",
             get(expenses::list_expenses).post(expenses::create_expense),
         )
+        .route("/expenses/billable", get(expenses::list_billable_expenses))
         .route(
             "/expenses/:id",
             get(expenses::get_expense).patch(expenses::update_expense),
@@ -941,6 +946,7 @@ pub fn build(state: AppState) -> Router {
         )
         // Vendor bills (AP)
         .route("/bills", get(bills::list_bills).post(bills::create_bill))
+        .route("/bills/spend-money", post(bills::create_spend_money))
         .route("/bills/:id", get(bills::get_bill).patch(bills::update_bill))
         .route("/bills/:id/approve", post(bills::approve_bill))
         .route("/bills/:id/void", post(bills::void_bill))

@@ -3,7 +3,9 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use oxidebooks_core::models::{CreateBillPayment, CreateVendorBill, UpdateVendorBill};
+use oxidebooks_core::models::{
+    CreateBillPayment, CreateSpendMoney, CreateVendorBill, UpdateVendorBill,
+};
 use oxidebooks_db::repos::BillRepo;
 
 use crate::{
@@ -121,4 +123,51 @@ pub async fn list_bill_payments(
     }
     let payments = BillRepo::list_payments(&state.db, &claims.org, &id).await?;
     Ok(Json(serde_json::json!({ "data": payments })))
+}
+
+/// POST /api/v1/bills/spend-money
+/// Creates a vendor bill + full payment atomically (no open AP).
+pub async fn create_spend_money(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Json(body): Json<CreateSpendMoney>,
+) -> ApiResult<(StatusCode, Json<serde_json::Value>)> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+
+    let payment_date = body.date;
+    let payment_method = body.payment_method.clone();
+    let reference = body.reference.clone();
+
+    let bill_input = CreateVendorBill {
+        contact_id: body.contact_id,
+        bill_date: payment_date,
+        due_date: Some(payment_date),
+        reference: reference.clone(),
+        description: body.description,
+        currency_code: body.currency_code,
+        exchange_rate: body.exchange_rate,
+        lines: body.lines,
+    };
+
+    let bill = BillRepo::create(&state.db, &claims.org, bill_input).await?;
+
+    let payment = BillRepo::record_payment(
+        &state.db,
+        &claims.org,
+        &bill.id,
+        CreateBillPayment {
+            payment_date,
+            amount: bill.total,
+            method: payment_method,
+            reference,
+        },
+    )
+    .await?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({ "data": { "bill": bill, "payment": payment } })),
+    ))
 }

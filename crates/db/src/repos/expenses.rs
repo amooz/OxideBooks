@@ -20,6 +20,9 @@ struct ExpenseRow {
     account_id: Option<Uuid>,
     project_id: Option<Uuid>,
     status: String,
+    is_billable: bool,
+    billable_contact_id: Option<Uuid>,
+    billed_invoice_id: Option<Uuid>,
     receipt_url: Option<String>,
     notes: Option<String>,
     created_at: OffsetDateTime,
@@ -39,6 +42,9 @@ fn from_row(r: ExpenseRow) -> Expense {
         account_id: r.account_id.map(|u| u.to_string()),
         project_id: r.project_id.map(|u| u.to_string()),
         status: ExpenseStatus::from_str(&r.status).unwrap_or(ExpenseStatus::Draft),
+        is_billable: r.is_billable,
+        billable_contact_id: r.billable_contact_id.map(|u| u.to_string()),
+        billed_invoice_id: r.billed_invoice_id.map(|u| u.to_string()),
         receipt_url: r.receipt_url,
         notes: r.notes,
         created_at: r.created_at,
@@ -47,7 +53,8 @@ fn from_row(r: ExpenseRow) -> Expense {
 }
 
 const COLS: &str = "id, organization_id, user_id, expense_date, amount, currency, category, \
-                    description, account_id, project_id, status, receipt_url, notes, \
+                    description, account_id, project_id, status, is_billable, \
+                    billable_contact_id, billed_invoice_id, receipt_url, notes, \
                     created_at, updated_at";
 
 pub struct ExpenseRepo;
@@ -148,12 +155,17 @@ impl ExpenseRepo {
         let user_uuid = parse_uuid(user_id)?;
         let acct_uuid = input.account_id.as_deref().map(parse_uuid).transpose()?;
         let proj_uuid = input.project_id.as_deref().map(parse_uuid).transpose()?;
+        let contact_uuid = input
+            .billable_contact_id
+            .as_deref()
+            .map(parse_uuid)
+            .transpose()?;
 
         let id: Uuid = sqlx::query_scalar(
             "INSERT INTO expenses \
              (organization_id, user_id, expense_date, amount, currency, category, description, \
-              account_id, project_id, receipt_url, notes) \
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id",
+              account_id, project_id, is_billable, billable_contact_id, receipt_url, notes) \
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id",
         )
         .bind(org_uuid)
         .bind(user_uuid)
@@ -164,6 +176,8 @@ impl ExpenseRepo {
         .bind(&input.description)
         .bind(acct_uuid)
         .bind(proj_uuid)
+        .bind(input.is_billable.unwrap_or(false))
+        .bind(contact_uuid)
         .bind(&input.receipt_url)
         .bind(&input.notes)
         .fetch_one(pool)
@@ -189,23 +203,33 @@ impl ExpenseRepo {
         let id_uuid = parse_uuid(id)?;
         let acct_uuid = input.account_id.as_deref().map(parse_uuid).transpose()?;
 
+        let billable_contact_uuid = input
+            .billable_contact_id
+            .as_deref()
+            .map(parse_uuid)
+            .transpose()?;
+
         sqlx::query(
             "UPDATE expenses SET \
-             expense_date = COALESCE($1, expense_date), \
-             amount       = COALESCE($2, amount), \
-             category     = COALESCE($3, category), \
-             description  = COALESCE($4, description), \
-             account_id   = COALESCE($5, account_id), \
-             receipt_url  = COALESCE($6, receipt_url), \
-             notes        = COALESCE($7, notes), \
-             updated_at   = NOW() \
-             WHERE id = $8 AND organization_id = $9",
+             expense_date         = COALESCE($1, expense_date), \
+             amount               = COALESCE($2, amount), \
+             category             = COALESCE($3, category), \
+             description          = COALESCE($4, description), \
+             account_id           = COALESCE($5, account_id), \
+             is_billable          = COALESCE($6, is_billable), \
+             billable_contact_id  = COALESCE($7, billable_contact_id), \
+             receipt_url          = COALESCE($8, receipt_url), \
+             notes                = COALESCE($9, notes), \
+             updated_at           = NOW() \
+             WHERE id = $10 AND organization_id = $11",
         )
         .bind(input.expense_date)
         .bind(input.amount)
         .bind(input.category)
         .bind(input.description)
         .bind(acct_uuid)
+        .bind(input.is_billable)
+        .bind(billable_contact_uuid)
         .bind(input.receipt_url)
         .bind(input.notes)
         .bind(id_uuid)
@@ -215,6 +239,51 @@ impl ExpenseRepo {
         .map_err(map_sqlx_err)?;
 
         Self::get_by_id(pool, org_id, id).await
+    }
+
+    /// Returns unbilled billable expenses for a contact in the org.
+    pub async fn list_billable(
+        pool: &PgPool,
+        org_id: &str,
+        contact_id: &str,
+    ) -> Result<Vec<Expense>, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let contact_uuid = parse_uuid(contact_id)?;
+        let rows: Vec<ExpenseRow> = sqlx::query_as(&format!(
+            "SELECT {COLS} FROM expenses \
+             WHERE organization_id = $1 \
+               AND billable_contact_id = $2 \
+               AND is_billable = TRUE \
+               AND billed_invoice_id IS NULL \
+             ORDER BY expense_date ASC, id ASC"
+        ))
+        .bind(org_uuid)
+        .bind(contact_uuid)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+        Ok(rows.into_iter().map(from_row).collect())
+    }
+
+    /// Marks a set of expense IDs as billed against the given invoice.
+    pub async fn mark_billed(
+        pool: &PgPool,
+        org_id: &str,
+        expense_ids: &[Uuid],
+        invoice_id: Uuid,
+    ) -> Result<(), DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        sqlx::query(
+            "UPDATE expenses SET billed_invoice_id = $1, updated_at = NOW() \
+             WHERE organization_id = $2 AND id = ANY($3)",
+        )
+        .bind(invoice_id)
+        .bind(org_uuid)
+        .bind(expense_ids)
+        .execute(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+        Ok(())
     }
 
     pub async fn transition(
