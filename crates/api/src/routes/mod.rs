@@ -16,7 +16,7 @@ use tower_http::{
 use crate::{
     handlers::{
         accounts, api_keys, approval_rules, attachments, audit, auth, auth_sso, bank,
-        bank_deposits, bank_rules, batch_payments, bills, budgets, bulk, client_portal,
+        bank_deposits, bank_rules, batch_payments, bills, budgets, bulk, check_runs, client_portal,
         closed_periods, commissions, consolidated, contact_groups, contacts, credit_notes,
         custom_fields, deferred_charges, deferred_revenue, departments, doc_sequences, dunning,
         email, employee_loans, employees, exchange_rates, expense_categories, expense_policies,
@@ -26,9 +26,9 @@ use crate::{
         organizations, payment_links, payment_plans, payment_terms, payments, payroll, payroll_tax,
         payslips, prepaid_expenses, prepayments, price_lists, product_categories, products,
         projects, purchase_orders, purchase_requisitions, recurring, reports, retainers, roles,
-        sales_orders, scim, sessions, stripe_webhook, subscriptions, tags, tax_groups, tax_periods,
-        tax_rates, time_entries, totp, tracking_categories, transactions, users, vendor_credits,
-        warehouses, webhooks,
+        sales_orders, sales_tax_nexus, scim, sessions, stripe_webhook, subscriptions, tags,
+        tax_groups, tax_periods, tax_rates, time_entries, totp, tracking_categories, transactions,
+        users, vendor_credits, warehouses, webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -1114,6 +1114,33 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/sales-orders/:id/convert-to-invoice",
             post(sales_orders::convert_so_to_invoice),
+        )
+        // Sales tax nexus
+        .route(
+            "/sales-tax-nexus",
+            get(sales_tax_nexus::list_nexus).post(sales_tax_nexus::create_nexus),
+        )
+        .route(
+            "/sales-tax-nexus/:id",
+            get(sales_tax_nexus::get_nexus)
+                .patch(sales_tax_nexus::update_nexus)
+                .delete(sales_tax_nexus::delete_nexus),
+        )
+        // Check runs
+        .route(
+            "/check-runs",
+            get(check_runs::list_check_runs).post(check_runs::create_check_run),
+        )
+        .route("/check-runs/:id", get(check_runs::get_check_run))
+        .route(
+            "/check-runs/:id/items",
+            get(check_runs::list_check_run_items),
+        )
+        .route("/check-runs/:id/print", post(check_runs::print_check_run))
+        .route("/check-runs/:id/void", post(check_runs::void_check_run))
+        .route(
+            "/check-runs/:id/items/:item_id/void",
+            post(check_runs::void_check_run_item),
         )
         // Tax groups
         .route(
