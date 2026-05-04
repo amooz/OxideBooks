@@ -5,6 +5,7 @@ use axum::{
 };
 use oxidebooks_core::models::{CreatePayrollEntry, CreatePayrollRun};
 use oxidebooks_db::repos::PayrollRepo;
+use serde::Deserialize;
 
 use crate::{
     error::{ApiError, ApiResult},
@@ -82,4 +83,35 @@ pub async fn pay_payroll_run(
     }
     let run = PayrollRepo::mark_paid(&state.db, &claims.org, &id).await?;
     Ok(Json(serde_json::json!(run)))
+}
+
+#[derive(Deserialize)]
+pub struct PostJournalBody {
+    pub wages_account_id: String,
+    pub tax_account_id: String,
+    pub cash_account_id: String,
+    pub deductions_account_id: Option<String>,
+}
+
+/// POST /api/v1/payroll-runs/:id/post-journal
+pub async fn post_payroll_journal(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<String>,
+    Json(body): Json<PostJournalBody>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_admin() {
+        return Err(ApiError::Forbidden);
+    }
+    let run = PayrollRepo::post_journal(
+        &state.db,
+        &claims.org,
+        &id,
+        &body.wages_account_id,
+        &body.tax_account_id,
+        &body.cash_account_id,
+        body.deductions_account_id.as_deref(),
+    )
+    .await?;
+    Ok(Json(serde_json::json!({ "data": run })))
 }

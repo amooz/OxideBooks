@@ -73,6 +73,7 @@ pub mod project_phase;
 pub mod purchase_order;
 pub mod purchase_requisition;
 pub mod recurring;
+pub mod recurring_bill;
 pub mod recurring_journal_entry;
 pub mod reports;
 pub mod retainer;
@@ -247,21 +248,26 @@ pub use purchase_requisition::{
 pub use recurring::{
     CreateRecurringSchedule, Frequency, RecurringSchedule, UpdateRecurringSchedule,
 };
+pub use recurring_bill::{
+    CreateRecurringBill, CreateRecurringBillLine, RecurringBill, RecurringBillLine,
+    UpdateRecurringBill,
+};
 pub use recurring_journal_entry::{
     CreateRecurringJournalEntry, CreateRecurringJournalEntryLine, RecurringJournalEntry,
     RecurringJournalEntryLine, UpdateRecurringJournalEntry,
 };
 pub use reports::{
     AccountBalance, AccountLedger, AgingReport, AgingRow, ApAgingDetailReport, ApAgingDetailRow,
-    ArAgingDetailReport, ArAgingDetailRow, BalanceSheetReport, CashFlowForecast,
-    CashFlowForecastBucket, CashFlowReport, CashFlowSection, DashboardKpis, Form941Quarter,
-    GrniReport, GrniRow, JobCostingCostCodeRow, JobCostingReport, JobCostingRow, LedgerLine,
-    OutstandingQuoteRow, OutstandingQuotesReport, PLComparisonReport, PayrollSummaryReport,
-    PayrollSummaryRow, PoSpendingReport, PoSpendingRow, ProfitLossReport,
-    ProjectProfitabilityReport, ProjectProfitabilityRow, RemittanceAdvice, RemittanceLine,
-    ReportLine, ReportSection, SalesByCustomerReport, SalesByCustomerRow, SalesByProductReport,
-    SalesByProductRow, SearchHit, Summary1099, TaxSummaryLine, TaxSummaryReport, TrialBalance,
-    Vendor1099Row, VendorSpendReport, VendorSpendRow, W2Row,
+    ArAgingDetailReport, ArAgingDetailRow, BalanceSheetComparisonReport,
+    BalanceSheetComparisonSection, BalanceSheetReport, CashFlowForecast, CashFlowForecastBucket,
+    CashFlowReport, CashFlowSection, DashboardKpis, Form941Quarter, GrniReport, GrniRow,
+    JobCostingCostCodeRow, JobCostingReport, JobCostingRow, LedgerLine, OutstandingQuoteRow,
+    OutstandingQuotesReport, PLComparisonReport, PayrollSummaryReport, PayrollSummaryRow,
+    PoSpendingReport, PoSpendingRow, ProfitLossReport, ProjectProfitabilityReport,
+    ProjectProfitabilityRow, RemittanceAdvice, RemittanceLine, ReportLine, ReportSection,
+    SalesByCustomerReport, SalesByCustomerRow, SalesByProductReport, SalesByProductRow, SearchHit,
+    Summary1099, TaxSummaryLine, TaxSummaryReport, TrialBalance, Vendor1099Row, VendorSpendReport,
+    VendorSpendRow, W2Row,
 };
 pub use retainer::{ApplyRetainer, CreateRetainer, DepositRetainer, Retainer, RetainerTransaction};
 pub use role::{AssignPermission, CreateRole, Permission, Role};

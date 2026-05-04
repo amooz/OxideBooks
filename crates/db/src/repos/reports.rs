@@ -1,14 +1,15 @@
 use oxidebooks_core::models::{
     AccountBalance, AccountLedger, AccountType, AgingReport, AgingRow, ApAgingDetailReport,
-    ApAgingDetailRow, ArAgingDetailReport, ArAgingDetailRow, BalanceSheetReport, CashFlowForecast,
-    CashFlowForecastBucket, CashFlowReport, CashFlowSection, ConsolidatedProfitLoss,
-    ContactStatement, DashboardKpis, Form941Quarter, GrniReport, GrniRow, JobCostingCostCodeRow,
-    JobCostingReport, JobCostingRow, LedgerLine, OrgProfitLoss, OutstandingQuoteRow,
-    OutstandingQuotesReport, PLComparisonReport, PayrollSummaryReport, PayrollSummaryRow,
-    PoSpendingReport, PoSpendingRow, ProfitLossReport, ProjectProfitabilityReport,
-    ProjectProfitabilityRow, ReportLine, ReportSection, SalesByCustomerReport, SalesByCustomerRow,
-    SalesByProductReport, SalesByProductRow, StatementLine, TaxSummaryLine, TaxSummaryReport,
-    TrialBalance, VendorSpendReport, VendorSpendRow, W2Row,
+    ApAgingDetailRow, ArAgingDetailReport, ArAgingDetailRow, BalanceSheetComparisonReport,
+    BalanceSheetComparisonSection, BalanceSheetReport, CashFlowForecast, CashFlowForecastBucket,
+    CashFlowReport, CashFlowSection, ConsolidatedProfitLoss, ContactStatement, DashboardKpis,
+    Form941Quarter, GrniReport, GrniRow, JobCostingCostCodeRow, JobCostingReport, JobCostingRow,
+    LedgerLine, OrgProfitLoss, OutstandingQuoteRow, OutstandingQuotesReport, PLComparisonReport,
+    PayrollSummaryReport, PayrollSummaryRow, PoSpendingReport, PoSpendingRow, ProfitLossReport,
+    ProjectProfitabilityReport, ProjectProfitabilityRow, ReportLine, ReportSection,
+    SalesByCustomerReport, SalesByCustomerRow, SalesByProductReport, SalesByProductRow,
+    StatementLine, TaxSummaryLine, TaxSummaryReport, TrialBalance, VendorSpendReport,
+    VendorSpendRow, W2Row,
 };
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -262,6 +263,103 @@ impl ReportRepo {
                 total: equity_total,
             },
             is_balanced: asset_total == liability_total + equity_total,
+        })
+    }
+
+    /// Two-column balance sheet: current as_of vs prior_as_of.
+    pub async fn balance_sheet_comparison(
+        pool: &PgPool,
+        org_id: &str,
+        as_of: Date,
+        prior_as_of: Date,
+    ) -> Result<BalanceSheetComparisonReport, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            account_id: Uuid,
+            account_code: String,
+            account_name: String,
+            account_type: String,
+            current_debit: i64,
+            current_credit: i64,
+            prior_debit: i64,
+            prior_credit: i64,
+        }
+
+        let rows: Vec<Row> = sqlx::query_as(
+            r#"
+            SELECT
+                a.id AS account_id, a.code AS account_code, a.name AS account_name,
+                a.account_type,
+                COALESCE(SUM(CASE WHEN je.date <= $2 THEN jl.debit  ELSE 0 END), 0)::BIGINT AS current_debit,
+                COALESCE(SUM(CASE WHEN je.date <= $2 THEN jl.credit ELSE 0 END), 0)::BIGINT AS current_credit,
+                COALESCE(SUM(CASE WHEN je.date <= $3 THEN jl.debit  ELSE 0 END), 0)::BIGINT AS prior_debit,
+                COALESCE(SUM(CASE WHEN je.date <= $3 THEN jl.credit ELSE 0 END), 0)::BIGINT AS prior_credit
+            FROM accounts a
+            LEFT JOIN journal_lines jl ON jl.account_id = a.id
+            LEFT JOIN journal_entries je
+                ON  je.id              = jl.journal_entry_id
+                AND je.organization_id = $1
+                AND je.status          = 'posted'
+            WHERE a.organization_id = $1
+              AND a.account_type IN ('asset', 'liability', 'equity')
+            GROUP BY a.id, a.code, a.name, a.account_type
+            ORDER BY a.code
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(as_of)
+        .bind(prior_as_of)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let mut asset_lines: Vec<(ReportLine, i64)> = vec![];
+        let mut liability_lines: Vec<(ReportLine, i64)> = vec![];
+        let mut equity_lines: Vec<(ReportLine, i64)> = vec![];
+
+        for r in rows {
+            let (current, prior) = match r.account_type.as_str() {
+                "asset" => (
+                    r.current_debit - r.current_credit,
+                    r.prior_debit - r.prior_credit,
+                ),
+                _ => (
+                    r.current_credit - r.current_debit,
+                    r.prior_credit - r.prior_debit,
+                ),
+            };
+            let line = ReportLine {
+                account_id: r.account_id.to_string(),
+                account_code: r.account_code,
+                account_name: r.account_name,
+                amount: current,
+            };
+            match r.account_type.as_str() {
+                "asset" => asset_lines.push((line, prior)),
+                "liability" => liability_lines.push((line, prior)),
+                _ => equity_lines.push((line, prior)),
+            }
+        }
+
+        let make_section = |items: Vec<(ReportLine, i64)>| {
+            let current_total: i64 = items.iter().map(|(l, _)| l.amount).sum();
+            let prior_total: i64 = items.iter().map(|(_, p)| *p).sum();
+            BalanceSheetComparisonSection {
+                lines: items.into_iter().map(|(l, _)| l).collect(),
+                current_total,
+                prior_total,
+                change: current_total - prior_total,
+            }
+        };
+
+        Ok(BalanceSheetComparisonReport {
+            as_of,
+            prior_as_of,
+            assets: make_section(asset_lines),
+            liabilities: make_section(liability_lines),
+            equity: make_section(equity_lines),
         })
     }
 

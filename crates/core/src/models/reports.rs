@@ -84,6 +84,25 @@ pub struct BalanceSheetReport {
     pub is_balanced: bool,
 }
 
+// ── Balance Sheet Comparison ──────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BalanceSheetComparisonSection {
+    pub lines: Vec<ReportLine>,
+    pub current_total: MinorUnits,
+    pub prior_total: MinorUnits,
+    pub change: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BalanceSheetComparisonReport {
+    pub as_of: Date,
+    pub prior_as_of: Date,
+    pub assets: BalanceSheetComparisonSection,
+    pub liabilities: BalanceSheetComparisonSection,
+    pub equity: BalanceSheetComparisonSection,
+}
+
 // ── AR/AP Aging ───────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -81,6 +81,7 @@ pub mod projects;
 pub mod purchase_orders;
 pub mod purchase_requisitions;
 pub mod recurring;
+pub mod recurring_bills;
 pub mod recurring_journal_entries;
 pub mod reports;
 pub mod retainers;
