@@ -425,3 +425,51 @@ pub async fn grni_accrual(
     let report = ReportRepo::grni_accrual(&state.db, &claims.org, as_of).await?;
     Ok(Json(serde_json::json!({ "data": report })))
 }
+
+/// GET /api/v1/reports/ar-aging-detail?as_of=YYYY-MM-DD
+pub async fn ar_aging_detail(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<AsOfQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let as_of = parse_date(&q.as_of)?;
+    let report = ReportRepo::ar_aging_detail(&state.db, &claims.org, as_of).await?;
+    Ok(Json(serde_json::json!({ "data": report })))
+}
+
+/// GET /api/v1/reports/ap-aging-detail?as_of=YYYY-MM-DD
+pub async fn ap_aging_detail(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<AsOfQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let as_of = parse_date(&q.as_of)?;
+    let report = ReportRepo::ap_aging_detail(&state.db, &claims.org, as_of).await?;
+    Ok(Json(serde_json::json!({ "data": report })))
+}
+
+/// GET /api/v1/reports/sales-by-customer?from=YYYY-MM-DD&to=YYYY-MM-DD
+pub async fn sales_by_customer(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<DateRangeQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let from = parse_date(&q.from)?;
+    let to = parse_date(&q.to)?;
+    if from > to {
+        return Err(ApiError::BadRequest(
+            "'from' must be on or before 'to'".into(),
+        ));
+    }
+    let report = ReportRepo::sales_by_customer(&state.db, &claims.org, from, to).await?;
+    Ok(Json(serde_json::json!({ "data": report })))
+}

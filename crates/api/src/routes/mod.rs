@@ -1465,6 +1465,14 @@ pub fn build(state: AppState) -> Router {
         .route("/reports/payroll-summary", get(reports::payroll_summary))
         // GRNI accrual report
         .route("/reports/grni-accrual", get(reports::grni_accrual))
+        // AR / AP aging detail
+        .route("/reports/ar-aging-detail", get(reports::ar_aging_detail))
+        .route("/reports/ap-aging-detail", get(reports::ap_aging_detail))
+        // Sales by customer
+        .route(
+            "/reports/sales-by-customer",
+            get(reports::sales_by_customer),
+        )
         // Inventory stocktakes
         .route(
             "/inventory-stocktakes",

@@ -152,6 +152,7 @@ pub async fn po_create_bill(
             quantity: l.quantity_received as i32,
             unit_price: l.unit_price,
             tax_rate: l.tax_rate,
+            variant_id: None,
         })
         .collect();
 

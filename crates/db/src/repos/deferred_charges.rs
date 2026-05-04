@@ -240,6 +240,7 @@ impl DeferredChargeRepo {
                 unit_price: c.amount,
                 tax_rate: Some(c.tax_rate),
                 discount_pct: 0,
+                variant_id: None,
                 product_id: None,
             })
             .collect();
