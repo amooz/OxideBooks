@@ -591,6 +591,55 @@ pub struct PoSpendingReport {
     pub total_billed: MinorUnits,
 }
 
+// ── Indirect Cash Flow Statement ──────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CashFlowIndirectLine {
+    pub account_id: String,
+    pub account_code: String,
+    pub account_name: String,
+    pub net_change: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CashFlowIndirectSection {
+    pub lines: Vec<CashFlowIndirectLine>,
+    pub total: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CashFlowIndirectReport {
+    pub from: Date,
+    pub to: Date,
+    pub operating: CashFlowIndirectSection,
+    pub investing: CashFlowIndirectSection,
+    pub financing: CashFlowIndirectSection,
+    pub net_change: MinorUnits,
+}
+
+// ── VAT Return ────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VatReturnLine {
+    pub tax_rate_id: Option<String>,
+    pub tax_rate_name: String,
+    pub rate_pct: i64,
+    pub taxable_sales: MinorUnits,
+    pub output_tax: MinorUnits,
+    pub taxable_purchases: MinorUnits,
+    pub input_tax: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VatReturnReport {
+    pub from: Date,
+    pub to: Date,
+    pub lines: Vec<VatReturnLine>,
+    pub total_output_tax: MinorUnits,
+    pub total_input_tax: MinorUnits,
+    pub net_vat_payable: MinorUnits,
+}
+
 // ── Global Search ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

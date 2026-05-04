@@ -506,6 +506,46 @@ pub async fn balance_sheet_comparison(
     Ok(Json(serde_json::json!({ "data": report })))
 }
 
+/// GET /api/v1/reports/cash-flow-indirect?from=YYYY-MM-DD&to=YYYY-MM-DD
+pub async fn cash_flow_indirect(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<DateRangeQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let from = parse_date(&q.from)?;
+    let to = parse_date(&q.to)?;
+    if from > to {
+        return Err(ApiError::BadRequest(
+            "'from' must be on or before 'to'".into(),
+        ));
+    }
+    let report = ReportRepo::cash_flow_indirect(&state.db, &claims.org, from, to).await?;
+    Ok(Json(serde_json::json!({ "data": report })))
+}
+
+/// GET /api/v1/reports/vat-return?from=YYYY-MM-DD&to=YYYY-MM-DD
+pub async fn vat_return(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<DateRangeQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let from = parse_date(&q.from)?;
+    let to = parse_date(&q.to)?;
+    if from > to {
+        return Err(ApiError::BadRequest(
+            "'from' must be on or before 'to'".into(),
+        ));
+    }
+    let report = ReportRepo::vat_return(&state.db, &claims.org, from, to).await?;
+    Ok(Json(serde_json::json!({ "data": report })))
+}
+
 /// GET /api/v1/reports/outstanding-quotes?as_of=YYYY-MM-DD
 pub async fn outstanding_quotes(
     State(state): State<AppState>,

@@ -18,6 +18,7 @@ struct AccountRow {
     sub_type: Option<String>,
     description: Option<String>,
     is_active: bool,
+    cash_flow_category: Option<String>,
     created_at: OffsetDateTime,
     updated_at: OffsetDateTime,
 }
@@ -34,11 +35,15 @@ impl AccountRow {
             sub_type: self.sub_type,
             description: self.description,
             is_active: self.is_active,
+            cash_flow_category: self.cash_flow_category,
             created_at: self.created_at,
             updated_at: self.updated_at,
         })
     }
 }
+
+const COLS: &str = "id, organization_id, code, name, account_type, parent_id, sub_type, \
+                    description, is_active, cash_flow_category, created_at, updated_at";
 
 pub struct AccountRepo;
 
@@ -59,13 +64,11 @@ impl AccountRepo {
             )
             .map_err(|_| DbError::Conflict("invalid cursor".into()))?;
             let cursor_id = parse_uuid(&c.id)?;
-            sqlx::query_as(
-                "SELECT id, organization_id, code, name, account_type, parent_id, sub_type, \
-                 description, is_active, created_at, updated_at \
-                 FROM accounts \
+            sqlx::query_as(&format!(
+                "SELECT {COLS} FROM accounts \
                  WHERE organization_id = $1 AND (created_at, id) > ($2, $3) \
-                 ORDER BY created_at ASC, id ASC LIMIT $4",
-            )
+                 ORDER BY created_at ASC, id ASC LIMIT $4"
+            ))
             .bind(org_uuid)
             .bind(cursor_ts)
             .bind(cursor_id)
@@ -74,12 +77,10 @@ impl AccountRepo {
             .await
             .map_err(map_sqlx_err)?
         } else {
-            sqlx::query_as(
-                "SELECT id, organization_id, code, name, account_type, parent_id, sub_type, \
-                 description, is_active, created_at, updated_at \
-                 FROM accounts WHERE organization_id = $1 \
-                 ORDER BY created_at ASC, id ASC LIMIT $2",
-            )
+            sqlx::query_as(&format!(
+                "SELECT {COLS} FROM accounts WHERE organization_id = $1 \
+                 ORDER BY created_at ASC, id ASC LIMIT $2"
+            ))
             .bind(org_uuid)
             .bind(limit + 1)
             .fetch_all(pool)
@@ -106,11 +107,9 @@ impl AccountRepo {
         let org_uuid = parse_uuid(org_id)?;
         let id_uuid = parse_uuid(id)?;
 
-        let row: AccountRow = sqlx::query_as(
-            "SELECT id, organization_id, code, name, account_type, parent_id, sub_type, \
-             description, is_active, created_at, updated_at \
-             FROM accounts WHERE organization_id = $1 AND id = $2",
-        )
+        let row: AccountRow = sqlx::query_as(&format!(
+            "SELECT {COLS} FROM accounts WHERE organization_id = $1 AND id = $2"
+        ))
         .bind(org_uuid)
         .bind(id_uuid)
         .fetch_optional(pool)
@@ -162,12 +161,13 @@ impl AccountRepo {
 
         sqlx::query(
             "UPDATE accounts SET \
-             code        = COALESCE($3, code), \
-             name        = COALESCE($4, name), \
-             sub_type    = COALESCE($5, sub_type), \
-             description = COALESCE($6, description), \
-             is_active   = COALESCE($7, is_active), \
-             updated_at  = NOW() \
+             code                = COALESCE($3, code), \
+             name                = COALESCE($4, name), \
+             sub_type            = COALESCE($5, sub_type), \
+             description         = COALESCE($6, description), \
+             is_active           = COALESCE($7, is_active), \
+             cash_flow_category  = COALESCE($8, cash_flow_category), \
+             updated_at          = NOW() \
              WHERE organization_id = $1 AND id = $2",
         )
         .bind(org_uuid)
@@ -177,6 +177,7 @@ impl AccountRepo {
         .bind(&input.sub_type)
         .bind(&input.description)
         .bind(input.is_active)
+        .bind(&input.cash_flow_category)
         .execute(pool)
         .await
         .map_err(map_sqlx_err)?;

@@ -2,14 +2,15 @@ use oxidebooks_core::models::{
     AccountBalance, AccountLedger, AccountType, AgingReport, AgingRow, ApAgingDetailReport,
     ApAgingDetailRow, ArAgingDetailReport, ArAgingDetailRow, BalanceSheetComparisonReport,
     BalanceSheetComparisonSection, BalanceSheetReport, CashFlowForecast, CashFlowForecastBucket,
-    CashFlowReport, CashFlowSection, ConsolidatedProfitLoss, ContactStatement, DashboardKpis,
-    Form941Quarter, GrniReport, GrniRow, JobCostingCostCodeRow, JobCostingReport, JobCostingRow,
-    LedgerLine, OrgProfitLoss, OutstandingQuoteRow, OutstandingQuotesReport, PLComparisonReport,
+    CashFlowIndirectLine, CashFlowIndirectReport, CashFlowIndirectSection, CashFlowReport,
+    CashFlowSection, ConsolidatedProfitLoss, ContactStatement, DashboardKpis, Form941Quarter,
+    GrniReport, GrniRow, JobCostingCostCodeRow, JobCostingReport, JobCostingRow, LedgerLine,
+    OrgProfitLoss, OutstandingQuoteRow, OutstandingQuotesReport, PLComparisonReport,
     PayrollSummaryReport, PayrollSummaryRow, PoSpendingReport, PoSpendingRow, ProfitLossReport,
     ProjectProfitabilityReport, ProjectProfitabilityRow, ReportLine, ReportSection,
     SalesByCustomerReport, SalesByCustomerRow, SalesByProductReport, SalesByProductRow,
-    StatementLine, TaxSummaryLine, TaxSummaryReport, TrialBalance, VendorSpendReport,
-    VendorSpendRow, W2Row,
+    StatementLine, TaxSummaryLine, TaxSummaryReport, TrialBalance, VatReturnLine, VatReturnReport,
+    VendorSpendReport, VendorSpendRow, W2Row,
 };
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -2532,6 +2533,203 @@ impl ReportRepo {
             rows: spend_rows,
             total_ordered,
             total_billed,
+        })
+    }
+
+    pub async fn cash_flow_indirect(
+        pool: &PgPool,
+        org_id: &str,
+        from: Date,
+        to: Date,
+    ) -> Result<CashFlowIndirectReport, DbError> {
+        let org_uuid =
+            Uuid::from_str(org_id).map_err(|_| DbError::Conflict("bad org id".into()))?;
+
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            account_id: Uuid,
+            account_code: String,
+            account_name: String,
+            category: String,
+            net_debit: i64,
+            net_credit: i64,
+        }
+
+        let rows: Vec<Row> = sqlx::query_as(
+            r#"
+            SELECT
+                a.id            AS account_id,
+                a.code          AS account_code,
+                a.name          AS account_name,
+                a.cash_flow_category AS category,
+                COALESCE(SUM(jl.debit),  0)::BIGINT AS net_debit,
+                COALESCE(SUM(jl.credit), 0)::BIGINT AS net_credit
+            FROM accounts a
+            JOIN journal_lines jl ON jl.account_id = a.id
+            JOIN journal_entries je
+                ON  je.id              = jl.journal_entry_id
+                AND je.organization_id = $1
+                AND je.status          = 'posted'
+                AND je.date BETWEEN $2 AND $3
+            WHERE a.organization_id = $1
+              AND a.cash_flow_category IS NOT NULL
+            GROUP BY a.id, a.code, a.name, a.cash_flow_category
+            ORDER BY a.cash_flow_category, a.code
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let mut operating: Vec<CashFlowIndirectLine> = vec![];
+        let mut investing: Vec<CashFlowIndirectLine> = vec![];
+        let mut financing: Vec<CashFlowIndirectLine> = vec![];
+
+        for r in rows {
+            let net_change = r.net_debit - r.net_credit;
+            let line = CashFlowIndirectLine {
+                account_id: r.account_id.to_string(),
+                account_code: r.account_code,
+                account_name: r.account_name,
+                net_change,
+            };
+            match r.category.as_str() {
+                "operating" => operating.push(line),
+                "investing" => investing.push(line),
+                _ => financing.push(line),
+            }
+        }
+
+        let op_total: i64 = operating.iter().map(|l| l.net_change).sum();
+        let inv_total: i64 = investing.iter().map(|l| l.net_change).sum();
+        let fin_total: i64 = financing.iter().map(|l| l.net_change).sum();
+
+        Ok(CashFlowIndirectReport {
+            from,
+            to,
+            operating: CashFlowIndirectSection {
+                lines: operating,
+                total: op_total,
+            },
+            investing: CashFlowIndirectSection {
+                lines: investing,
+                total: inv_total,
+            },
+            financing: CashFlowIndirectSection {
+                lines: financing,
+                total: fin_total,
+            },
+            net_change: op_total + inv_total + fin_total,
+        })
+    }
+
+    pub async fn vat_return(
+        pool: &PgPool,
+        org_id: &str,
+        from: Date,
+        to: Date,
+    ) -> Result<VatReturnReport, DbError> {
+        let org_uuid =
+            Uuid::from_str(org_id).map_err(|_| DbError::Conflict("bad org id".into()))?;
+
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            tax_rate_id: Option<Uuid>,
+            tax_rate_name: String,
+            rate_pct: i64,
+            taxable_sales: i64,
+            output_tax: i64,
+            taxable_purchases: i64,
+            input_tax: i64,
+        }
+
+        let rows: Vec<Row> = sqlx::query_as(
+            r#"
+            WITH sales AS (
+                SELECT
+                    tr.id           AS tax_rate_id,
+                    tr.name         AS tax_rate_name,
+                    tr.rate         AS rate_pct,
+                    COALESCE(SUM(il.quantity * il.unit_price
+                        * (100 - il.discount_pct) / 100), 0)::BIGINT AS taxable_amount,
+                    COALESCE(SUM(il.quantity * il.unit_price
+                        * (100 - il.discount_pct) / 100
+                        * il.tax_rate / 10000), 0)::BIGINT AS tax_amount
+                FROM invoice_lines il
+                JOIN invoices i ON i.id = il.invoice_id
+                JOIN tax_rates tr ON tr.rate = il.tax_rate
+                    AND tr.organization_id = i.organization_id
+                WHERE i.organization_id = $1
+                  AND i.invoice_type = 'invoice'
+                  AND i.status NOT IN ('draft','voided')
+                  AND i.date BETWEEN $2 AND $3
+                  AND il.tax_rate > 0
+                GROUP BY tr.id, tr.name, tr.rate
+            ),
+            purchases AS (
+                SELECT
+                    tr.id           AS tax_rate_id,
+                    tr.name         AS tax_rate_name,
+                    tr.rate         AS rate_pct,
+                    COALESCE(SUM(bl.quantity * bl.unit_price), 0)::BIGINT AS taxable_amount,
+                    COALESCE(SUM(bl.quantity * bl.unit_price
+                        * bl.tax_rate / 10000), 0)::BIGINT AS tax_amount
+                FROM bill_lines bl
+                JOIN vendor_bills vb ON vb.id = bl.bill_id
+                JOIN tax_rates tr ON tr.rate = bl.tax_rate
+                    AND tr.organization_id = vb.organization_id
+                WHERE vb.organization_id = $1
+                  AND vb.status NOT IN ('draft','voided')
+                  AND vb.bill_date BETWEEN $2 AND $3
+                  AND bl.tax_rate > 0
+                GROUP BY tr.id, tr.name, tr.rate
+            )
+            SELECT
+                COALESCE(s.tax_rate_id, p.tax_rate_id)  AS tax_rate_id,
+                COALESCE(s.tax_rate_name, p.tax_rate_name) AS tax_rate_name,
+                COALESCE(s.rate_pct, p.rate_pct)         AS rate_pct,
+                COALESCE(s.taxable_amount, 0)            AS taxable_sales,
+                COALESCE(s.tax_amount, 0)                AS output_tax,
+                COALESCE(p.taxable_amount, 0)            AS taxable_purchases,
+                COALESCE(p.tax_amount, 0)                AS input_tax
+            FROM sales s
+            FULL OUTER JOIN purchases p USING (tax_rate_id)
+            ORDER BY rate_pct DESC
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let lines: Vec<VatReturnLine> = rows
+            .into_iter()
+            .map(|r| VatReturnLine {
+                tax_rate_id: r.tax_rate_id.map(|u| u.to_string()),
+                tax_rate_name: r.tax_rate_name,
+                rate_pct: r.rate_pct,
+                taxable_sales: r.taxable_sales,
+                output_tax: r.output_tax,
+                taxable_purchases: r.taxable_purchases,
+                input_tax: r.input_tax,
+            })
+            .collect();
+
+        let total_output_tax: i64 = lines.iter().map(|l| l.output_tax).sum();
+        let total_input_tax: i64 = lines.iter().map(|l| l.input_tax).sum();
+
+        Ok(VatReturnReport {
+            from,
+            to,
+            lines,
+            total_output_tax,
+            total_input_tax,
+            net_vat_payable: total_output_tax - total_input_tax,
         })
     }
 }
