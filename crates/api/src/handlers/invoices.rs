@@ -8,7 +8,7 @@ use oxidebooks_core::models::{
     InvoiceFilters, InvoiceType, ProgressInvoiceInput, UpdateInvoice,
 };
 use oxidebooks_core::pagination::PageParams;
-use oxidebooks_db::repos::{AuditRepo, ExpenseRepo, InvoiceRepo, PaymentRepo};
+use oxidebooks_db::repos::{AuditRepo, ContactRepo, ExpenseRepo, InvoiceRepo, PaymentRepo};
 use serde::Deserialize;
 use tracing::info;
 use uuid::Uuid;
@@ -85,6 +85,24 @@ pub async fn create_invoice(
     if !claims.has("invoices:write") {
         return Err(ApiError::Forbidden);
     }
+
+    // Credit limit enforcement
+    if let Ok(contact) = ContactRepo::get_by_id(&state.db, &claims.org, &body.contact_id).await {
+        if let Some(limit) = contact.credit_limit {
+            if contact.credit_limit_behaviour == "block" {
+                let ar_balance =
+                    InvoiceRepo::contact_ar_balance(&state.db, &claims.org, &body.contact_id)
+                        .await
+                        .unwrap_or(0);
+                if ar_balance >= limit {
+                    return Err(ApiError::BadRequest(format!(
+                        "contact has reached their credit limit of {limit} (current balance: {ar_balance})"
+                    )));
+                }
+            }
+        }
+    }
+
     let invoice = InvoiceRepo::create(&state.db, &claims.org, body).await?;
     let _ = AuditRepo::record(
         &state.db,

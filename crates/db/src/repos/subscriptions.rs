@@ -475,4 +475,52 @@ impl SubscriptionRepo {
         Self::renew(pool, org_id, id).await?;
         Ok(invoice)
     }
+
+    /// Bill all active subscriptions whose current_period_end is on or before `as_of`.
+    /// Returns the list of generated invoice IDs and a count of failures.
+    pub async fn bill_due(
+        pool: &PgPool,
+        org_id: &str,
+        as_of: Date,
+    ) -> Result<BillingRunResult, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        let ids: Vec<Uuid> = sqlx::query_scalar(
+            "SELECT id FROM subscriptions
+             WHERE organization_id = $1
+               AND status IN ('active','trialing')
+               AND current_period_end <= $2",
+        )
+        .bind(org_uuid)
+        .bind(as_of)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let mut invoiced: Vec<String> = Vec::new();
+        let mut failed: Vec<String> = Vec::new();
+
+        for sub_id in ids {
+            let sid = sub_id.to_string();
+            match Self::bill(pool, org_id, &sid).await {
+                Ok(inv) => invoiced.push(inv.id),
+                Err(_) => failed.push(sid),
+            }
+        }
+
+        Ok(BillingRunResult {
+            invoiced_count: invoiced.len() as i64,
+            failed_count: failed.len() as i64,
+            invoice_ids: invoiced,
+            failed_subscription_ids: failed,
+        })
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct BillingRunResult {
+    pub invoiced_count: i64,
+    pub failed_count: i64,
+    pub invoice_ids: Vec<String>,
+    pub failed_subscription_ids: Vec<String>,
 }

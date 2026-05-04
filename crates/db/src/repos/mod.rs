@@ -184,7 +184,7 @@ pub use sales_orders::SalesOrderRepo;
 pub use sales_tax_nexus::SalesTaxNexusRepo;
 pub use service_territories::ServiceTerritoryRepo;
 pub use sessions::SessionRepo;
-pub use subscriptions::SubscriptionRepo;
+pub use subscriptions::{BillingRunResult, SubscriptionRepo};
 pub use tags::TagRepo;
 pub use tax_groups::TaxGroupRepo;
 pub use tax_periods::TaxPeriodRepo;

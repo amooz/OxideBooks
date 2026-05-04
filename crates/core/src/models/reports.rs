@@ -640,6 +640,25 @@ pub struct VatReturnReport {
     pub net_vat_payable: MinorUnits,
 }
 
+// ── Sales Tax by Nexus ────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SalesTaxByNexusRow {
+    pub jurisdiction_code: String,
+    pub jurisdiction_name: String,
+    pub taxable_sales: MinorUnits,
+    pub tax_collected: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SalesTaxByNexusReport {
+    pub from: Date,
+    pub to: Date,
+    pub rows: Vec<SalesTaxByNexusRow>,
+    pub total_taxable_sales: MinorUnits,
+    pub total_tax_collected: MinorUnits,
+}
+
 // ── Global Search ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
