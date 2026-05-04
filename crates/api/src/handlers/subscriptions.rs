@@ -151,3 +151,20 @@ pub async fn renew_subscription(
     let sub = SubscriptionRepo::renew(&state.db, &claims.org, &id).await?;
     Ok(Json(serde_json::json!(sub)))
 }
+
+/// POST /api/v1/subscriptions/:id/bill
+/// Creates a draft invoice for the current billing period and advances the period.
+pub async fn bill_subscription(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<String>,
+) -> ApiResult<(StatusCode, Json<serde_json::Value>)> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let invoice = SubscriptionRepo::bill(&state.db, &claims.org, &id).await?;
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({ "data": invoice })),
+    ))
+}

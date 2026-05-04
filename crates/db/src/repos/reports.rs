@@ -2,10 +2,10 @@ use oxidebooks_core::models::{
     AccountBalance, AccountLedger, AccountType, AgingReport, AgingRow, BalanceSheetReport,
     CashFlowForecast, CashFlowForecastBucket, CashFlowReport, CashFlowSection,
     ConsolidatedProfitLoss, ContactStatement, DashboardKpis, JobCostingCostCodeRow,
-    JobCostingReport, JobCostingRow, LedgerLine, OrgProfitLoss, ProfitLossReport,
-    ProjectProfitabilityReport, ProjectProfitabilityRow, ReportLine, ReportSection,
-    SalesByProductReport, SalesByProductRow, StatementLine, TaxSummaryLine, TaxSummaryReport,
-    TrialBalance, VendorSpendReport, VendorSpendRow,
+    JobCostingReport, JobCostingRow, LedgerLine, OrgProfitLoss, PayrollSummaryReport,
+    PayrollSummaryRow, ProfitLossReport, ProjectProfitabilityReport, ProjectProfitabilityRow,
+    ReportLine, ReportSection, SalesByProductReport, SalesByProductRow, StatementLine,
+    TaxSummaryLine, TaxSummaryReport, TrialBalance, VendorSpendReport, VendorSpendRow,
 };
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -1700,6 +1700,82 @@ impl ReportRepo {
             total_subtotal,
             total_paid,
             total_outstanding,
+        })
+    }
+
+    pub async fn payroll_summary(
+        pool: &PgPool,
+        org_id: &str,
+        from: Date,
+        to: Date,
+    ) -> Result<PayrollSummaryReport, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        #[derive(sqlx::FromRow)]
+        struct SummaryRow {
+            run_id: Uuid,
+            period_start: time::Date,
+            period_end: time::Date,
+            status: String,
+            employee_count: i64,
+            total_gross: i64,
+            total_tax: i64,
+            total_deductions: i64,
+            total_net: i64,
+        }
+
+        let rows: Vec<SummaryRow> = sqlx::query_as(
+            "SELECT
+               pr.id          AS run_id,
+               pr.period_start,
+               pr.period_end,
+               pr.status,
+               COUNT(pe.id)                                  AS employee_count,
+               COALESCE(SUM(pe.gross_pay), 0)::BIGINT        AS total_gross,
+               COALESCE(SUM(pe.tax_withheld), 0)::BIGINT     AS total_tax,
+               COALESCE(SUM(pe.other_deductions), 0)::BIGINT AS total_deductions,
+               COALESCE(SUM(pe.net_pay), 0)::BIGINT          AS total_net
+             FROM payroll_runs pr
+             LEFT JOIN payroll_entries pe ON pe.payroll_run_id = pr.id
+             WHERE pr.organization_id = $1
+               AND pr.period_start >= $2
+               AND pr.period_end   <= $3
+             GROUP BY pr.id, pr.period_start, pr.period_end, pr.status
+             ORDER BY pr.period_start DESC",
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let total_gross: i64 = rows.iter().map(|r| r.total_gross).sum();
+        let total_tax: i64 = rows.iter().map(|r| r.total_tax).sum();
+        let total_net: i64 = rows.iter().map(|r| r.total_net).sum();
+
+        let summary_rows: Vec<PayrollSummaryRow> = rows
+            .into_iter()
+            .map(|r| PayrollSummaryRow {
+                run_id: r.run_id.to_string(),
+                period_start: r.period_start,
+                period_end: r.period_end,
+                status: r.status,
+                employee_count: r.employee_count,
+                total_gross: r.total_gross,
+                total_tax: r.total_tax,
+                total_deductions: r.total_deductions,
+                total_net: r.total_net,
+            })
+            .collect();
+
+        Ok(PayrollSummaryReport {
+            from,
+            to,
+            rows: summary_rows,
+            total_gross,
+            total_tax,
+            total_net,
         })
     }
 }

@@ -352,3 +352,21 @@ pub async fn vendor_spend(
     let report = ReportRepo::vendor_spend(&state.db, &claims.org, from, to).await?;
     Ok(Json(serde_json::json!({ "data": report })))
 }
+
+/// GET /api/v1/reports/payroll-summary?from=YYYY-MM-DD&to=YYYY-MM-DD
+pub async fn payroll_summary(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<DateRangeQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let from = parse_date(&q.from)?;
+    let to = parse_date(&q.to)?;
+    if to < from {
+        return Err(ApiError::BadRequest("to must be >= from".into()));
+    }
+    let report = ReportRepo::payroll_summary(&state.db, &claims.org, from, to).await?;
+    Ok(Json(serde_json::json!({ "data": report })))
+}

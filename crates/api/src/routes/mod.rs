@@ -28,10 +28,10 @@ use crate::{
         payment_plans, payment_terms, payments, payroll, payroll_tax, payslips, prepaid_expenses,
         prepayments, price_lists, product_categories, products, project_phases, projects,
         purchase_orders, purchase_requisitions, recurring, recurring_journal_entries, reports,
-        retainers, roles, sales_orders, sales_tax_nexus, scim, sessions, stripe_webhook,
-        subscriptions, tags, tax_groups, tax_periods, tax_rates, tax_rules, time_entries, totp,
-        tracking_categories, transactions, users, vendor_credits, vendor_portal, warehouses,
-        webhooks, work_orders,
+        retainers, roles, sales_orders, sales_tax_nexus, scim, service_territories, sessions,
+        stripe_webhook, subscriptions, tags, tax_groups, tax_periods, tax_rates, tax_rules,
+        time_entries, totp, tracking_categories, transactions, users, vendor_credits,
+        vendor_portal, warehouses, webhooks, work_orders,
     },
     middleware::require_auth,
     state::AppState,
@@ -1426,6 +1426,25 @@ pub fn build(state: AppState) -> Router {
                 .patch(tax_rules::update_tax_rule)
                 .delete(tax_rules::delete_tax_rule),
         )
+        // Service territories (field service / work order dispatch)
+        .route(
+            "/service-territories",
+            get(service_territories::list_service_territories)
+                .post(service_territories::create_service_territory),
+        )
+        .route(
+            "/service-territories/:id",
+            get(service_territories::get_service_territory)
+                .patch(service_territories::update_service_territory)
+                .delete(service_territories::delete_service_territory),
+        )
+        // Subscription billing
+        .route(
+            "/subscriptions/:id/bill",
+            post(subscriptions::bill_subscription),
+        )
+        // Payroll summary report
+        .route("/reports/payroll-summary", get(reports::payroll_summary))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     // SCIM 2.0 endpoints (separate bearer-token auth, not JWT)
