@@ -3,14 +3,15 @@ use oxidebooks_core::models::{
     ApAgingDetailRow, ArAgingDetailReport, ArAgingDetailRow, BalanceSheetComparisonReport,
     BalanceSheetComparisonSection, BalanceSheetReport, CashFlowForecast, CashFlowForecastBucket,
     CashFlowIndirectLine, CashFlowIndirectReport, CashFlowIndirectSection, CashFlowReport,
-    CashFlowSection, ConsolidatedProfitLoss, ContactStatement, DashboardKpis, Form941Quarter,
-    GrniReport, GrniRow, JobCostingCostCodeRow, JobCostingReport, JobCostingRow, LedgerLine,
-    OrgProfitLoss, OutstandingQuoteRow, OutstandingQuotesReport, PLComparisonReport,
-    PayrollSummaryReport, PayrollSummaryRow, PoSpendingReport, PoSpendingRow, ProfitLossReport,
-    ProjectProfitabilityReport, ProjectProfitabilityRow, ReportLine, ReportSection,
-    SalesByCustomerReport, SalesByCustomerRow, SalesByProductReport, SalesByProductRow,
-    SalesTaxByNexusReport, SalesTaxByNexusRow, StatementLine, TaxSummaryLine, TaxSummaryReport,
-    TrialBalance, VatReturnLine, VatReturnReport, VendorSpendReport, VendorSpendRow, W2Row,
+    CashFlowSection, ConsolidatedProfitLoss, ContactStatement, CurrencyExposureReport,
+    CurrencyExposureRow, DashboardKpis, Form941Quarter, GrniReport, GrniRow, JobCostingCostCodeRow,
+    JobCostingReport, JobCostingRow, LedgerLine, OrgProfitLoss, OutstandingQuoteRow,
+    OutstandingQuotesReport, PLComparisonReport, PayrollSummaryReport, PayrollSummaryRow,
+    PoSpendingReport, PoSpendingRow, ProfitLossReport, ProjectProfitabilityReport,
+    ProjectProfitabilityRow, ReportLine, ReportSection, SalesByCustomerReport, SalesByCustomerRow,
+    SalesByProductReport, SalesByProductRow, SalesTaxByNexusReport, SalesTaxByNexusRow,
+    StatementLine, TaxSummaryLine, TaxSummaryReport, TrialBalance, VatReturnLine, VatReturnReport,
+    VendorSpendReport, VendorSpendRow, W2Row,
 };
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -2800,5 +2801,83 @@ impl ReportRepo {
             total_taxable_sales,
             total_tax_collected,
         })
+    }
+
+    /// Outstanding AR and AP by currency as of a given date.
+    pub async fn currency_exposure(
+        pool: &PgPool,
+        org_id: &str,
+        as_of: Date,
+    ) -> Result<CurrencyExposureReport, DbError> {
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            currency: String,
+            ar_outstanding: i64,
+            ap_outstanding: i64,
+        }
+
+        let org_uuid =
+            Uuid::from_str(org_id).map_err(|_| DbError::Internal("invalid org_id UUID".into()))?;
+
+        let rows: Vec<Row> = sqlx::query_as(
+            r#"
+            WITH ar AS (
+                SELECT i.currency,
+                       COALESCE(SUM(il.quantity * il.unit_price
+                           + il.quantity * il.unit_price * il.tax_rate / 10000), 0)::BIGINT
+                           - COALESCE((
+                               SELECT SUM(p.amount)
+                               FROM payments p
+                               WHERE p.invoice_id = i.id AND p.status = 'recorded'
+                           ), 0) AS outstanding
+                FROM invoices i
+                JOIN invoice_lines il ON il.invoice_id = i.id
+                WHERE i.organization_id = $1
+                  AND i.invoice_type = 'invoice'
+                  AND i.status NOT IN ('draft','voided','paid')
+                  AND i.date <= $2
+                GROUP BY i.currency, i.id
+            ),
+            ap AS (
+                SELECT vb.currency_code AS currency,
+                       COALESCE(SUM(bl.quantity * bl.unit_price
+                           + bl.quantity * bl.unit_price * bl.tax_rate / 10000), 0)::BIGINT
+                           AS outstanding
+                FROM vendor_bills vb
+                JOIN bill_lines bl ON bl.bill_id = vb.id
+                WHERE vb.organization_id = $1
+                  AND vb.status NOT IN ('draft','voided','paid')
+                  AND vb.bill_date <= $2
+                GROUP BY vb.currency_code, vb.id
+            )
+            SELECT
+                COALESCE(a.currency, p.currency)      AS currency,
+                COALESCE(SUM(a.outstanding), 0)::BIGINT  AS ar_outstanding,
+                COALESCE(SUM(p.outstanding), 0)::BIGINT  AS ap_outstanding
+            FROM (SELECT currency, SUM(outstanding) outstanding FROM ar GROUP BY currency) a
+            FULL OUTER JOIN
+                 (SELECT currency, SUM(outstanding) outstanding FROM ap GROUP BY currency) p
+            USING (currency)
+            GROUP BY COALESCE(a.currency, p.currency)
+            ORDER BY ar_outstanding DESC
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(as_of)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let rows: Vec<CurrencyExposureRow> = rows
+            .into_iter()
+            .map(|r| CurrencyExposureRow {
+                net_exposure: r.ar_outstanding - r.ap_outstanding,
+                currency: r.currency,
+                ar_outstanding: r.ar_outstanding,
+                ap_outstanding: r.ap_outstanding,
+            })
+            .collect();
+
+        Ok(CurrencyExposureReport { as_of, rows })
     }
 }

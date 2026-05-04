@@ -36,6 +36,12 @@ pub struct JournalEntry {
     pub lines: Vec<JournalLine>,
     pub created_by: String,
     pub reversal_of: Option<String>,
+    #[serde(
+        with = "crate::models::opt_date_serde",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    pub auto_reversal_date: Option<Date>,
     pub submitted_by: Option<String>,
     #[serde(default, with = "time::serde::rfc3339::option")]
     pub submitted_at: Option<OffsetDateTime>,
@@ -75,6 +81,14 @@ pub struct CreateJournalEntry {
     pub reference: Option<String>,
     pub description: String,
     pub lines: Vec<CreateJournalLine>,
+    /// If set, a reversal JE will be automatically posted on this date by the
+    /// POST /transactions/auto-reversals batch endpoint.
+    #[serde(
+        with = "crate::models::opt_date_serde",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    pub auto_reversal_date: Option<Date>,
 }
 
 impl CreateJournalEntry {
@@ -141,6 +155,7 @@ mod tests {
             reference: None,
             description: "Test".to_string(),
             lines: vec![debit_line("cash", amount), credit_line("revenue", amount)],
+            auto_reversal_date: None,
         }
     }
 
@@ -162,6 +177,7 @@ mod tests {
                 debit_line("bank", 4_000),
                 credit_line("revenue", 10_000),
             ],
+            auto_reversal_date: None,
         };
         assert!(entry.validate().is_ok());
     }
@@ -173,6 +189,7 @@ mod tests {
             reference: None,
             description: "Bad".to_string(),
             lines: vec![debit_line("cash", 100)],
+            auto_reversal_date: None,
         };
         assert!(matches!(
             entry.validate(),
@@ -187,6 +204,7 @@ mod tests {
             reference: None,
             description: "Bad".to_string(),
             lines: vec![],
+            auto_reversal_date: None,
         };
         assert!(matches!(
             entry.validate(),
@@ -201,6 +219,7 @@ mod tests {
             reference: None,
             description: "Unbalanced".to_string(),
             lines: vec![debit_line("cash", 10_000), credit_line("revenue", 9_000)],
+            auto_reversal_date: None,
         };
         assert!(matches!(
             entry.validate(),
@@ -226,6 +245,7 @@ mod tests {
                 },
                 credit_line("b", 100),
             ],
+            auto_reversal_date: None,
         };
         assert!(matches!(
             entry.validate(),
@@ -248,6 +268,7 @@ mod tests {
                     credit: -100,
                 },
             ],
+            auto_reversal_date: None,
         };
         assert!(matches!(
             entry.validate(),
@@ -270,6 +291,7 @@ mod tests {
                 },
                 credit_line("b", 0),
             ],
+            auto_reversal_date: None,
         };
         assert!(matches!(
             entry.validate(),

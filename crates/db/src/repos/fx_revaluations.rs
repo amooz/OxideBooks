@@ -162,6 +162,7 @@ impl FxRevaluationRepo {
                                 description: None,
                             },
                         ],
+                        auto_reversal_date: None,
                     };
                     let entry = TransactionRepo::create(pool, org_id, "system", je).await?;
                     parse_uuid(&entry.id).ok()
