@@ -29,7 +29,8 @@ use crate::{
         project_phases, projects, purchase_orders, purchase_requisitions, recurring, reports,
         retainers, roles, sales_orders, sales_tax_nexus, scim, sessions, stripe_webhook,
         subscriptions, tags, tax_groups, tax_periods, tax_rates, time_entries, totp,
-        tracking_categories, transactions, users, vendor_credits, warehouses, webhooks,
+        tracking_categories, transactions, users, vendor_credits, vendor_portal, warehouses,
+        webhooks,
     },
     middleware::require_auth,
     state::AppState,
@@ -127,6 +128,15 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/portal/:token/invoices/:invoice_id",
             get(client_portal::portal_invoice),
+        )
+        // Vendor portal (public — token-based)
+        .route(
+            "/vendor-portal/:token",
+            get(vendor_portal::vendor_portal_view),
+        )
+        .route(
+            "/vendor-portal/:token/bills/:bill_id",
+            get(vendor_portal::vendor_portal_bill),
         );
 
     let protected = Router::new()
@@ -964,6 +974,15 @@ pub fn build(state: AppState) -> Router {
         )
         // Client portal token creation
         .route("/portal-tokens", post(client_portal::create_portal_token))
+        // Vendor portal token management
+        .route(
+            "/vendor-portal/tokens",
+            post(vendor_portal::create_vendor_portal_token),
+        )
+        .route(
+            "/vendor-portal/tokens/:contact_id",
+            axum::routing::delete(vendor_portal::revoke_vendor_portal_token),
+        )
         // Bulk operations
         .route("/invoices/bulk-void", post(bulk::bulk_void_invoices))
         .route("/invoices/bulk-send", post(bulk::bulk_send_invoices))
