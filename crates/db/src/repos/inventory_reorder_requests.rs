@@ -264,6 +264,57 @@ impl InventoryReorderRequestRepo {
         .map_err(map_sqlx_err)?;
         Self::get_by_id(pool, org_id, id).await
     }
+
+    /// Scans all inventory items below their reorder_point and creates a pending reorder request
+    /// for each that does not already have one. Returns the newly created requests.
+    pub async fn trigger_reorders(
+        pool: &PgPool,
+        org_id: &str,
+    ) -> Result<Vec<InventoryReorderRequest>, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        #[derive(sqlx::FromRow)]
+        struct CandidateRow {
+            product_id: Uuid,
+            reorder_qty: i64,
+        }
+
+        let candidates: Vec<CandidateRow> = sqlx::query_as(
+            "SELECT ii.product_id, ii.reorder_qty
+             FROM inventory_items ii
+             WHERE ii.organization_id = $1
+               AND ii.reorder_qty > 0
+               AND ii.quantity_on_hand <= ii.reorder_point
+               AND NOT EXISTS (
+                   SELECT 1 FROM inventory_reorder_requests r
+                   WHERE r.organization_id = $1
+                     AND r.product_id = ii.product_id
+                     AND r.status = 'pending'
+               )",
+        )
+        .bind(org_uuid)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let mut created = Vec::new();
+        for c in candidates {
+            let id: Uuid = sqlx::query_scalar(
+                "INSERT INTO inventory_reorder_requests \
+                 (organization_id, product_id, requested_qty) \
+                 VALUES ($1,$2,$3) RETURNING id",
+            )
+            .bind(org_uuid)
+            .bind(c.product_id)
+            .bind(c.reorder_qty)
+            .fetch_one(pool)
+            .await
+            .map_err(map_sqlx_err)?;
+            let req = Self::get_by_id(pool, org_id, &id.to_string()).await?;
+            created.push(req);
+        }
+        Ok(created)
+    }
 }
 
 fn parse_uuid(s: &str) -> Result<Uuid, DbError> {

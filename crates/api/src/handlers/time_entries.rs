@@ -3,7 +3,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use oxidebooks_core::models::{BillTimeEntries, CreateTimeEntry, UpdateTimeEntry};
+use oxidebooks_core::models::{BillTimeEntries, CreateTimeEntry, RejectTimeEntry, UpdateTimeEntry};
 use oxidebooks_db::repos::TimeEntryRepo;
 use serde::Deserialize;
 use time::format_description::well_known::Iso8601;
@@ -113,6 +113,31 @@ pub async fn delete_time_entry(
     }
     TimeEntryRepo::delete(&state.db, &claims.org, &id).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn approve_time_entry(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let entry = TimeEntryRepo::approve(&state.db, &claims.org, &id, &claims.sub).await?;
+    Ok(Json(serde_json::json!({ "data": entry })))
+}
+
+pub async fn reject_time_entry(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<String>,
+    Json(body): Json<RejectTimeEntry>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let entry = TimeEntryRepo::reject(&state.db, &claims.org, &id, body).await?;
+    Ok(Json(serde_json::json!({ "data": entry })))
 }
 
 pub async fn bill_time_entries(

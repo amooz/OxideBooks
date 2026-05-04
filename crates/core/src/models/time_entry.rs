@@ -17,6 +17,15 @@ pub struct TimeEntry {
     pub hourly_rate: i64,
     pub is_billable: bool,
     pub invoice_line_id: Option<String>,
+    pub approval_status: String,
+    pub approved_by: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "time::serde::rfc3339::option"
+    )]
+    pub approved_at: Option<OffsetDateTime>,
+    pub rejection_reason: Option<String>,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
@@ -66,4 +75,9 @@ pub struct TimeSummaryRow {
     pub total_minutes: i64,
     pub billable_minutes: i64,
     pub billable_amount: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct RejectTimeEntry {
+    pub reason: Option<String>,
 }

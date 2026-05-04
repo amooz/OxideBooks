@@ -742,6 +742,14 @@ pub fn build(state: AppState) -> Router {
         )
         .route("/time-entries/bill", post(time_entries::bill_time_entries))
         .route("/time-entries/summary", get(time_entries::time_summary))
+        .route(
+            "/time-entries/:id/approve",
+            post(time_entries::approve_time_entry),
+        )
+        .route(
+            "/time-entries/:id/reject",
+            post(time_entries::reject_time_entry),
+        )
         // Webhooks
         .route(
             "/webhooks",
@@ -1527,6 +1535,10 @@ pub fn build(state: AppState) -> Router {
             "/inventory-reorder-requests/:id/cancel",
             post(inventory_reorder_requests::cancel_reorder_request),
         )
+        .route(
+            "/inventory-reorder-requests/trigger",
+            post(inventory_reorder_requests::trigger_reorders),
+        )
         // Tax rules (jurisdiction → tax rate mapping)
         .route(
             "/tax-rules",
@@ -1610,6 +1622,7 @@ pub fn build(state: AppState) -> Router {
         )
         .route("/reports/vendor-balances", get(reports::vendor_balances))
         .route("/reports/sales-by-rep", get(reports::sales_by_rep))
+        .route("/reports/project-burn", get(reports::project_burn))
         // Inventory serial number tracking
         .route(
             "/inventory-serial-numbers",
