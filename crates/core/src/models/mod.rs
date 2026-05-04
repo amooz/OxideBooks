@@ -24,6 +24,7 @@ pub mod doc_sequence;
 pub mod dunning;
 pub mod email;
 pub mod employee;
+pub mod employee_loan;
 pub mod expense;
 pub mod expense_policy;
 pub mod expense_report;
@@ -50,6 +51,7 @@ pub mod payment_link;
 pub mod payment_plan;
 pub mod payment_terms;
 pub mod payroll;
+pub mod payroll_tax;
 pub mod payslip;
 pub mod prepaid_expense;
 pub mod prepayment;
@@ -122,6 +124,9 @@ pub use doc_sequence::{DocSequence, ResetDocSequence, UpsertDocSequence};
 pub use dunning::{CreateDunningRule, DunningRule, InvoiceReminder, OverdueInvoice};
 pub use email::{EmailLog, EmailSettings, SendEmailRequest, UpsertEmailSettings};
 pub use employee::{CreateEmployee, Employee, UpdateEmployee};
+pub use employee_loan::{
+    CreateEmployeeLoan, CreateLoanRepayment, EmployeeLoan, LoanRepayment, UpdateEmployeeLoan,
+};
 pub use expense::{
     BillableExpenseRef, CreateExpense, CreateExpenseCategory, Expense, ExpenseCategory,
     ExpenseStatus, UpdateExpense, UpdateExpenseCategory,
@@ -173,6 +178,7 @@ pub use payment_terms::{CreatePaymentTerms, PaymentTerms, UpdatePaymentTerms};
 pub use payroll::{
     CreatePayrollEntry, CreatePayrollRun, PayrollEntry, PayrollRun, PayrollRunSummary,
 };
+pub use payroll_tax::{CreatePayrollTaxLiability, PayPayrollTax, PayrollTaxLiability};
 pub use payslip::{CreatePayslip, Payslip};
 pub use prepaid_expense::{
     CreatePrepaidExpenseSchedule, PrepaidExpenseEntry, PrepaidExpenseSchedule,
