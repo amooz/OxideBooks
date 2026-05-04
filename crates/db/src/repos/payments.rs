@@ -1,4 +1,6 @@
 use oxidebooks_core::models::{CreatePayment, CreateRefund, Payment, Refund};
+use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::Decimal;
 use sqlx::PgPool;
 use time::{Date, OffsetDateTime};
 use uuid::Uuid;
@@ -16,6 +18,8 @@ struct PaymentRow {
     reference: Option<String>,
     notes: Option<String>,
     status: String,
+    realized_fx_amount: i64,
+    fx_journal_entry_id: Option<Uuid>,
     voided_at: Option<OffsetDateTime>,
     created_at: OffsetDateTime,
 }
@@ -32,6 +36,8 @@ impl From<PaymentRow> for Payment {
             reference: r.reference,
             notes: r.notes,
             status: r.status,
+            realized_fx_amount: r.realized_fx_amount,
+            fx_journal_entry_id: r.fx_journal_entry_id.map(|u| u.to_string()),
             voided_at: r.voided_at,
             created_at: r.created_at,
         }
@@ -62,7 +68,7 @@ impl From<RefundRow> for Refund {
 }
 
 const PAYMENT_COLS: &str = "id, organization_id, invoice_id, amount, payment_date, method, \
-     reference, notes, status, voided_at, created_at";
+     reference, notes, status, realized_fx_amount, fx_journal_entry_id, voided_at, created_at";
 
 pub struct PaymentRepo;
 
@@ -78,23 +84,36 @@ impl PaymentRepo {
         let inv_uuid = parse_uuid(invoice_id)?;
         let id = Uuid::new_v4();
 
-        // Verify the invoice belongs to this org.
-        let exists: Option<(Uuid,)> =
-            sqlx::query_as("SELECT id FROM invoices WHERE organization_id = $1 AND id = $2")
-                .bind(org_uuid)
-                .bind(inv_uuid)
-                .fetch_optional(pool)
-                .await
-                .map_err(map_sqlx_err)?;
+        // Verify the invoice belongs to this org; fetch exchange_rate for FX computation.
+        let inv_row: Option<(Uuid, Decimal)> = sqlx::query_as(
+            "SELECT id, exchange_rate FROM invoices WHERE organization_id = $1 AND id = $2",
+        )
+        .bind(org_uuid)
+        .bind(inv_uuid)
+        .fetch_optional(pool)
+        .await
+        .map_err(map_sqlx_err)?;
 
-        if exists.is_none() {
-            return Err(DbError::NotFound);
-        }
+        let (_, invoice_exchange_rate) = inv_row.ok_or(DbError::NotFound)?;
+
+        // Compute realized FX gain/loss if payment was recorded at a different rate.
+        let realized_fx_amount: i64 = if let Some(pay_rate) = input.exchange_rate {
+            if pay_rate != invoice_exchange_rate && !pay_rate.is_zero() {
+                let amt = Decimal::from(input.amount);
+                let diff = amt - amt * invoice_exchange_rate / pay_rate;
+                diff.round().to_i64().unwrap_or(0)
+            } else {
+                0
+            }
+        } else {
+            0
+        };
 
         sqlx::query(
             "INSERT INTO payments \
-             (id, organization_id, invoice_id, amount, payment_date, method, reference, notes) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+             (id, organization_id, invoice_id, amount, payment_date, method, reference, notes, \
+              realized_fx_amount) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
         )
         .bind(id)
         .bind(org_uuid)
@@ -104,6 +123,7 @@ impl PaymentRepo {
         .bind(&input.method)
         .bind(&input.reference)
         .bind(&input.notes)
+        .bind(realized_fx_amount)
         .execute(pool)
         .await
         .map_err(map_sqlx_err)?;
@@ -283,6 +303,115 @@ impl PaymentRepo {
         .map_err(map_sqlx_err)?;
 
         Ok(rows.into_iter().map(Refund::from).collect())
+    }
+
+    /// Post a realized FX gain/loss journal entry for a payment and link it.
+    ///
+    /// `ar_account_id` is the AR clearing account; `fx_account_id` is the FX gain/loss GL account.
+    /// No-ops if `realized_fx_amount == 0` or a JE is already linked.
+    pub async fn post_fx_journal(
+        pool: &PgPool,
+        org_id: &str,
+        payment_id: &str,
+        ar_account_id: &str,
+        fx_account_id: &str,
+    ) -> Result<Payment, DbError> {
+        use crate::repos::TransactionRepo;
+        use oxidebooks_core::models::{CreateJournalEntry, CreateJournalLine};
+
+        let org_uuid = parse_uuid(org_id)?;
+        let pay_uuid = parse_uuid(payment_id)?;
+
+        let row: PaymentRow = sqlx::query_as(&format!(
+            "SELECT {PAYMENT_COLS} FROM payments WHERE id = $1 AND organization_id = $2"
+        ))
+        .bind(pay_uuid)
+        .bind(org_uuid)
+        .fetch_optional(pool)
+        .await
+        .map_err(map_sqlx_err)?
+        .ok_or(DbError::NotFound)?;
+
+        if row.realized_fx_amount == 0 {
+            return Ok(row.into());
+        }
+        if row.fx_journal_entry_id.is_some() {
+            return Err(DbError::Conflict(
+                "FX journal entry already posted for this payment".into(),
+            ));
+        }
+
+        let fx_amount = row.realized_fx_amount.abs();
+        let is_gain = row.realized_fx_amount > 0;
+
+        // Gain: Dr AR clearing / Cr FX gain
+        // Loss: Dr FX loss / Cr AR clearing
+        let lines = if is_gain {
+            vec![
+                CreateJournalLine {
+                    account_id: ar_account_id.to_string(),
+                    description: Some("Realized FX gain — AR settlement".to_string()),
+                    debit: fx_amount,
+                    credit: 0,
+                },
+                CreateJournalLine {
+                    account_id: fx_account_id.to_string(),
+                    description: Some("Realized FX gain".to_string()),
+                    debit: 0,
+                    credit: fx_amount,
+                },
+            ]
+        } else {
+            vec![
+                CreateJournalLine {
+                    account_id: fx_account_id.to_string(),
+                    description: Some("Realized FX loss".to_string()),
+                    debit: fx_amount,
+                    credit: 0,
+                },
+                CreateJournalLine {
+                    account_id: ar_account_id.to_string(),
+                    description: Some("Realized FX loss — AR settlement".to_string()),
+                    debit: 0,
+                    credit: fx_amount,
+                },
+            ]
+        };
+
+        let je_input = CreateJournalEntry {
+            date: row.payment_date,
+            reference: Some(format!("FX-{}", &payment_id[..8])),
+            description: format!(
+                "Realized FX {} on payment {}",
+                if is_gain { "gain" } else { "loss" },
+                &payment_id[..8]
+            ),
+            lines,
+        };
+
+        let je = TransactionRepo::create_posted(pool, org_id, "system", je_input).await?;
+        let je_uuid = parse_uuid(&je.id)?;
+
+        sqlx::query(
+            "UPDATE payments SET fx_journal_entry_id = $3, updated_at = NOW() \
+             WHERE id = $1 AND organization_id = $2",
+        )
+        .bind(pay_uuid)
+        .bind(org_uuid)
+        .bind(je_uuid)
+        .execute(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let updated: PaymentRow = sqlx::query_as(&format!(
+            "SELECT {PAYMENT_COLS} FROM payments WHERE id = $1"
+        ))
+        .bind(pay_uuid)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        Ok(updated.into())
     }
 
     /// Recompute invoice status based on total non-voided payments vs. invoice line total.

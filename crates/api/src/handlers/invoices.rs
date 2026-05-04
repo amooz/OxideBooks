@@ -285,6 +285,7 @@ pub async fn create_cash_sale(
         method: payment_method,
         reference: None,
         notes: None,
+        exchange_rate: None,
     };
 
     let payment = PaymentRepo::create(&state.db, &claims.org, &invoice.id, payment_input).await?;
