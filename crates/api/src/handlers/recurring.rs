@@ -4,10 +4,10 @@ use axum::{
     Json,
 };
 use oxidebooks_core::models::{
-    CreateRecurringSchedule, CreateVendorBill, Frequency, InvoiceStatus, RecurringSchedule,
-    UpdateInvoice, UpdateRecurringSchedule,
+    CreateJournalEntry, CreateRecurringSchedule, CreateVendorBill, Frequency, InvoiceStatus,
+    RecurringSchedule, UpdateInvoice, UpdateRecurringSchedule,
 };
-use oxidebooks_db::repos::{BillRepo, InvoiceRepo, RecurringRepo};
+use oxidebooks_db::repos::{BillRepo, InvoiceRepo, RecurringRepo, TransactionRepo};
 use time::Date;
 
 use crate::{
@@ -47,6 +47,7 @@ fn advance_date(date: Date, frequency: &Frequency, interval: i32) -> Option<Date
 async fn run_schedule_inner(
     state: &AppState,
     org_id: &str,
+    user_id: &str,
     schedule: &RecurringSchedule,
 ) -> ApiResult<String> {
     let today = time::OffsetDateTime::now_utc().date();
@@ -57,6 +58,12 @@ async fn run_schedule_inner(
         input.bill_date = today;
         let bill = BillRepo::create(&state.db, org_id, input).await?;
         bill.id
+    } else if schedule.template_type == "journal_entry" {
+        let mut input = serde_json::from_value::<CreateJournalEntry>(schedule.template.clone())
+            .map_err(|e| ApiError::BadRequest(format!("invalid journal_entry template: {e}")))?;
+        input.date = today;
+        let je = TransactionRepo::create(&state.db, org_id, user_id, input).await?;
+        je.id
     } else {
         let mut input = serde_json::from_value::<oxidebooks_core::models::CreateInvoice>(
             schedule.template.clone(),
@@ -216,7 +223,7 @@ pub async fn run_due_schedules(
         if schedule.organization_id != claims.org {
             continue;
         }
-        match run_schedule_inner(&state, &claims.org, &schedule).await {
+        match run_schedule_inner(&state, &claims.org, &claims.sub, &schedule).await {
             Ok(id) => generated.push(id),
             Err(_) => skipped.push(schedule.id),
         }
@@ -236,7 +243,7 @@ pub async fn run_schedule(
         return Err(ApiError::Forbidden);
     }
     let schedule = RecurringRepo::get_by_id(&state.db, &claims.org, &id).await?;
-    let invoice_id = run_schedule_inner(&state, &claims.org, &schedule).await?;
+    let invoice_id = run_schedule_inner(&state, &claims.org, &claims.sub, &schedule).await?;
     Ok((
         StatusCode::CREATED,
         Json(serde_json::json!({ "invoice_id": invoice_id })),

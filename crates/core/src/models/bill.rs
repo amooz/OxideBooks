@@ -108,6 +108,25 @@ pub struct CreateBillPayment {
     pub reference: Option<String>,
 }
 
+/// Input for POST /bills/spend-money — creates a vendor bill + immediate payment atomically.
+#[derive(Debug, Deserialize)]
+pub struct CreateSpendMoney {
+    pub contact_id: Option<String>,
+    #[serde(with = "date_serde")]
+    pub date: Date,
+    pub payment_account_id: String,
+    #[serde(default = "default_method")]
+    pub payment_method: String,
+    pub reference: Option<String>,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default = "default_currency")]
+    pub currency_code: String,
+    #[serde(default = "default_rate")]
+    pub exchange_rate: rust_decimal::Decimal,
+    pub lines: Vec<CreateBillLine>,
+}
+
 fn default_method() -> String {
     "bank_transfer".into()
 }

@@ -67,6 +67,9 @@ pub struct Expense {
     pub account_id: Option<String>,
     pub project_id: Option<String>,
     pub status: ExpenseStatus,
+    pub is_billable: bool,
+    pub billable_contact_id: Option<String>,
+    pub billed_invoice_id: Option<String>,
     pub receipt_url: Option<String>,
     pub notes: Option<String>,
     #[serde(with = "time::serde::rfc3339")]
@@ -86,6 +89,8 @@ pub struct CreateExpense {
     pub description: String,
     pub account_id: Option<String>,
     pub project_id: Option<String>,
+    pub is_billable: Option<bool>,
+    pub billable_contact_id: Option<String>,
     pub receipt_url: Option<String>,
     pub notes: Option<String>,
 }
@@ -118,6 +123,17 @@ pub struct UpdateExpenseCategory {
     pub description: Option<String>,
 }
 
+/// Input for POST /invoices/from-expenses — wraps a set of approved billable expenses into an invoice.
+#[derive(Debug, Deserialize)]
+pub struct BillableExpenseRef {
+    pub contact_id: String,
+    pub expense_ids: Vec<String>,
+    #[serde(with = "crate::models::date_serde")]
+    pub invoice_date: time::Date,
+    #[serde(default, with = "crate::models::opt_date_serde")]
+    pub due_date: Option<time::Date>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UpdateExpense {
     #[serde(default, with = "opt_date_serde")]
@@ -126,6 +142,8 @@ pub struct UpdateExpense {
     pub category: Option<String>,
     pub description: Option<String>,
     pub account_id: Option<String>,
+    pub is_billable: Option<bool>,
+    pub billable_contact_id: Option<String>,
     pub receipt_url: Option<String>,
     pub notes: Option<String>,
 }

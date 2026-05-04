@@ -160,3 +160,20 @@ pub async fn reimburse_expense(
         ExpenseRepo::transition(&state.db, &claims.org, &id, ExpenseStatus::Reimbursed).await?;
     Ok(Json(serde_json::json!({ "data": updated })))
 }
+
+/// GET /api/v1/expenses/billable?contact_id=<uuid>
+/// Returns unbilled billable expenses for a contact, ready to be invoiced.
+pub async fn list_billable_expenses(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    axum::extract::Query(q): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("expenses:read") {
+        return Err(ApiError::Forbidden);
+    }
+    let contact_id = q
+        .get("contact_id")
+        .ok_or_else(|| ApiError::BadRequest("contact_id is required".into()))?;
+    let expenses = ExpenseRepo::list_billable(&state.db, &claims.org, contact_id).await?;
+    Ok(Json(serde_json::json!({ "data": expenses })))
+}

@@ -89,8 +89,8 @@ pub use bank_deposit::{
 pub use bank_rule::{BankRule, CreateBankRule};
 pub use batch_payment::{BatchPayment, BatchPaymentLine, CreateBatchPayment};
 pub use bill::{
-    BillLine, BillPayment, CreateBillLine, CreateBillPayment, CreateVendorBill, UpdateVendorBill,
-    VendorBill,
+    BillLine, BillPayment, CreateBillLine, CreateBillPayment, CreateSpendMoney, CreateVendorBill,
+    UpdateVendorBill, VendorBill,
 };
 pub use budget::{
     Budget, BudgetLine, BudgetVsActualLine, BudgetVsActualReport, CreateBudget, UpdateBudget,
@@ -120,8 +120,8 @@ pub use dunning::{CreateDunningRule, DunningRule, InvoiceReminder, OverdueInvoic
 pub use email::{EmailLog, EmailSettings, SendEmailRequest, UpsertEmailSettings};
 pub use employee::{CreateEmployee, Employee, UpdateEmployee};
 pub use expense::{
-    CreateExpense, CreateExpenseCategory, Expense, ExpenseCategory, ExpenseStatus, UpdateExpense,
-    UpdateExpenseCategory,
+    BillableExpenseRef, CreateExpense, CreateExpenseCategory, Expense, ExpenseCategory,
+    ExpenseStatus, UpdateExpense, UpdateExpenseCategory,
 };
 pub use expense_policy::{ContactStatement, ExpensePolicy, StatementLine, UpsertExpensePolicy};
 pub use expense_report::{
