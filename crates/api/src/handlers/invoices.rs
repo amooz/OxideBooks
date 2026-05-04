@@ -323,6 +323,7 @@ pub async fn create_from_expenses(
             tax_rate: None,
             discount_pct: 0,
             product_id: None,
+            variant_id: None,
         });
 
         expense_uuids.push(

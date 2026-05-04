@@ -247,14 +247,15 @@ pub use recurring_journal_entry::{
     RecurringJournalEntryLine, UpdateRecurringJournalEntry,
 };
 pub use reports::{
-    AccountBalance, AccountLedger, AgingReport, AgingRow, BalanceSheetReport, CashFlowForecast,
+    AccountBalance, AccountLedger, AgingReport, AgingRow, ApAgingDetailReport, ApAgingDetailRow,
+    ArAgingDetailReport, ArAgingDetailRow, BalanceSheetReport, CashFlowForecast,
     CashFlowForecastBucket, CashFlowReport, CashFlowSection, DashboardKpis, Form941Quarter,
     GrniReport, GrniRow, JobCostingCostCodeRow, JobCostingReport, JobCostingRow, LedgerLine,
     PLComparisonReport, PayrollSummaryReport, PayrollSummaryRow, ProfitLossReport,
     ProjectProfitabilityReport, ProjectProfitabilityRow, RemittanceAdvice, RemittanceLine,
-    ReportLine, ReportSection, SalesByProductReport, SalesByProductRow, SearchHit, Summary1099,
-    TaxSummaryLine, TaxSummaryReport, TrialBalance, Vendor1099Row, VendorSpendReport,
-    VendorSpendRow, W2Row,
+    ReportLine, ReportSection, SalesByCustomerReport, SalesByCustomerRow, SalesByProductReport,
+    SalesByProductRow, SearchHit, Summary1099, TaxSummaryLine, TaxSummaryReport, TrialBalance,
+    Vendor1099Row, VendorSpendReport, VendorSpendRow, W2Row,
 };
 pub use retainer::{ApplyRetainer, CreateRetainer, DepositRetainer, Retainer, RetainerTransaction};
 pub use role::{AssignPermission, CreateRole, Permission, Role};

@@ -1,10 +1,11 @@
 use oxidebooks_core::models::{
-    AccountBalance, AccountLedger, AccountType, AgingReport, AgingRow, BalanceSheetReport,
-    CashFlowForecast, CashFlowForecastBucket, CashFlowReport, CashFlowSection,
-    ConsolidatedProfitLoss, ContactStatement, DashboardKpis, Form941Quarter, GrniReport, GrniRow,
-    JobCostingCostCodeRow, JobCostingReport, JobCostingRow, LedgerLine, OrgProfitLoss,
-    PLComparisonReport, PayrollSummaryReport, PayrollSummaryRow, ProfitLossReport,
-    ProjectProfitabilityReport, ProjectProfitabilityRow, ReportLine, ReportSection,
+    AccountBalance, AccountLedger, AccountType, AgingReport, AgingRow, ApAgingDetailReport,
+    ApAgingDetailRow, ArAgingDetailReport, ArAgingDetailRow, BalanceSheetReport, CashFlowForecast,
+    CashFlowForecastBucket, CashFlowReport, CashFlowSection, ConsolidatedProfitLoss,
+    ContactStatement, DashboardKpis, Form941Quarter, GrniReport, GrniRow, JobCostingCostCodeRow,
+    JobCostingReport, JobCostingRow, LedgerLine, OrgProfitLoss, PLComparisonReport,
+    PayrollSummaryReport, PayrollSummaryRow, ProfitLossReport, ProjectProfitabilityReport,
+    ProjectProfitabilityRow, ReportLine, ReportSection, SalesByCustomerReport, SalesByCustomerRow,
     SalesByProductReport, SalesByProductRow, StatementLine, TaxSummaryLine, TaxSummaryReport,
     TrialBalance, VendorSpendReport, VendorSpendRow, W2Row,
 };
@@ -2039,6 +2040,249 @@ impl ReportRepo {
             as_of,
             rows: result_rows,
             total_accrual,
+        })
+    }
+
+    /// AR aging detail — per-invoice outstanding balance as of `as_of`.
+    pub async fn ar_aging_detail(
+        pool: &PgPool,
+        org_id: &str,
+        as_of: Date,
+    ) -> Result<ArAgingDetailReport, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            contact_id: Uuid,
+            contact_name: String,
+            invoice_id: Uuid,
+            doc_number: Option<String>,
+            invoice_date: Date,
+            due_date: Option<Date>,
+            total: i64,
+            amount_paid: i64,
+        }
+
+        let rows: Vec<Row> = sqlx::query_as(
+            r#"
+            SELECT
+                c.id           AS contact_id,
+                c.name         AS contact_name,
+                i.id           AS invoice_id,
+                i.doc_number,
+                i.invoice_date,
+                i.due_date,
+                COALESCE((
+                    SELECT SUM(il.quantity * il.unit_price
+                           + il.quantity * il.unit_price * il.tax_rate / 1000000)
+                    FROM invoice_lines il WHERE il.invoice_id = i.id
+                ), 0)::BIGINT AS total,
+                COALESCE((
+                    SELECT SUM(p.amount) FROM payments p WHERE p.invoice_id = i.id
+                ), 0)::BIGINT AS amount_paid
+            FROM invoices i
+            JOIN contacts c ON c.id = i.contact_id
+            WHERE i.organization_id = $1
+              AND i.invoice_date <= $2
+              AND i.invoice_type = 'invoice'
+              AND i.status NOT IN ('draft','voided','paid')
+            ORDER BY c.name ASC, i.due_date ASC NULLS LAST
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(as_of)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let detail_rows: Vec<ArAgingDetailRow> = rows
+            .iter()
+            .map(|r| {
+                let balance = r.total - r.amount_paid;
+                let days_overdue = r
+                    .due_date
+                    .map(|d| (as_of - d).whole_days().max(0))
+                    .unwrap_or(0);
+                ArAgingDetailRow {
+                    contact_id: r.contact_id.to_string(),
+                    contact_name: r.contact_name.clone(),
+                    invoice_id: r.invoice_id.to_string(),
+                    doc_number: r.doc_number.clone(),
+                    invoice_date: r.invoice_date,
+                    due_date: r.due_date,
+                    total: r.total,
+                    amount_paid: r.amount_paid,
+                    balance,
+                    days_overdue,
+                }
+            })
+            .collect();
+
+        let total_outstanding = detail_rows.iter().map(|r| r.balance).sum();
+        Ok(ArAgingDetailReport {
+            as_of,
+            rows: detail_rows,
+            total_outstanding,
+        })
+    }
+
+    /// AP aging detail — per-bill outstanding balance as of `as_of`.
+    pub async fn ap_aging_detail(
+        pool: &PgPool,
+        org_id: &str,
+        as_of: Date,
+    ) -> Result<ApAgingDetailReport, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            contact_id: Uuid,
+            contact_name: String,
+            bill_id: Uuid,
+            doc_number: Option<String>,
+            bill_date: Date,
+            due_date: Option<Date>,
+            total: i64,
+            amount_paid: i64,
+        }
+
+        let rows: Vec<Row> = sqlx::query_as(
+            r#"
+            SELECT
+                c.id           AS contact_id,
+                c.name         AS contact_name,
+                vb.id          AS bill_id,
+                vb.doc_number,
+                vb.bill_date,
+                vb.due_date,
+                COALESCE((
+                    SELECT SUM(bl.quantity * bl.unit_price
+                           + bl.quantity * bl.unit_price * bl.tax_rate / 1000000)
+                    FROM bill_lines bl WHERE bl.bill_id = vb.id
+                ), 0)::BIGINT AS total,
+                COALESCE((
+                    SELECT SUM(bp.amount) FROM bill_payments bp WHERE bp.bill_id = vb.id
+                ), 0)::BIGINT AS amount_paid
+            FROM vendor_bills vb
+            JOIN contacts c ON c.id = vb.contact_id
+            WHERE vb.organization_id = $1
+              AND vb.bill_date <= $2
+              AND vb.status NOT IN ('draft','voided','paid')
+            ORDER BY c.name ASC, vb.due_date ASC NULLS LAST
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(as_of)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let detail_rows: Vec<ApAgingDetailRow> = rows
+            .iter()
+            .map(|r| {
+                let balance = r.total - r.amount_paid;
+                let days_overdue = r
+                    .due_date
+                    .map(|d| (as_of - d).whole_days().max(0))
+                    .unwrap_or(0);
+                ApAgingDetailRow {
+                    contact_id: r.contact_id.to_string(),
+                    contact_name: r.contact_name.clone(),
+                    bill_id: r.bill_id.to_string(),
+                    doc_number: r.doc_number.clone(),
+                    bill_date: r.bill_date,
+                    due_date: r.due_date,
+                    total: r.total,
+                    amount_paid: r.amount_paid,
+                    balance,
+                    days_overdue,
+                }
+            })
+            .collect();
+
+        let total_outstanding = detail_rows.iter().map(|r| r.balance).sum();
+        Ok(ApAgingDetailReport {
+            as_of,
+            rows: detail_rows,
+            total_outstanding,
+        })
+    }
+
+    /// Sales by customer — revenue and payment totals per contact over a date range.
+    pub async fn sales_by_customer(
+        pool: &PgPool,
+        org_id: &str,
+        from: Date,
+        to: Date,
+    ) -> Result<SalesByCustomerReport, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            contact_id: Uuid,
+            contact_name: String,
+            invoice_count: i64,
+            total_invoiced: i64,
+            total_paid: i64,
+        }
+
+        let rows: Vec<Row> = sqlx::query_as(
+            r#"
+            SELECT
+                c.id                                       AS contact_id,
+                c.name                                     AS contact_name,
+                COUNT(DISTINCT i.id)::BIGINT               AS invoice_count,
+                COALESCE(SUM(
+                    (SELECT SUM(il.quantity * il.unit_price
+                               + il.quantity * il.unit_price * il.tax_rate / 1000000)
+                     FROM invoice_lines il WHERE il.invoice_id = i.id)
+                ), 0)::BIGINT                              AS total_invoiced,
+                COALESCE((
+                    SELECT SUM(p.amount)
+                    FROM payments p
+                    JOIN invoices pi ON pi.id = p.invoice_id
+                    WHERE pi.contact_id = c.id
+                      AND pi.organization_id = $1
+                      AND p.payment_date BETWEEN $2 AND $3
+                ), 0)::BIGINT                              AS total_paid
+            FROM invoices i
+            JOIN contacts c ON c.id = i.contact_id
+            WHERE i.organization_id = $1
+              AND i.invoice_date BETWEEN $2 AND $3
+              AND i.invoice_type = 'invoice'
+              AND i.status != 'void'
+            GROUP BY c.id, c.name
+            ORDER BY total_invoiced DESC
+            "#,
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let customer_rows: Vec<SalesByCustomerRow> = rows
+            .iter()
+            .map(|r| SalesByCustomerRow {
+                contact_id: r.contact_id.to_string(),
+                contact_name: r.contact_name.clone(),
+                invoice_count: r.invoice_count,
+                total_invoiced: r.total_invoiced,
+                total_paid: r.total_paid,
+                balance_outstanding: (r.total_invoiced - r.total_paid).max(0),
+            })
+            .collect();
+
+        let total_invoiced = customer_rows.iter().map(|r| r.total_invoiced).sum();
+        let total_paid = customer_rows.iter().map(|r| r.total_paid).sum();
+
+        Ok(SalesByCustomerReport {
+            from,
+            to,
+            rows: customer_rows,
+            total_invoiced,
+            total_paid,
         })
     }
 }

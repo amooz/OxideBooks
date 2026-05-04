@@ -33,6 +33,7 @@ struct BillLineRow {
     quantity: i32,
     unit_price: i64,
     tax_rate: i64,
+    variant_id: Option<Uuid>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -170,10 +171,11 @@ impl BillRepo {
         for line in &input.lines {
             let line_id = Uuid::new_v4();
             let acct_uuid = line.account_id.as_deref().map(parse_uuid).transpose()?;
+            let var_uuid = line.variant_id.as_deref().map(parse_uuid).transpose()?;
             sqlx::query(
                 "INSERT INTO bill_lines \
-                 (id, bill_id, account_id, description, quantity, unit_price, tax_rate) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                 (id, bill_id, account_id, description, quantity, unit_price, tax_rate, variant_id) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
             )
             .bind(line_id)
             .bind(id)
@@ -182,6 +184,7 @@ impl BillRepo {
             .bind(line.quantity)
             .bind(line.unit_price)
             .bind(line.tax_rate)
+            .bind(var_uuid)
             .execute(&mut *tx)
             .await
             .map_err(map_sqlx_err)?;
@@ -404,8 +407,8 @@ impl BillRepo {
 
     async fn assemble(pool: &PgPool, org_uuid: Uuid, r: BillRow) -> Result<VendorBill, DbError> {
         let line_rows: Vec<BillLineRow> = sqlx::query_as(
-            "SELECT id, bill_id, account_id, description, quantity, unit_price, tax_rate \
-             FROM bill_lines WHERE bill_id = $1",
+            "SELECT id, bill_id, account_id, description, quantity, unit_price, tax_rate, \
+             variant_id FROM bill_lines WHERE bill_id = $1",
         )
         .bind(r.id)
         .fetch_all(pool)
@@ -422,6 +425,7 @@ impl BillRepo {
                 quantity: l.quantity,
                 unit_price: l.unit_price,
                 tax_rate: l.tax_rate,
+                variant_id: l.variant_id.map(|u| u.to_string()),
             })
             .collect();
 

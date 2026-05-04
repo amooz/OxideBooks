@@ -37,6 +37,7 @@ pub struct BillLine {
     pub quantity: i32,
     pub unit_price: MinorUnits,
     pub tax_rate: MinorUnits,
+    pub variant_id: Option<String>,
 }
 
 impl BillLine {
@@ -86,6 +87,7 @@ pub struct CreateBillLine {
     pub unit_price: MinorUnits,
     #[serde(default)]
     pub tax_rate: MinorUnits,
+    pub variant_id: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]

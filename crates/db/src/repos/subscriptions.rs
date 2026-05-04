@@ -467,6 +467,7 @@ impl SubscriptionRepo {
                 unit_price: sub.unit_price,
                 tax_rate: None,
                 discount_pct: 0,
+                variant_id: None,
             }],
         };
 

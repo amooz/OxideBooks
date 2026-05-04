@@ -431,6 +431,79 @@ pub struct PLComparisonReport {
     pub net_income_change_bps: i64,
 }
 
+// ── AR / AP Aging Detail ──────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArAgingDetailRow {
+    pub contact_id: String,
+    pub contact_name: String,
+    pub invoice_id: String,
+    pub doc_number: Option<String>,
+    #[serde(with = "crate::models::date_serde")]
+    pub invoice_date: Date,
+    #[serde(with = "crate::models::opt_date_serde")]
+    pub due_date: Option<Date>,
+    pub total: MinorUnits,
+    pub amount_paid: MinorUnits,
+    pub balance: MinorUnits,
+    pub days_overdue: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArAgingDetailReport {
+    #[serde(with = "crate::models::date_serde")]
+    pub as_of: Date,
+    pub rows: Vec<ArAgingDetailRow>,
+    pub total_outstanding: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApAgingDetailRow {
+    pub contact_id: String,
+    pub contact_name: String,
+    pub bill_id: String,
+    pub doc_number: Option<String>,
+    #[serde(with = "crate::models::date_serde")]
+    pub bill_date: Date,
+    #[serde(with = "crate::models::opt_date_serde")]
+    pub due_date: Option<Date>,
+    pub total: MinorUnits,
+    pub amount_paid: MinorUnits,
+    pub balance: MinorUnits,
+    pub days_overdue: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApAgingDetailReport {
+    #[serde(with = "crate::models::date_serde")]
+    pub as_of: Date,
+    pub rows: Vec<ApAgingDetailRow>,
+    pub total_outstanding: MinorUnits,
+}
+
+// ── Sales by Customer ─────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SalesByCustomerRow {
+    pub contact_id: String,
+    pub contact_name: String,
+    pub invoice_count: i64,
+    pub total_invoiced: MinorUnits,
+    pub total_paid: MinorUnits,
+    pub balance_outstanding: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SalesByCustomerReport {
+    #[serde(with = "crate::models::date_serde")]
+    pub from: Date,
+    #[serde(with = "crate::models::date_serde")]
+    pub to: Date,
+    pub rows: Vec<SalesByCustomerRow>,
+    pub total_invoiced: MinorUnits,
+    pub total_paid: MinorUnits,
+}
+
 // ── Remittance Advice ─────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

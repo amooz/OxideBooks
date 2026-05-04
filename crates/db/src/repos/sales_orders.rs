@@ -363,6 +363,7 @@ impl SalesOrderRepo {
                 unit_price: l.unit_price,
                 tax_rate: Some(l.tax_rate),
                 discount_pct: l.discount_pct,
+                variant_id: None,
                 product_id: l.product_id.clone(),
             })
             .collect();
