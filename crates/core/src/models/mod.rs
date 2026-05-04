@@ -274,14 +274,15 @@ pub use reports::{
     CashDisbursementsJournalRow, CashFlowForecast, CashFlowForecastBucket, CashFlowIndirectLine,
     CashFlowIndirectReport, CashFlowIndirectSection, CashFlowReport, CashFlowSection,
     CashReceiptsJournal, CashReceiptsJournalRow, CurrencyExposureReport, CurrencyExposureRow,
-    DashboardKpis, Form941Quarter, GrniReport, GrniRow, JobCostingCostCodeRow, JobCostingReport,
+    DashboardKpis, EquityStatement, EquityStatementLine, Form941Quarter, GrniReport, GrniRow,
+    InventoryAgingReport, InventoryAgingRow, JobCostingCostCodeRow, JobCostingReport,
     JobCostingRow, LedgerLine, OutstandingQuoteRow, OutstandingQuotesReport, PLComparisonReport,
     PayrollSummaryReport, PayrollSummaryRow, PoSpendingReport, PoSpendingRow, ProfitLossReport,
     ProjectProfitabilityReport, ProjectProfitabilityRow, RemittanceAdvice, RemittanceLine,
     ReportLine, ReportSection, SalesByCustomerReport, SalesByCustomerRow, SalesByProductReport,
     SalesByProductRow, SalesTaxByNexusReport, SalesTaxByNexusRow, SearchHit, Summary1099,
-    TaxSummaryLine, TaxSummaryReport, TrialBalance, VatReturnLine, VatReturnReport, Vendor1099Row,
-    VendorSpendReport, VendorSpendRow, W2Row,
+    TaxSummaryLine, TaxSummaryReport, TrackingPLReport, TrackingPLRow, TrialBalance, VatReturnLine,
+    VatReturnReport, Vendor1099Row, VendorSpendReport, VendorSpendRow, W2Row,
 };
 pub use retainer::{ApplyRetainer, CreateRetainer, DepositRetainer, Retainer, RetainerTransaction};
 pub use role::{AssignPermission, CreateRole, Permission, Role};

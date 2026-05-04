@@ -727,6 +727,73 @@ pub struct CashDisbursementsJournal {
     pub total: MinorUnits,
 }
 
+// ── P&L by Tracking Category ──────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrackingPLRow {
+    pub option_id: String,
+    pub option_name: String,
+    pub revenue: MinorUnits,
+    pub expenses: MinorUnits,
+    pub net_income: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrackingPLReport {
+    pub category_id: String,
+    pub category_name: String,
+    #[serde(with = "crate::models::date_serde")]
+    pub from_date: Date,
+    #[serde(with = "crate::models::date_serde")]
+    pub to_date: Date,
+    pub rows: Vec<TrackingPLRow>,
+    pub untracked_revenue: MinorUnits,
+    pub untracked_expenses: MinorUnits,
+}
+
+// ── Statement of Changes in Equity ────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EquityStatementLine {
+    pub label: String,
+    pub amount: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EquityStatement {
+    #[serde(with = "crate::models::date_serde")]
+    pub from_date: Date,
+    #[serde(with = "crate::models::date_serde")]
+    pub to_date: Date,
+    pub opening_equity: MinorUnits,
+    pub net_income: MinorUnits,
+    pub other_lines: Vec<EquityStatementLine>,
+    pub closing_equity: MinorUnits,
+}
+
+// ── Inventory Aging ────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InventoryAgingRow {
+    pub product_id: String,
+    pub product_name: String,
+    pub sku: String,
+    pub qty_0_30: i64,
+    pub qty_31_60: i64,
+    pub qty_61_90: i64,
+    pub qty_over_90: i64,
+    pub total_qty: i64,
+    pub total_cost: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InventoryAgingReport {
+    #[serde(with = "crate::models::date_serde")]
+    pub as_of: Date,
+    pub rows: Vec<InventoryAgingRow>,
+    pub grand_total_cost: MinorUnits,
+}
+
 // ── Global Search ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

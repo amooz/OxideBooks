@@ -1585,6 +1585,12 @@ pub fn build(state: AppState) -> Router {
             "/reports/cash-disbursements-journal",
             get(reports::cash_disbursements_journal),
         )
+        .route(
+            "/reports/pl-by-tracking-category",
+            get(reports::pl_by_tracking_category),
+        )
+        .route("/reports/equity-statement", get(reports::equity_statement))
+        .route("/reports/inventory-aging", get(reports::inventory_aging))
         // Inventory serial number tracking
         .route(
             "/inventory-serial-numbers",
