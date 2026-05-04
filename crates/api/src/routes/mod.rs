@@ -20,17 +20,17 @@ use crate::{
         client_portal, closed_periods, commissions, consolidated, consolidation_eliminations,
         contact_groups, contacts, contractor_tax_info, cost_codes, credit_notes, custom_fields,
         deferred_charges, deferred_revenue, departments, doc_sequences, dunning, email,
-        employee_loans, employees, exchange_rates, expense_categories, expense_policies,
-        expense_reports, expenses, export, fixed_assets, fx, fx_revaluations, grn, health,
-        identity, import, intercompany, inventory, inventory_lots, invoice_templates, invoices,
-        landed_costs, late_fees, leave, mileage, notes, notifications, opening_balances,
+        employee_bank_accounts, employee_loans, employees, exchange_rates, expense_categories,
+        expense_policies, expense_reports, expenses, export, fixed_assets, fx, fx_revaluations,
+        grn, health, identity, import, intercompany, inventory, inventory_lots, invoice_templates,
+        invoices, landed_costs, late_fees, leave, mileage, notes, notifications, opening_balances,
         organizations, payment_links, payment_plans, payment_terms, payments, payroll, payroll_tax,
         payslips, prepaid_expenses, prepayments, price_lists, product_categories, products,
-        project_phases, projects, purchase_orders, purchase_requisitions, recurring, reports,
-        retainers, roles, sales_orders, sales_tax_nexus, scim, sessions, stripe_webhook,
-        subscriptions, tags, tax_groups, tax_periods, tax_rates, time_entries, totp,
-        tracking_categories, transactions, users, vendor_credits, vendor_portal, warehouses,
-        webhooks, work_orders,
+        project_phases, projects, purchase_orders, purchase_requisitions, recurring,
+        recurring_journal_entries, reports, retainers, roles, sales_orders, sales_tax_nexus, scim,
+        sessions, stripe_webhook, subscriptions, tags, tax_groups, tax_periods, tax_rates,
+        time_entries, totp, tracking_categories, transactions, users, vendor_credits,
+        vendor_portal, warehouses, webhooks, work_orders,
     },
     middleware::require_auth,
     state::AppState,
@@ -440,6 +440,22 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/recurring-schedules/:id/run",
             post(recurring::run_schedule),
+        )
+        // Recurring journal entries (memorized transactions)
+        .route(
+            "/recurring-journal-entries",
+            get(recurring_journal_entries::list_recurring_journal_entries)
+                .post(recurring_journal_entries::create_recurring_journal_entry),
+        )
+        .route(
+            "/recurring-journal-entries/:id",
+            get(recurring_journal_entries::get_recurring_journal_entry)
+                .patch(recurring_journal_entries::update_recurring_journal_entry)
+                .delete(recurring_journal_entries::delete_recurring_journal_entry),
+        )
+        .route(
+            "/recurring-journal-entries/:id/post",
+            post(recurring_journal_entries::post_recurring_journal_entry),
         )
         // Approval workflow rules
         .route(
@@ -1073,6 +1089,16 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/employees/:id/leave-balance",
             get(leave::employee_leave_balance),
+        )
+        .route(
+            "/employees/:id/bank-accounts",
+            get(employee_bank_accounts::list_employee_bank_accounts)
+                .post(employee_bank_accounts::create_employee_bank_account),
+        )
+        .route(
+            "/employee-bank-accounts/:id",
+            axum::routing::patch(employee_bank_accounts::update_employee_bank_account)
+                .delete(employee_bank_accounts::delete_employee_bank_account),
         )
         .route(
             "/employees/:id/loans",

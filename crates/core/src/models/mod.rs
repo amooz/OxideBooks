@@ -29,6 +29,7 @@ pub mod doc_sequence;
 pub mod dunning;
 pub mod email;
 pub mod employee;
+pub mod employee_bank_account;
 pub mod employee_loan;
 pub mod expense;
 pub mod expense_policy;
@@ -68,6 +69,7 @@ pub mod project_phase;
 pub mod purchase_order;
 pub mod purchase_requisition;
 pub mod recurring;
+pub mod recurring_journal_entry;
 pub mod reports;
 pub mod retainer;
 pub mod role;
@@ -142,6 +144,9 @@ pub use doc_sequence::{DocSequence, ResetDocSequence, UpsertDocSequence};
 pub use dunning::{CreateDunningRule, DunningRule, InvoiceReminder, OverdueInvoice};
 pub use email::{EmailLog, EmailSettings, SendEmailRequest, UpsertEmailSettings};
 pub use employee::{CreateEmployee, Employee, UpdateEmployee};
+pub use employee_bank_account::{
+    CreateEmployeeBankAccount, EmployeeBankAccount, UpdateEmployeeBankAccount,
+};
 pub use employee_loan::{
     CreateEmployeeLoan, CreateLoanRepayment, EmployeeLoan, LoanRepayment, UpdateEmployeeLoan,
 };
@@ -224,6 +229,10 @@ pub use purchase_requisition::{
 };
 pub use recurring::{
     CreateRecurringSchedule, Frequency, RecurringSchedule, UpdateRecurringSchedule,
+};
+pub use recurring_journal_entry::{
+    CreateRecurringJournalEntry, CreateRecurringJournalEntryLine, RecurringJournalEntry,
+    RecurringJournalEntryLine, UpdateRecurringJournalEntry,
 };
 pub use reports::{
     AccountBalance, AccountLedger, AgingReport, AgingRow, BalanceSheetReport, CashFlowForecast,
