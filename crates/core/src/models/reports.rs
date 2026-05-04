@@ -794,6 +794,55 @@ pub struct InventoryAgingReport {
     pub grand_total_cost: MinorUnits,
 }
 
+// ── Customer / Vendor Balance Summary ─────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContactBalanceRow {
+    pub contact_id: String,
+    pub contact_name: String,
+    pub total_invoiced: MinorUnits,
+    pub total_paid: MinorUnits,
+    pub balance: MinorUnits,
+    pub currency: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomerBalancesReport {
+    #[serde(with = "crate::models::date_serde")]
+    pub as_of: Date,
+    pub rows: Vec<ContactBalanceRow>,
+    pub total_balance: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VendorBalancesReport {
+    #[serde(with = "crate::models::date_serde")]
+    pub as_of: Date,
+    pub rows: Vec<ContactBalanceRow>,
+    pub total_balance: MinorUnits,
+}
+
+// ── Sales by Rep ───────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SalesByRepRow {
+    pub salesperson_id: String,
+    pub salesperson_name: String,
+    pub invoice_count: i64,
+    pub total_sales: MinorUnits,
+    pub total_commission: MinorUnits,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SalesByRepReport {
+    #[serde(with = "crate::models::date_serde")]
+    pub from_date: Date,
+    #[serde(with = "crate::models::date_serde")]
+    pub to_date: Date,
+    pub rows: Vec<SalesByRepRow>,
+    pub grand_total: MinorUnits,
+}
+
 // ── Global Search ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

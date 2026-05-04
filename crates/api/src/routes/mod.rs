@@ -20,10 +20,10 @@ use crate::{
         check_runs, client_portal, closed_periods, commissions, consolidated,
         consolidation_eliminations, contact_groups, contacts, contractor_tax_info, cost_codes,
         credit_notes, custom_fields, deferred_charges, deferred_revenue, departments,
-        doc_sequences, dunning, email, employee_bank_accounts, employee_loans, employees,
-        exchange_rates, expense_categories, expense_claims, expense_policies, expense_reports,
-        expenses, export, fixed_assets, fx, fx_revaluations, grn, health, identity, import,
-        intercompany, inventory, inventory_lots, inventory_reorder_requests,
+        direct_deposit, doc_sequences, dunning, email, employee_bank_accounts, employee_loans,
+        employees, exchange_rates, expense_categories, expense_claims, expense_policies,
+        expense_reports, expenses, export, fixed_assets, fx, fx_revaluations, grn, health,
+        identity, import, intercompany, inventory, inventory_lots, inventory_reorder_requests,
         inventory_serial_numbers, inventory_stocktakes, invoice_templates, invoices, landed_costs,
         late_fees, leave, mileage, notes, notifications, opening_balances, organizations,
         payment_links, payment_plans, payment_terms, payments, payroll, payroll_tax, payslips,
@@ -976,6 +976,19 @@ pub fn build(state: AppState) -> Router {
                 .delete(departments::delete_department),
         )
         .route("/departments/:id/pl", get(departments::department_pl))
+        // Direct deposit / ACH batches
+        .route(
+            "/direct-deposit-batches",
+            get(direct_deposit::list_batches).post(direct_deposit::create_batch),
+        )
+        .route(
+            "/direct-deposit-batches/:id",
+            get(direct_deposit::get_batch).delete(direct_deposit::delete_batch),
+        )
+        .route(
+            "/direct-deposit-batches/:id/send",
+            axum::routing::post(direct_deposit::mark_sent),
+        )
         // Invoice branding template
         .route(
             "/invoice-template",
@@ -1591,6 +1604,12 @@ pub fn build(state: AppState) -> Router {
         )
         .route("/reports/equity-statement", get(reports::equity_statement))
         .route("/reports/inventory-aging", get(reports::inventory_aging))
+        .route(
+            "/reports/customer-balances",
+            get(reports::customer_balances),
+        )
+        .route("/reports/vendor-balances", get(reports::vendor_balances))
+        .route("/reports/sales-by-rep", get(reports::sales_by_rep))
         // Inventory serial number tracking
         .route(
             "/inventory-serial-numbers",
