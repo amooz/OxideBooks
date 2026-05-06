@@ -68,6 +68,16 @@ pub struct UpdateContact {
     pub is_1099_vendor: Option<bool>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContactCreditStatus {
+    pub contact_id: String,
+    pub credit_limit: Option<i64>,
+    pub credit_limit_behaviour: String,
+    pub outstanding_balance: i64,
+    pub available_credit: Option<i64>,
+    pub overlimit: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

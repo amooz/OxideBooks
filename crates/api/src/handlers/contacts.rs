@@ -153,3 +153,16 @@ pub async fn merge_contact(
     let contact = ContactRepo::merge(&state.db, &claims.org, &keep_id, &body.discard_id).await?;
     Ok(Json(serde_json::json!({ "data": contact })))
 }
+
+/// GET /api/v1/contacts/:id/credit-status
+pub async fn contact_credit_status(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let status = ContactRepo::credit_status(&state.db, &claims.org, &id).await?;
+    Ok(Json(serde_json::json!({ "data": status })))
+}

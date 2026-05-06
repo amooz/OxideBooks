@@ -5,6 +5,9 @@ use uuid::Uuid;
 
 use crate::error::{map_sqlx_err, DbError};
 
+const COLS: &str = "id, organization_id, payroll_run_id, employee_id, gross_pay, \
+                    tax_withheld, deductions, net_pay, notes, status, published_at, created_at";
+
 #[derive(sqlx::FromRow)]
 struct PayslipRow {
     id: Uuid,
@@ -16,6 +19,8 @@ struct PayslipRow {
     deductions: i64,
     net_pay: i64,
     notes: Option<String>,
+    status: String,
+    published_at: Option<OffsetDateTime>,
     created_at: OffsetDateTime,
 }
 
@@ -31,6 +36,8 @@ impl From<PayslipRow> for Payslip {
             deductions: r.deductions,
             net_pay: r.net_pay,
             notes: r.notes,
+            status: r.status,
+            published_at: r.published_at,
             created_at: r.created_at,
         }
     }
@@ -46,7 +53,6 @@ impl PayslipRepo {
     ) -> Result<Vec<Payslip>, DbError> {
         let org_uuid = parse_uuid(org_id)?;
         let run_uuid = parse_uuid(run_id)?;
-        // Verify run belongs to org.
         let exists: Option<(Uuid,)> =
             sqlx::query_as("SELECT id FROM payroll_runs WHERE organization_id = $1 AND id = $2")
                 .bind(org_uuid)
@@ -57,12 +63,30 @@ impl PayslipRepo {
         if exists.is_none() {
             return Err(DbError::NotFound);
         }
-        let rows: Vec<PayslipRow> = sqlx::query_as(
-            "SELECT id, organization_id, payroll_run_id, employee_id, gross_pay, \
-             tax_withheld, deductions, net_pay, notes, created_at \
-             FROM payslips WHERE payroll_run_id = $1 ORDER BY created_at ASC",
-        )
+        let rows: Vec<PayslipRow> = sqlx::query_as(&format!(
+            "SELECT {COLS} FROM payslips WHERE payroll_run_id = $1 ORDER BY created_at ASC"
+        ))
         .bind(run_uuid)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+        Ok(rows.into_iter().map(Payslip::from).collect())
+    }
+
+    pub async fn list_by_employee(
+        pool: &PgPool,
+        org_id: &str,
+        employee_id: &str,
+    ) -> Result<Vec<Payslip>, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let emp_uuid = parse_uuid(employee_id)?;
+        let rows: Vec<PayslipRow> = sqlx::query_as(&format!(
+            "SELECT {COLS} FROM payslips \
+             WHERE organization_id = $1 AND employee_id = $2 \
+             ORDER BY created_at DESC"
+        ))
+        .bind(org_uuid)
+        .bind(emp_uuid)
         .fetch_all(pool)
         .await
         .map_err(map_sqlx_err)?;
@@ -72,11 +96,9 @@ impl PayslipRepo {
     pub async fn get_by_id(pool: &PgPool, org_id: &str, id: &str) -> Result<Payslip, DbError> {
         let org_uuid = parse_uuid(org_id)?;
         let id_uuid = parse_uuid(id)?;
-        let row: PayslipRow = sqlx::query_as(
-            "SELECT id, organization_id, payroll_run_id, employee_id, gross_pay, \
-             tax_withheld, deductions, net_pay, notes, created_at \
-             FROM payslips WHERE organization_id = $1 AND id = $2",
-        )
+        let row: PayslipRow = sqlx::query_as(&format!(
+            "SELECT {COLS} FROM payslips WHERE organization_id = $1 AND id = $2"
+        ))
         .bind(org_uuid)
         .bind(id_uuid)
         .fetch_optional(pool)
@@ -96,7 +118,6 @@ impl PayslipRepo {
         let run_uuid = parse_uuid(run_id)?;
         let emp_uuid = parse_uuid(&input.employee_id)?;
 
-        // Verify run belongs to org.
         let exists: Option<(Uuid,)> =
             sqlx::query_as("SELECT id FROM payroll_runs WHERE organization_id = $1 AND id = $2")
                 .bind(org_uuid)
@@ -108,7 +129,6 @@ impl PayslipRepo {
             return Err(DbError::NotFound);
         }
 
-        // Verify employee belongs to org.
         let emp_exists: Option<(Uuid,)> =
             sqlx::query_as("SELECT id FROM employees WHERE organization_id = $1 AND id = $2")
                 .bind(org_uuid)
@@ -138,7 +158,7 @@ impl PayslipRepo {
             "INSERT INTO payslips \
              (id, organization_id, payroll_run_id, employee_id, gross_pay, \
               tax_withheld, deductions, net_pay, notes) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
         )
         .bind(id)
         .bind(org_uuid)
@@ -154,6 +174,27 @@ impl PayslipRepo {
         .map_err(map_sqlx_err)?;
 
         Self::get_by_id(pool, org_id, &id.to_string()).await
+    }
+
+    /// Transition payslip from draft → published, making it visible to the employee.
+    pub async fn publish(pool: &PgPool, org_id: &str, id: &str) -> Result<Payslip, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let id_uuid = parse_uuid(id)?;
+        let n = sqlx::query(
+            "UPDATE payslips \
+             SET status = 'published', published_at = NOW() \
+             WHERE organization_id = $1 AND id = $2 AND status = 'draft'",
+        )
+        .bind(org_uuid)
+        .bind(id_uuid)
+        .execute(pool)
+        .await
+        .map_err(map_sqlx_err)?
+        .rows_affected();
+        if n == 0 {
+            return Err(DbError::NotFound);
+        }
+        Self::get_by_id(pool, org_id, id).await
     }
 }
 

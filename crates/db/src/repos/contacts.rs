@@ -1,4 +1,6 @@
-use oxidebooks_core::models::{Contact, ContactType, CreateContact, UpdateContact};
+use oxidebooks_core::models::{
+    Contact, ContactCreditStatus, ContactType, CreateContact, UpdateContact,
+};
 use oxidebooks_core::pagination::{encode_cursor, PageParams};
 use sqlx::PgPool;
 use time::OffsetDateTime;
@@ -317,6 +319,44 @@ impl ContactRepo {
             .map_err(map_sqlx_err)?;
 
         Self::get_by_id(pool, org_id, keep_id).await
+    }
+
+    pub async fn credit_status(
+        pool: &PgPool,
+        org_id: &str,
+        id: &str,
+    ) -> Result<ContactCreditStatus, DbError> {
+        let contact = Self::get_by_id(pool, org_id, id).await?;
+        let org_uuid = parse_uuid(org_id)?;
+        let id_uuid = parse_uuid(id)?;
+
+        let outstanding: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(SUM(total_amount - amount_paid), 0)::BIGINT \
+             FROM invoices \
+             WHERE organization_id = $1 AND contact_id = $2 \
+               AND invoice_type = 'invoice' \
+               AND status NOT IN ('draft', 'voided', 'paid')",
+        )
+        .bind(org_uuid)
+        .bind(id_uuid)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let available_credit = contact.credit_limit.map(|limit| limit - outstanding);
+        let overlimit = contact
+            .credit_limit
+            .map(|limit| outstanding > limit)
+            .unwrap_or(false);
+
+        Ok(ContactCreditStatus {
+            contact_id: id.to_string(),
+            credit_limit: contact.credit_limit,
+            credit_limit_behaviour: contact.credit_limit_behaviour,
+            outstanding_balance: outstanding,
+            available_credit,
+            overlimit,
+        })
     }
 }
 

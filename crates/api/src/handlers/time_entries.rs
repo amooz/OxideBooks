@@ -3,7 +3,10 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use oxidebooks_core::models::{BillTimeEntries, CreateTimeEntry, RejectTimeEntry, UpdateTimeEntry};
+use oxidebooks_core::models::{
+    BillTimeEntries, BulkApproveTimeEntries, BulkRejectTimeEntries, CreateTimeEntry,
+    RejectTimeEntry, UpdateTimeEntry,
+};
 use oxidebooks_db::repos::TimeEntryRepo;
 use serde::Deserialize;
 use time::format_description::well_known::Iso8601;
@@ -138,6 +141,30 @@ pub async fn reject_time_entry(
     }
     let entry = TimeEntryRepo::reject(&state.db, &claims.org, &id, body).await?;
     Ok(Json(serde_json::json!({ "data": entry })))
+}
+
+pub async fn bulk_approve_time_entries(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Json(body): Json<BulkApproveTimeEntries>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let entries = TimeEntryRepo::bulk_approve(&state.db, &claims.org, body, &claims.sub).await?;
+    Ok(Json(serde_json::json!({ "data": entries })))
+}
+
+pub async fn bulk_reject_time_entries(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Json(body): Json<BulkRejectTimeEntries>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let entries = TimeEntryRepo::bulk_reject(&state.db, &claims.org, body).await?;
+    Ok(Json(serde_json::json!({ "data": entries })))
 }
 
 pub async fn bill_time_entries(

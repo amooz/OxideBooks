@@ -743,6 +743,14 @@ pub fn build(state: AppState) -> Router {
         .route("/time-entries/bill", post(time_entries::bill_time_entries))
         .route("/time-entries/summary", get(time_entries::time_summary))
         .route(
+            "/time-entries/bulk-approve",
+            post(time_entries::bulk_approve_time_entries),
+        )
+        .route(
+            "/time-entries/bulk-reject",
+            post(time_entries::bulk_reject_time_entries),
+        )
+        .route(
             "/time-entries/:id/approve",
             post(time_entries::approve_time_entry),
         )
@@ -1078,6 +1086,10 @@ pub fn build(state: AppState) -> Router {
         // Contacts statement
         .route("/contacts/:id/statement", get(contacts::contact_statement))
         .route("/contacts/:id/merge", post(contacts::merge_contact))
+        .route(
+            "/contacts/:id/credit-status",
+            get(contacts::contact_credit_status),
+        )
         // Expense policies
         .route(
             "/expense-policies",
@@ -1300,6 +1312,11 @@ pub fn build(state: AppState) -> Router {
             post(payslips::create_payslip).get(payslips::list_payslips),
         )
         .route("/payslips/:id", get(payslips::get_payslip))
+        .route("/payslips/:id/publish", post(payslips::publish_payslip))
+        .route(
+            "/employees/:id/payslips",
+            get(payslips::list_employee_payslips),
+        )
         // Leave management
         .route(
             "/leave-types",

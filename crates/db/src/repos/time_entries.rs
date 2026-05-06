@@ -1,5 +1,6 @@
 use oxidebooks_core::models::{
-    BillTimeEntries, CreateTimeEntry, RejectTimeEntry, TimeEntry, TimeSummaryRow, UpdateTimeEntry,
+    BillTimeEntries, BulkApproveTimeEntries, BulkRejectTimeEntries, CreateTimeEntry,
+    RejectTimeEntry, TimeEntry, TimeSummaryRow, UpdateTimeEntry,
 };
 use sqlx::PgPool;
 use time::{Date, OffsetDateTime};
@@ -259,6 +260,82 @@ impl TimeEntryRepo {
             return Err(DbError::NotFound);
         }
         Self::get_by_id(pool, org_id, id).await
+    }
+
+    pub async fn bulk_approve(
+        pool: &PgPool,
+        org_id: &str,
+        input: BulkApproveTimeEntries,
+        approver_id: &str,
+    ) -> Result<Vec<TimeEntry>, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let approver_uuid = parse_uuid(approver_id)?;
+        let ids: Vec<Uuid> = input
+            .entry_ids
+            .iter()
+            .map(|s| parse_uuid(s))
+            .collect::<Result<_, _>>()?;
+
+        sqlx::query(
+            "UPDATE time_entries \
+             SET approval_status = 'approved', approved_by = $1, approved_at = NOW(), \
+                 rejection_reason = NULL, updated_at = NOW() \
+             WHERE organization_id = $2 AND id = ANY($3) AND approval_status = 'pending'",
+        )
+        .bind(approver_uuid)
+        .bind(org_uuid)
+        .bind(&ids)
+        .execute(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let rows: Vec<TimeEntryRow> = sqlx::query_as(&format!(
+            "SELECT {COLS} FROM time_entries \
+             WHERE organization_id = $1 AND id = ANY($2) ORDER BY entry_date DESC"
+        ))
+        .bind(org_uuid)
+        .bind(&ids)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+        Ok(rows.into_iter().map(from_row).collect())
+    }
+
+    pub async fn bulk_reject(
+        pool: &PgPool,
+        org_id: &str,
+        input: BulkRejectTimeEntries,
+    ) -> Result<Vec<TimeEntry>, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let ids: Vec<Uuid> = input
+            .entry_ids
+            .iter()
+            .map(|s| parse_uuid(s))
+            .collect::<Result<_, _>>()?;
+
+        sqlx::query(
+            "UPDATE time_entries \
+             SET approval_status = 'rejected', approved_by = NULL, approved_at = NULL, \
+                 rejection_reason = $1, updated_at = NOW() \
+             WHERE organization_id = $2 AND id = ANY($3) AND approval_status = 'pending'",
+        )
+        .bind(input.reason)
+        .bind(org_uuid)
+        .bind(&ids)
+        .execute(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let rows: Vec<TimeEntryRow> = sqlx::query_as(&format!(
+            "SELECT {COLS} FROM time_entries \
+             WHERE organization_id = $1 AND id = ANY($2) ORDER BY entry_date DESC"
+        ))
+        .bind(org_uuid)
+        .bind(&ids)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+        Ok(rows.into_iter().map(from_row).collect())
     }
 
     /// Convert unbilled time entries into invoice lines on an existing invoice.
