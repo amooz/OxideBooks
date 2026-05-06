@@ -54,11 +54,13 @@ impl ReportRepo {
                 COALESCE(SUM(jl.debit),  0)::BIGINT AS debit_total,
                 COALESCE(SUM(jl.credit), 0)::BIGINT AS credit_total
             FROM accounts a
-            LEFT JOIN journal_lines jl ON jl.account_id = a.id
-            LEFT JOIN journal_entries je
-                ON  je.id              = jl.journal_entry_id
-                AND je.organization_id = $1
-                AND je.status          = 'posted'
+            LEFT JOIN (
+                SELECT jl.account_id, jl.debit, jl.credit
+                FROM journal_lines jl
+                JOIN journal_entries je ON je.id = jl.journal_entry_id
+                WHERE je.organization_id = $1
+                  AND je.status = 'posted'
+            ) jl ON jl.account_id = a.id
             WHERE a.organization_id = $1
               AND a.is_active = TRUE
             GROUP BY a.id, a.code, a.name, a.account_type
@@ -124,12 +126,14 @@ impl ReportRepo {
                 COALESCE(SUM(jl.debit),  0)::BIGINT AS total_debit,
                 COALESCE(SUM(jl.credit), 0)::BIGINT AS total_credit
             FROM accounts a
-            LEFT JOIN journal_lines jl ON jl.account_id = a.id
-            LEFT JOIN journal_entries je
-                ON  je.id              = jl.journal_entry_id
-                AND je.organization_id = $1
-                AND je.status          = 'posted'
-                AND je.date BETWEEN $2 AND $3
+            LEFT JOIN (
+                SELECT jl.account_id, jl.debit, jl.credit
+                FROM journal_lines jl
+                JOIN journal_entries je ON je.id = jl.journal_entry_id
+                WHERE je.organization_id = $1
+                  AND je.status = 'posted'
+                  AND je.date BETWEEN $2 AND $3
+            ) jl ON jl.account_id = a.id
             WHERE a.organization_id = $1
               AND a.account_type IN ('revenue', 'expense')
             GROUP BY a.id, a.code, a.name, a.account_type
@@ -210,12 +214,14 @@ impl ReportRepo {
                 COALESCE(SUM(jl.debit),  0)::BIGINT AS total_debit,
                 COALESCE(SUM(jl.credit), 0)::BIGINT AS total_credit
             FROM accounts a
-            LEFT JOIN journal_lines jl ON jl.account_id = a.id
-            LEFT JOIN journal_entries je
-                ON  je.id              = jl.journal_entry_id
-                AND je.organization_id = $1
-                AND je.status          = 'posted'
-                AND je.date            <= $2
+            LEFT JOIN (
+                SELECT jl.account_id, jl.debit, jl.credit
+                FROM journal_lines jl
+                JOIN journal_entries je ON je.id = jl.journal_entry_id
+                WHERE je.organization_id = $1
+                  AND je.status = 'posted'
+                  AND je.date <= $2
+            ) jl ON jl.account_id = a.id
             WHERE a.organization_id = $1
               AND a.account_type IN ('asset', 'liability', 'equity')
             GROUP BY a.id, a.code, a.name, a.account_type

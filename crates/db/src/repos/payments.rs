@@ -422,7 +422,12 @@ impl PaymentRepo {
         inv_uuid: Uuid,
     ) -> Result<(), DbError> {
         let invoice_total: (i64,) = sqlx::query_as(
-            "SELECT COALESCE(SUM(quantity * unit_price + quantity * unit_price * tax_rate / 1000000), 0)::BIGINT \
+            "SELECT COALESCE(SUM(
+                 quantity * unit_price / 100
+                 - quantity * unit_price / 100 * discount_pct / 10000
+                 + (quantity * unit_price / 100 - quantity * unit_price / 100 * discount_pct / 10000)
+                   * tax_rate / 10000
+             ), 0)::BIGINT \
              FROM invoice_lines WHERE invoice_id = $1",
         )
         .bind(inv_uuid)
