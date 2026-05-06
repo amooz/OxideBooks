@@ -73,6 +73,7 @@ pub mod product_category;
 pub mod product_variant;
 pub mod project;
 pub mod project_phase;
+pub mod project_task;
 pub mod purchase_order;
 pub mod purchase_requisition;
 pub mod recurring;
@@ -83,6 +84,7 @@ pub mod reports;
 pub mod retainer;
 pub mod role;
 pub mod sales_order;
+pub mod sales_order_shipment;
 pub mod sales_tax_nexus;
 pub mod service_territory;
 pub mod session;
@@ -194,8 +196,9 @@ pub use intercompany::{
     IntercompanyTransaction,
 };
 pub use inventory::{
-    CreateInventoryItem, InventoryAdjustment, InventoryItem, InventoryMovement,
-    InventoryValuationReport, InventoryValuationRow, LowStockItem, UpdateInventoryItem,
+    CreateInventoryItem, InventoryAdjustment, InventoryAvailability, InventoryItem,
+    InventoryMovement, InventoryValuationReport, InventoryValuationRow, LowStockItem,
+    UpdateInventoryItem,
 };
 pub use inventory_lot::{CreateInventoryLot, InventoryLot, UpdateInventoryLot};
 pub use inventory_reorder_request::{
@@ -249,6 +252,7 @@ pub use product_category::{CreateProductCategory, ProductCategory, UpdateProduct
 pub use product_variant::{CreateProductVariant, ProductVariant, UpdateProductVariant};
 pub use project::{CreateProject, Project, ProjectSummary, UpdateProject};
 pub use project_phase::{CreateProjectPhase, ProjectPhase, UpdateProjectPhase};
+pub use project_task::{CreateProjectTask, ProjectTask, UpdateProjectTask};
 pub use purchase_order::{
     CreatePoLine, CreatePurchaseOrder, PoStatus, PurchaseOrder, PurchaseOrderLine, ReceivePoLine,
     UpdatePurchaseOrder,
@@ -295,6 +299,9 @@ pub use retainer::{ApplyRetainer, CreateRetainer, DepositRetainer, Retainer, Ret
 pub use role::{AssignPermission, CreateRole, Permission, Role};
 pub use sales_order::{
     ConvertSoToInvoice, CreateSalesOrder, CreateSoLine, SalesOrder, SoLine, UpdateSalesOrder,
+};
+pub use sales_order_shipment::{
+    CreateSalesOrderShipment, CreateShipmentLine, SalesOrderShipment, ShipmentLine,
 };
 pub use sales_tax_nexus::{CreateSalesTaxNexus, SalesTaxNexus, UpdateSalesTaxNexus};
 pub use service_territory::{CreateServiceTerritory, ServiceTerritory, UpdateServiceTerritory};

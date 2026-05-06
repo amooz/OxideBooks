@@ -107,3 +107,16 @@ pub async fn inventory_valuation(
     let report = InventoryRepo::valuation_report(&state.db, &claims.org).await?;
     Ok(Json(serde_json::json!({ "data": report })))
 }
+
+/// GET /api/v1/inventory/:product_id/availability
+pub async fn inventory_availability(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(product_id): Path<String>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let avail = InventoryRepo::availability(&state.db, &claims.org, &product_id).await?;
+    Ok(Json(serde_json::json!({ "data": avail })))
+}
