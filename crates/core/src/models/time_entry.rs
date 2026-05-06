@@ -81,3 +81,14 @@ pub struct TimeSummaryRow {
 pub struct RejectTimeEntry {
     pub reason: Option<String>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BulkApproveTimeEntries {
+    pub entry_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct BulkRejectTimeEntries {
+    pub entry_ids: Vec<String>,
+    pub reason: Option<String>,
+}

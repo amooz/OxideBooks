@@ -14,6 +14,13 @@ pub struct Payslip {
     pub deductions: MinorUnits,
     pub net_pay: MinorUnits,
     pub notes: Option<String>,
+    pub status: String,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "time::serde::rfc3339::option"
+    )]
+    pub published_at: Option<OffsetDateTime>,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
 }

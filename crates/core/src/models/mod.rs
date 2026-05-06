@@ -133,7 +133,7 @@ pub use closed_period::{ClosedPeriod, CreateClosedPeriod};
 pub use commission::{CreateSalesCommission, PayCommission, SalesCommission};
 pub use consolidated::{ConsolidatedProfitLoss, OrgProfitLoss};
 pub use consolidation_elimination::{ConsolidationElimination, CreateConsolidationElimination};
-pub use contact::{Contact, ContactType, CreateContact, UpdateContact};
+pub use contact::{Contact, ContactCreditStatus, ContactType, CreateContact, UpdateContact};
 pub use contact_group::{ContactGroup, CreateContactGroup, UpdateContactGroup};
 pub use contractor_tax_info::{
     Contractor1099Summary, ContractorTaxInfo, CreateContractorTaxInfo, UpdateContractorTaxInfo,
@@ -309,7 +309,8 @@ pub use tax_period::{CreateTaxPeriod, FileTaxPeriod, TaxPeriod};
 pub use tax_rate::{CreateTaxRate, TaxRate, UpdateTaxRate};
 pub use tax_rule::{CreateTaxRule, SuggestedTaxRate, TaxRule, UpdateTaxRule};
 pub use time_entry::{
-    BillTimeEntries, CreateTimeEntry, RejectTimeEntry, TimeEntry, TimeSummaryRow, UpdateTimeEntry,
+    BillTimeEntries, BulkApproveTimeEntries, BulkRejectTimeEntries, CreateTimeEntry,
+    RejectTimeEntry, TimeEntry, TimeSummaryRow, UpdateTimeEntry,
 };
 pub use tracking_category::{
     CreateTrackingCategory, CreateTrackingOption, TrackingCategory, TrackingOption,
