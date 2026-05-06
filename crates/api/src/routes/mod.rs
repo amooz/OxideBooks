@@ -28,12 +28,12 @@ use crate::{
         late_fees, leave, mileage, notes, notifications, opening_balances, organizations,
         payment_links, payment_plans, payment_terms, payments, payroll, payroll_tax, payslips,
         prepaid_expenses, prepayments, price_lists, product_categories, product_variants, products,
-        project_phases, projects, purchase_orders, purchase_requisitions, recurring,
+        project_phases, project_tasks, projects, purchase_orders, purchase_requisitions, recurring,
         recurring_bills, recurring_invoices, recurring_journal_entries, reports, retainers, roles,
-        sales_orders, sales_tax_nexus, scim, service_territories, sessions, stripe_webhook,
-        subscriptions, tags, tax_groups, tax_periods, tax_rates, tax_rules, time_entries, totp,
-        tracking_categories, transactions, users, vendor_credits, vendor_portal, warehouses,
-        webhooks, work_orders,
+        sales_order_shipments, sales_orders, sales_tax_nexus, scim, service_territories, sessions,
+        stripe_webhook, subscriptions, tags, tax_groups, tax_periods, tax_rates, tax_rules,
+        time_entries, totp, tracking_categories, transactions, users, vendor_credits,
+        vendor_portal, warehouses, webhooks, work_orders,
     },
     middleware::require_auth,
     state::AppState,
@@ -708,6 +708,17 @@ pub fn build(state: AppState) -> Router {
                 .patch(project_phases::update_phase)
                 .delete(project_phases::delete_phase),
         )
+        // Project tasks
+        .route(
+            "/projects/:id/tasks",
+            get(project_tasks::list_tasks).post(project_tasks::create_task),
+        )
+        .route(
+            "/project-tasks/:id",
+            get(project_tasks::get_task)
+                .patch(project_tasks::update_task)
+                .delete(project_tasks::delete_task),
+        )
         // Assembly orders
         .route(
             "/assembly-orders",
@@ -843,6 +854,10 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/inventory/:product_id",
             get(inventory::get_inventory_item).patch(inventory::update_inventory_item),
+        )
+        .route(
+            "/inventory/:product_id/availability",
+            get(inventory::inventory_availability),
         )
         .route(
             "/inventory/:product_id/adjust",
@@ -1366,6 +1381,15 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/sales-orders/:id/convert-to-invoice",
             post(sales_orders::convert_so_to_invoice),
+        )
+        // Sales order shipments
+        .route(
+            "/sales-orders/:id/shipments",
+            get(sales_order_shipments::list_shipments).post(sales_order_shipments::create_shipment),
+        )
+        .route(
+            "/so-shipments/:id",
+            get(sales_order_shipments::get_shipment),
         )
         // Sales tax nexus
         .route(

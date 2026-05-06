@@ -1,6 +1,7 @@
 use oxidebooks_core::models::{
-    CreateInventoryItem, InventoryAdjustment, InventoryItem, InventoryMovement,
-    InventoryValuationReport, InventoryValuationRow, LowStockItem, UpdateInventoryItem,
+    CreateInventoryItem, InventoryAdjustment, InventoryAvailability, InventoryItem,
+    InventoryMovement, InventoryValuationReport, InventoryValuationRow, LowStockItem,
+    UpdateInventoryItem,
 };
 use sqlx::PgPool;
 use time::OffsetDateTime;
@@ -14,6 +15,7 @@ struct ItemRow {
     organization_id: Uuid,
     product_id: Uuid,
     quantity_on_hand: i64,
+    quantity_reserved: i64,
     reorder_point: i64,
     reorder_qty: i64,
     cost_per_unit: i64,
@@ -49,6 +51,7 @@ fn item_from_row(r: ItemRow) -> InventoryItem {
         organization_id: r.organization_id.to_string(),
         product_id: r.product_id.to_string(),
         quantity_on_hand: r.quantity_on_hand,
+        quantity_reserved: r.quantity_reserved,
         reorder_point: r.reorder_point,
         reorder_qty: r.reorder_qty,
         cost_per_unit: r.cost_per_unit,
@@ -81,8 +84,8 @@ impl InventoryRepo {
     pub async fn list(pool: &PgPool, org_id: &str) -> Result<Vec<InventoryItem>, DbError> {
         let org_uuid = parse_uuid(org_id)?;
         let rows: Vec<ItemRow> = sqlx::query_as(
-            "SELECT id, organization_id, product_id, quantity_on_hand, reorder_point, reorder_qty, \
-             cost_per_unit, valuation_method \
+            "SELECT id, organization_id, product_id, quantity_on_hand, quantity_reserved, \
+             reorder_point, reorder_qty, cost_per_unit, valuation_method \
              FROM inventory_items WHERE organization_id = $1",
         )
         .bind(org_uuid)
@@ -100,8 +103,8 @@ impl InventoryRepo {
         let org_uuid = parse_uuid(org_id)?;
         let prod_uuid = parse_uuid(product_id)?;
         let row: ItemRow = sqlx::query_as(
-            "SELECT id, organization_id, product_id, quantity_on_hand, reorder_point, reorder_qty, \
-             cost_per_unit, valuation_method \
+            "SELECT id, organization_id, product_id, quantity_on_hand, quantity_reserved, \
+             reorder_point, reorder_qty, cost_per_unit, valuation_method \
              FROM inventory_items WHERE organization_id = $1 AND product_id = $2",
         )
         .bind(org_uuid)
@@ -342,6 +345,42 @@ impl InventoryRepo {
         Ok(InventoryValuationReport {
             rows: valuation_rows,
             total_value,
+        })
+    }
+
+    pub async fn availability(
+        pool: &PgPool,
+        org_id: &str,
+        product_id: &str,
+    ) -> Result<InventoryAvailability, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let prod_uuid = parse_uuid(product_id)?;
+
+        #[derive(sqlx::FromRow)]
+        struct AvailRow {
+            id: Uuid,
+            product_id: Uuid,
+            quantity_on_hand: i64,
+            quantity_reserved: i64,
+        }
+
+        let row: AvailRow = sqlx::query_as(
+            "SELECT id, product_id, quantity_on_hand, quantity_reserved \
+             FROM inventory_items WHERE organization_id = $1 AND product_id = $2",
+        )
+        .bind(org_uuid)
+        .bind(prod_uuid)
+        .fetch_optional(pool)
+        .await
+        .map_err(map_sqlx_err)?
+        .ok_or(DbError::NotFound)?;
+
+        Ok(InventoryAvailability {
+            item_id: row.id.to_string(),
+            product_id: row.product_id.to_string(),
+            quantity_on_hand: row.quantity_on_hand,
+            quantity_reserved: row.quantity_reserved,
+            quantity_available: row.quantity_on_hand - row.quantity_reserved,
         })
     }
 }

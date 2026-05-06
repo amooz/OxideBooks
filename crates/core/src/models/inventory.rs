@@ -7,10 +7,20 @@ pub struct InventoryItem {
     pub organization_id: String,
     pub product_id: String,
     pub quantity_on_hand: i64,
+    pub quantity_reserved: i64,
     pub reorder_point: i64,
     pub reorder_qty: i64,
     pub cost_per_unit: i64,
     pub valuation_method: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InventoryAvailability {
+    pub item_id: String,
+    pub product_id: String,
+    pub quantity_on_hand: i64,
+    pub quantity_reserved: i64,
+    pub quantity_available: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
