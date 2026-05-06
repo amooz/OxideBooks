@@ -26,7 +26,7 @@ pub async fn list_audit_log(
     Extension(claims): Extension<Claims>,
     Query(q): Query<AuditQuery>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    if !claims.has("audit:read") {
+    if !claims.is_admin() {
         return Err(ApiError::Forbidden);
     }
     let (events, next_cursor) = AuditRepo::list(
