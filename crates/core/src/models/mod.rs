@@ -1,4 +1,5 @@
 pub mod account;
+pub mod ach;
 pub mod api_key;
 pub mod approval_chain;
 pub mod approval_rule;
@@ -113,6 +114,7 @@ pub mod webhook;
 pub mod work_order;
 
 pub use account::{Account, AccountType, CreateAccount, UpdateAccount};
+pub use ach::{AchPayment, CollectAch, GenerateNachaRequest, NachaFile, PayBillAch};
 pub use api_key::{ApiKey, CreateApiKey, CreatedApiKey};
 pub use approval_chain::{
     ApprovalChain, ApprovalChainStep, ApprovalDecision, ApprovalRequest, CreateApprovalChain,

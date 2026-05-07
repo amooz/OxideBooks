@@ -15,8 +15,8 @@ use tower_http::{
 
 use crate::{
     handlers::{
-        accounts, api_keys, approval_chains, approval_rules, assembly_orders, attachments, audit,
-        auth, auth_sso, bank, bank_deposits, bank_feed, bank_reconciliation, bank_rules,
+        accounts, ach, api_keys, approval_chains, approval_rules, assembly_orders, attachments,
+        audit, auth, auth_sso, bank, bank_deposits, bank_feed, bank_reconciliation, bank_rules,
         batch_payments, bills, budgets, bulk, check_runs, client_portal, closed_periods,
         commissions, consolidated, consolidation_eliminations, contact_groups, contacts,
         contractor_tax_info, cost_codes, credit_notes, custom_fields, deferred_charges,
@@ -1860,6 +1860,11 @@ pub fn build(state: AppState) -> Router {
             get(einvoice::einvoice_status),
         )
         .route("/einvoice/receive", post(einvoice::receive_einvoice))
+        // ACH collection & bill pay
+        .route("/ach-payments", get(ach::list_ach_payments))
+        .route("/invoices/:id/collect-ach", post(ach::collect_ach))
+        .route("/bills/:id/pay-ach", post(ach::pay_bill_ach))
+        .route("/ach/generate-nacha", post(ach::generate_nacha))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     // SCIM 2.0 endpoints (separate bearer-token auth, not JWT)

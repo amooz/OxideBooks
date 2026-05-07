@@ -1,4 +1,5 @@
 pub mod accounts;
+pub mod ach;
 pub mod api_keys;
 pub mod approval_chains;
 pub mod approval_rules;
@@ -115,6 +116,7 @@ pub mod webhooks;
 pub mod work_orders;
 
 pub use accounts::AccountRepo;
+pub use ach::AchRepo;
 pub use api_keys::ApiKeyRepo;
 pub use approval_chains::ApprovalChainRepo;
 pub use approval_rules::ApprovalRuleRepo;
