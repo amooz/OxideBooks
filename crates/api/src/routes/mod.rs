@@ -15,24 +15,24 @@ use tower_http::{
 
 use crate::{
     handlers::{
-        accounts, api_keys, approval_rules, assembly_orders, attachments, audit, auth, auth_sso,
-        bank, bank_deposits, bank_feed, bank_reconciliation, bank_rules, batch_payments, bills,
-        budgets, bulk, check_runs, client_portal, closed_periods, commissions, consolidated,
-        consolidation_eliminations, contact_groups, contacts, contractor_tax_info, cost_codes,
-        credit_notes, custom_fields, deferred_charges, deferred_revenue, departments,
-        direct_deposit, doc_sequences, dunning, email, employee_bank_accounts, employee_loans,
-        employees, exchange_rates, expense_categories, expense_claims, expense_policies,
-        expense_reports, expenses, export, fixed_assets, fx, fx_revaluations, grn, health,
-        identity, import, intercompany, inventory, inventory_lots, inventory_reorder_requests,
-        inventory_serial_numbers, inventory_stocktakes, invoice_templates, invoices, landed_costs,
-        late_fees, leave, mileage, notes, notifications, opening_balances, organizations,
-        payment_links, payment_plans, payment_terms, payments, payroll, payroll_tax, payslips,
-        prepaid_expenses, prepayments, price_lists, product_categories, product_variants, products,
-        progress_claims, project_phases, project_tasks, projects, purchase_orders,
-        purchase_requisitions, purchase_returns, quotes, recurring, recurring_bills,
-        recurring_invoices, recurring_journal_entries, reports, retainers, roles,
-        sales_order_shipments, sales_orders, sales_returns, sales_tax_nexus, scim,
-        service_territories, sessions, stripe_webhook, subscriptions, tags, tax_filings,
+        accounts, api_keys, approval_chains, approval_rules, assembly_orders, attachments, audit,
+        auth, auth_sso, bank, bank_deposits, bank_feed, bank_reconciliation, bank_rules,
+        batch_payments, bills, budgets, bulk, check_runs, client_portal, closed_periods,
+        commissions, consolidated, consolidation_eliminations, contact_groups, contacts,
+        contractor_tax_info, cost_codes, credit_notes, custom_fields, deferred_charges,
+        deferred_revenue, departments, direct_deposit, doc_sequences, dunning, email,
+        employee_bank_accounts, employee_loans, employees, exchange_rates, expense_categories,
+        expense_claims, expense_policies, expense_reports, expenses, export, fixed_assets, fx,
+        fx_revaluations, grn, health, identity, import, intercompany, inventory, inventory_lots,
+        inventory_reorder_requests, inventory_serial_numbers, inventory_stocktakes,
+        invoice_templates, invoices, landed_costs, late_fees, leave, mileage, notes, notifications,
+        opening_balances, organizations, payment_links, payment_plans, payment_terms, payments,
+        payroll, payroll_tax, payslips, prepaid_expenses, prepayments, price_lists,
+        product_categories, product_variants, products, progress_claims, project_phases,
+        project_tasks, projects, purchase_orders, purchase_requisitions, purchase_returns, quotes,
+        recurring, recurring_bills, recurring_invoices, recurring_journal_entries, reports,
+        retainers, roles, sales_order_shipments, sales_orders, sales_returns, sales_tax_nexus,
+        scim, service_territories, sessions, stripe_webhook, subscriptions, tags, tax_filings,
         tax_groups, tax_periods, tax_rates, tax_rules, time_entries, totp, tracking_categories,
         transactions, users, vendor_credits, vendor_portal, warehouses, webhooks, work_orders,
     },
@@ -530,6 +530,25 @@ pub fn build(state: AppState) -> Router {
             get(approval_rules::get_approval_rule)
                 .patch(approval_rules::update_approval_rule)
                 .delete(approval_rules::delete_approval_rule),
+        )
+        // Multi-level approval chains & requests
+        .route(
+            "/approval-chains",
+            get(approval_chains::list_chains).post(approval_chains::create_chain),
+        )
+        .route("/approval-chains/:id", get(approval_chains::get_chain))
+        .route(
+            "/approval-requests",
+            get(approval_chains::list_requests).post(approval_chains::submit_request),
+        )
+        .route("/approval-requests/:id", get(approval_chains::get_request))
+        .route(
+            "/approval-requests/:id/approve",
+            post(approval_chains::approve_request),
+        )
+        .route(
+            "/approval-requests/:id/reject",
+            post(approval_chains::reject_request),
         )
         // RBAC: permissions & roles
         .route("/permissions", get(roles::list_permissions))
