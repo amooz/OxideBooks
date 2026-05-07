@@ -219,16 +219,8 @@ impl PortalPaymentMethodRepo {
 
         let mut tx = pool.begin().await.map_err(map_sqlx_err)?;
 
-        sqlx::query(
-            "UPDATE portal_payment_methods SET is_default = FALSE, updated_at = NOW() \
-             WHERE organization_id = $1 AND contact_id = $2",
-        )
-        .bind(org_uuid)
-        .bind(contact_uuid)
-        .execute(&mut *tx)
-        .await
-        .map_err(map_sqlx_err)?;
-
+        // Set target to default first — if it doesn't exist, roll back without
+        // touching any other rows.
         let row: Option<PmRow> = sqlx::query_as(&format!(
             "UPDATE portal_payment_methods SET is_default = TRUE, updated_at = NOW() \
              WHERE id = $1 AND organization_id = $2 AND contact_id = $3 \
@@ -241,8 +233,28 @@ impl PortalPaymentMethodRepo {
         .await
         .map_err(map_sqlx_err)?;
 
+        let row = match row {
+            Some(r) => r,
+            None => {
+                tx.rollback().await.map_err(map_sqlx_err)?;
+                return Err(DbError::NotFound);
+            }
+        };
+
+        // Clear every other default for this contact.
+        sqlx::query(
+            "UPDATE portal_payment_methods SET is_default = FALSE, updated_at = NOW() \
+             WHERE organization_id = $1 AND contact_id = $2 AND id <> $3",
+        )
+        .bind(org_uuid)
+        .bind(contact_uuid)
+        .bind(pm_uuid)
+        .execute(&mut *tx)
+        .await
+        .map_err(map_sqlx_err)?;
+
         tx.commit().await.map_err(map_sqlx_err)?;
-        row.map(Into::into).ok_or(DbError::NotFound)
+        Ok(row.into())
     }
 
     pub async fn delete(
@@ -285,6 +297,9 @@ impl PortalPaymentMethodRepo {
         let pm_uuid = parse_uuid(&input.payment_method_id)?;
 
         // Verify payment method belongs to this contact
+        let mut tx = pool.begin().await.map_err(map_sqlx_err)?;
+
+        // Verify payment method belongs to this contact (inside tx for consistency).
         let exists: bool = sqlx::query_scalar(
             "SELECT EXISTS(SELECT 1 FROM portal_payment_methods \
              WHERE id = $1 AND organization_id = $2 AND contact_id = $3)",
@@ -292,7 +307,7 @@ impl PortalPaymentMethodRepo {
         .bind(pm_uuid)
         .bind(org_uuid)
         .bind(contact_uuid)
-        .fetch_one(pool)
+        .fetch_one(&mut *tx)
         .await
         .map_err(map_sqlx_err)?;
 
@@ -300,7 +315,7 @@ impl PortalPaymentMethodRepo {
             return Err(DbError::NotFound);
         }
 
-        // Cancel any existing active enrollment
+        // Cancel any existing active enrollment atomically with the new insert.
         sqlx::query(
             "UPDATE portal_autopay_enrollments \
              SET is_active = FALSE, cancelled_at = NOW(), updated_at = NOW() \
@@ -308,7 +323,7 @@ impl PortalPaymentMethodRepo {
         )
         .bind(org_uuid)
         .bind(contact_uuid)
-        .execute(pool)
+        .execute(&mut *tx)
         .await
         .map_err(map_sqlx_err)?;
 
@@ -322,10 +337,11 @@ impl PortalPaymentMethodRepo {
         .bind(pm_uuid)
         .bind(input.days_before_due)
         .bind(input.max_amount)
-        .fetch_one(pool)
+        .fetch_one(&mut *tx)
         .await
         .map_err(map_sqlx_err)?;
 
+        tx.commit().await.map_err(map_sqlx_err)?;
         Ok(row.into())
     }
 
