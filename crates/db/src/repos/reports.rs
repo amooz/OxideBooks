@@ -978,6 +978,145 @@ impl ReportRepo {
         })
     }
 
+    /// Vendor (AP) statement: all bills, bill payments, and vendor credits for a contact.
+    pub async fn vendor_statement(
+        pool: &PgPool,
+        org_id: &str,
+        contact_id: &str,
+        from: Date,
+        to: Date,
+    ) -> Result<ContactStatement, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let contact_uuid = parse_uuid(contact_id)?;
+
+        // Opening balance: bills issued before `from`
+        let bills_before: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(SUM(\
+               (bl.quantity * bl.unit_price / 100) + \
+               (bl.quantity * bl.unit_price / 100 * bl.tax_rate / 10000)\
+             ), 0)::BIGINT \
+             FROM vendor_bills b \
+             JOIN bill_lines bl ON bl.bill_id = b.id \
+             WHERE b.organization_id = $1 AND b.contact_id = $2 \
+               AND b.bill_date < $3 AND b.status NOT IN ('draft', 'voided')",
+        )
+        .bind(org_uuid)
+        .bind(contact_uuid)
+        .bind(from)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let paid_before: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(SUM(bp.amount), 0)::BIGINT \
+             FROM bill_payments bp \
+             JOIN vendor_bills b ON b.id = bp.bill_id \
+             WHERE b.organization_id = $1 AND b.contact_id = $2 \
+               AND bp.payment_date < $3",
+        )
+        .bind(org_uuid)
+        .bind(contact_uuid)
+        .bind(from)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let credits_before: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(SUM(total_amount), 0)::BIGINT \
+             FROM vendor_credits \
+             WHERE organization_id = $1 AND contact_id = $2 \
+               AND credit_date < $3 AND status NOT IN ('open', 'voided')",
+        )
+        .bind(org_uuid)
+        .bind(contact_uuid)
+        .bind(from)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let opening_balance = bills_before - paid_before - credits_before;
+
+        #[derive(sqlx::FromRow)]
+        struct EventRow {
+            event_date: Date,
+            description: String,
+            reference: Option<String>,
+            debit: i64,
+            credit: i64,
+        }
+
+        let events: Vec<EventRow> = sqlx::query_as(
+            "SELECT event_date, description, reference, debit, credit FROM (\
+               SELECT b.bill_date AS event_date, \
+                      'Bill ' || COALESCE(b.doc_number, b.id::TEXT) AS description, \
+                      b.doc_number AS reference, \
+                      COALESCE(SUM(\
+                        (bl.quantity * bl.unit_price / 100) + \
+                        (bl.quantity * bl.unit_price / 100 * bl.tax_rate / 10000)\
+                      ), 0)::BIGINT AS debit, \
+                      0::BIGINT AS credit \
+               FROM vendor_bills b \
+               JOIN bill_lines bl ON bl.bill_id = b.id \
+               WHERE b.organization_id = $1 AND b.contact_id = $2 \
+                 AND b.bill_date BETWEEN $3 AND $4 \
+                 AND b.status NOT IN ('draft', 'voided') \
+               GROUP BY b.id, b.doc_number, b.bill_date \
+               UNION ALL \
+               SELECT bp.payment_date AS event_date, \
+                      'Payment for ' || COALESCE(b.doc_number, b.id::TEXT) AS description, \
+                      b.doc_number AS reference, \
+                      0::BIGINT AS debit, \
+                      bp.amount AS credit \
+               FROM bill_payments bp \
+               JOIN vendor_bills b ON b.id = bp.bill_id \
+               WHERE b.organization_id = $1 AND b.contact_id = $2 \
+                 AND bp.payment_date BETWEEN $3 AND $4 \
+               UNION ALL \
+               SELECT vc.credit_date AS event_date, \
+                      'Vendor Credit ' || COALESCE(vc.reference, vc.id::TEXT) AS description, \
+                      vc.reference AS reference, \
+                      0::BIGINT AS debit, \
+                      vc.total_amount AS credit \
+               FROM vendor_credits vc \
+               WHERE vc.organization_id = $1 AND vc.contact_id = $2 \
+                 AND vc.credit_date BETWEEN $3 AND $4 \
+                 AND vc.status NOT IN ('open', 'voided')\
+             ) sub ORDER BY event_date, description",
+        )
+        .bind(org_uuid)
+        .bind(contact_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let mut running = opening_balance;
+        let lines: Vec<StatementLine> = events
+            .into_iter()
+            .map(|e| {
+                running += e.debit - e.credit;
+                StatementLine {
+                    date: e.event_date,
+                    description: e.description,
+                    reference: e.reference,
+                    debit: e.debit,
+                    credit: e.credit,
+                    balance: running,
+                }
+            })
+            .collect();
+
+        Ok(ContactStatement {
+            contact_id: contact_id.to_string(),
+            from,
+            to,
+            opening_balance,
+            closing_balance: running,
+            lines,
+        })
+    }
+
     pub async fn consolidated_profit_loss(
         pool: &PgPool,
         org_ids: &[&str],

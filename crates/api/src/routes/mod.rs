@@ -1179,8 +1179,17 @@ pub fn build(state: AppState) -> Router {
         )
         .route("/mileage/summary", get(mileage::mileage_summary))
         .route("/mileage/:id", delete(mileage::delete_mileage_trip))
-        // Contacts statement
+        // Contacts statements
         .route("/contacts/:id/statement", get(contacts::contact_statement))
+        .route(
+            "/contacts/:id/statement/email",
+            post(contacts::email_statement),
+        )
+        .route(
+            "/contacts/:id/vendor-statement",
+            get(contacts::vendor_statement),
+        )
+        .route("/contacts/bulk-statements", post(contacts::bulk_statements))
         .route("/contacts/:id/merge", post(contacts::merge_contact))
         .route(
             "/contacts/:id/credit-status",

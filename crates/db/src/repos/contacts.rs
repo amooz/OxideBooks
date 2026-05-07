@@ -358,6 +358,24 @@ impl ContactRepo {
             overlimit,
         })
     }
+
+    /// All active contacts with an email address (used for bulk statement delivery).
+    pub async fn list_with_email(pool: &PgPool, org_id: &str) -> Result<Vec<Contact>, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let rows: Vec<ContactRow> = sqlx::query_as(
+            "SELECT id, organization_id, name, contact_type, email, phone, address, \
+             tax_number, tax_id, currency, credit_limit, credit_limit_behaviour, \
+             is_active, is_1099_vendor, created_at, updated_at \
+             FROM contacts \
+             WHERE organization_id = $1 AND is_active = TRUE AND email IS NOT NULL \
+             ORDER BY name",
+        )
+        .bind(org_uuid)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+        Ok(rows.into_iter().map(Contact::from).collect())
+    }
 }
 
 fn parse_uuid(s: &str) -> Result<Uuid, DbError> {
