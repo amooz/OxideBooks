@@ -206,7 +206,8 @@ pub use expense_report::{
     AddExpenseToReport, CreateExpenseReport, ExpenseReport, UpdateExpenseReport,
 };
 pub use fixed_asset::{
-    AssetRegisterRow, CreateFixedAsset, DepreciationMethod, FixedAsset, UpdateFixedAsset,
+    AssetRegisterRow, BulkDepreciationResult, CreateFixedAsset, DepreciationMethod,
+    DepreciationScheduleLine, FixedAsset, UpdateFixedAsset,
 };
 pub use fx::{FxSummaryRow, RealizedFxEntry};
 pub use fx_revaluation::{CreateFxRevaluation, FxRevaluation};

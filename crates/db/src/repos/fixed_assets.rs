@@ -1,9 +1,10 @@
 use oxidebooks_core::models::{
-    AssetRegisterRow, CreateFixedAsset, DepreciationMethod, FixedAsset, UpdateFixedAsset,
+    AssetRegisterRow, BulkDepreciationResult, CreateFixedAsset, DepreciationMethod,
+    DepreciationScheduleLine, FixedAsset, UpdateFixedAsset,
 };
 use sqlx::PgPool;
 use std::str::FromStr;
-use time::{Date, OffsetDateTime};
+use time::{Date, Month, OffsetDateTime};
 use uuid::Uuid;
 
 use crate::error::{map_sqlx_err, DbError};
@@ -219,7 +220,7 @@ impl FixedAssetRepo {
         Self::get_by_id(pool, org_id, id).await
     }
 
-    /// Record a monthly depreciation entry and optionally create a journal entry.
+    /// Record a monthly depreciation entry.
     pub async fn depreciate(
         pool: &PgPool,
         org_id: &str,
@@ -231,14 +232,37 @@ impl FixedAssetRepo {
             return Err(DbError::Conflict("asset is not active".into()));
         }
 
+        let n = asset.useful_life_months as i64;
         let depreciable = asset.purchase_cost - asset.salvage_value;
+
+        // For SYD we need to know which period number we're on.
+        let period_num = if asset.depreciation_method == DepreciationMethod::SumOfYearsDigits {
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM asset_depreciation_entries WHERE asset_id = $1",
+            )
+            .bind(parse_uuid(id)?)
+            .fetch_one(pool)
+            .await
+            .map_err(map_sqlx_err)?;
+            count + 1
+        } else {
+            0
+        };
+
         let amount = match asset.depreciation_method {
-            DepreciationMethod::StraightLine => depreciable / asset.useful_life_months as i64,
+            DepreciationMethod::StraightLine => depreciable / n,
             DepreciationMethod::DecliningBalance => {
-                let rate_num = 2i64;
-                let rate_den = asset.useful_life_months as i64;
                 let book = asset.book_value;
-                (book * rate_num / rate_den).max(0)
+                (book * 2 / n).max(0)
+            }
+            DepreciationMethod::SumOfYearsDigits => {
+                let syd = n * (n + 1) / 2;
+                let remaining_periods = (n - period_num + 1).max(0);
+                if syd == 0 {
+                    0
+                } else {
+                    depreciable * remaining_periods / syd
+                }
             }
         };
 
@@ -299,6 +323,147 @@ impl FixedAssetRepo {
         Self::get_by_id(pool, org_id, id).await
     }
 
+    /// Generate the complete depreciation schedule (posted + projected future periods).
+    pub async fn schedule(
+        pool: &PgPool,
+        org_id: &str,
+        id: &str,
+    ) -> Result<Vec<DepreciationScheduleLine>, DbError> {
+        let asset = Self::get_by_id(pool, org_id, id).await?;
+        let asset_uuid = parse_uuid(id)?;
+
+        // Fetch posted entries keyed by date.
+        #[derive(sqlx::FromRow)]
+        struct EntryRow {
+            period_date: Date,
+            amount: i64,
+        }
+        let posted: Vec<EntryRow> = sqlx::query_as(
+            "SELECT period_date, amount FROM asset_depreciation_entries \
+             WHERE asset_id = $1 ORDER BY period_date",
+        )
+        .bind(asset_uuid)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let posted_map: std::collections::HashMap<Date, i64> =
+            posted.iter().map(|e| (e.period_date, e.amount)).collect();
+
+        let n = asset.useful_life_months as i64;
+        let depreciable = asset.purchase_cost - asset.salvage_value;
+        let syd = n * (n + 1) / 2;
+        let start = first_of_month(asset.purchase_date);
+
+        let mut lines = Vec::with_capacity(asset.useful_life_months as usize);
+        let mut accumulated: i64 = 0;
+
+        for period in 1..=asset.useful_life_months as i64 {
+            let date = add_months(start, (period - 1) as i32);
+            let is_posted = posted_map.contains_key(&date);
+
+            let amount = if is_posted {
+                *posted_map.get(&date).unwrap()
+            } else {
+                // Project: compute what the amount would be.
+                let projected = match asset.depreciation_method {
+                    DepreciationMethod::StraightLine => depreciable / n,
+                    DepreciationMethod::DecliningBalance => {
+                        let book = (depreciable - accumulated).max(0);
+                        (book * 2 / n).max(0)
+                    }
+                    DepreciationMethod::SumOfYearsDigits => {
+                        let remaining = (n - period + 1).max(0);
+                        if syd == 0 {
+                            0
+                        } else {
+                            depreciable * remaining / syd
+                        }
+                    }
+                };
+                let remaining_depreciable = (depreciable - accumulated).max(0);
+                projected.min(remaining_depreciable).max(0)
+            };
+
+            accumulated += amount;
+            let book_value = (asset.purchase_cost - accumulated).max(asset.salvage_value);
+
+            lines.push(DepreciationScheduleLine {
+                period: period as i32,
+                period_date: date,
+                amount,
+                accumulated_depreciation: accumulated,
+                book_value,
+                is_posted,
+            });
+
+            if accumulated >= depreciable {
+                break;
+            }
+        }
+
+        Ok(lines)
+    }
+
+    /// Depreciate all active assets for a given period. Skips already-posted periods.
+    pub async fn bulk_depreciate(
+        pool: &PgPool,
+        org_id: &str,
+        period_date: Date,
+    ) -> Result<BulkDepreciationResult, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let asset_ids: Vec<Uuid> = sqlx::query_scalar(
+            "SELECT id FROM fixed_assets WHERE organization_id = $1 AND status = 'active'",
+        )
+        .bind(org_uuid)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let processed = asset_ids.len();
+        let mut succeeded = 0usize;
+        let mut skipped = 0usize;
+
+        for asset_id in asset_ids {
+            let id_str = asset_id.to_string();
+            let asset = Self::get_by_id(pool, org_id, &id_str).await?;
+
+            // Skip if already fully depreciated.
+            if asset.book_value <= asset.salvage_value {
+                skipped += 1;
+                continue;
+            }
+
+            // Check if this period is already posted.
+            let already: bool = sqlx::query_scalar(
+                "SELECT EXISTS(SELECT 1 FROM asset_depreciation_entries \
+                 WHERE asset_id = $1 AND period_date = $2)",
+            )
+            .bind(asset_id)
+            .bind(period_date)
+            .fetch_one(pool)
+            .await
+            .map_err(map_sqlx_err)?;
+
+            if already {
+                skipped += 1;
+                continue;
+            }
+
+            match Self::depreciate(pool, org_id, &id_str, period_date).await {
+                Ok(_) => succeeded += 1,
+                Err(_) => skipped += 1,
+            }
+        }
+
+        Ok(BulkDepreciationResult {
+            period_date: period_date.to_string(),
+            processed,
+            succeeded,
+            skipped,
+        })
+    }
+
     pub async fn asset_register(
         pool: &PgPool,
         org_id: &str,
@@ -334,4 +499,15 @@ impl FixedAssetRepo {
             })
             .collect())
     }
+}
+
+fn first_of_month(date: Date) -> Date {
+    Date::from_calendar_date(date.year(), date.month(), 1).expect("valid date")
+}
+
+fn add_months(date: Date, months: i32) -> Date {
+    let total = date.month() as i32 - 1 + months;
+    let year = date.year() + total.div_euclid(12);
+    let month = Month::try_from((total.rem_euclid(12) + 1) as u8).expect("valid month");
+    Date::from_calendar_date(year, month, 1).expect("valid date")
 }
