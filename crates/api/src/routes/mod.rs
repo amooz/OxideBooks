@@ -28,12 +28,12 @@ use crate::{
         late_fees, leave, mileage, notes, notifications, opening_balances, organizations,
         payment_links, payment_plans, payment_terms, payments, payroll, payroll_tax, payslips,
         prepaid_expenses, prepayments, price_lists, product_categories, product_variants, products,
-        project_phases, project_tasks, projects, purchase_orders, purchase_requisitions, recurring,
-        recurring_bills, recurring_invoices, recurring_journal_entries, reports, retainers, roles,
-        sales_order_shipments, sales_orders, sales_tax_nexus, scim, service_territories, sessions,
-        stripe_webhook, subscriptions, tags, tax_groups, tax_periods, tax_rates, tax_rules,
-        time_entries, totp, tracking_categories, transactions, users, vendor_credits,
-        vendor_portal, warehouses, webhooks, work_orders,
+        project_phases, project_tasks, projects, purchase_orders, purchase_requisitions, quotes,
+        recurring, recurring_bills, recurring_invoices, recurring_journal_entries, reports,
+        retainers, roles, sales_order_shipments, sales_orders, sales_tax_nexus, scim,
+        service_territories, sessions, stripe_webhook, subscriptions, tags, tax_groups,
+        tax_periods, tax_rates, tax_rules, time_entries, totp, tracking_categories, transactions,
+        users, vendor_credits, vendor_portal, warehouses, webhooks, work_orders,
     },
     middleware::require_auth,
     state::AppState,
@@ -546,6 +546,24 @@ pub fn build(state: AppState) -> Router {
             get(identity::list_scim_tokens).post(identity::create_scim_token),
         )
         .route("/scim/tokens/:id", delete(identity::revoke_scim_token))
+        // Quotes
+        .route(
+            "/quotes",
+            get(quotes::list_quotes).post(quotes::create_quote),
+        )
+        .route(
+            "/quotes/:id",
+            get(quotes::get_quote)
+                .patch(quotes::update_quote)
+                .delete(quotes::delete_quote),
+        )
+        .route("/quotes/:id/send", post(quotes::send_quote))
+        .route("/quotes/:id/accept", post(quotes::accept_quote))
+        .route("/quotes/:id/decline", post(quotes::decline_quote))
+        .route(
+            "/quotes/:id/convert-to-invoice",
+            post(quotes::convert_quote_to_invoice),
+        )
         // Purchase orders
         .route(
             "/purchase-orders",

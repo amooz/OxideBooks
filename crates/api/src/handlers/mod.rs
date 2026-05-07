@@ -84,6 +84,7 @@ pub mod project_tasks;
 pub mod projects;
 pub mod purchase_orders;
 pub mod purchase_requisitions;
+pub mod quotes;
 pub mod recurring;
 pub mod recurring_bills;
 pub mod recurring_invoices;
