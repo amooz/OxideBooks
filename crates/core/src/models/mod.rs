@@ -69,6 +69,7 @@ pub mod payment_terms;
 pub mod payroll;
 pub mod payroll_tax;
 pub mod payslip;
+pub mod plaid;
 pub mod prepaid_expense;
 pub mod prepayment;
 pub mod price_list;
@@ -259,6 +260,7 @@ pub use payroll::{
 };
 pub use payroll_tax::{CreatePayrollTaxLiability, PayPayrollTax, PayrollTaxLiability};
 pub use payslip::{CreatePayslip, Payslip};
+pub use plaid::{ExchangePlaidToken, PlaidItem, PlaidSyncRequest, PlaidSyncResult};
 pub use prepaid_expense::{
     CreatePrepaidExpenseSchedule, PrepaidExpenseEntry, PrepaidExpenseSchedule,
     UpdatePrepaidExpenseSchedule,

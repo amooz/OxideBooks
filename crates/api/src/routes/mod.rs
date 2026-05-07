@@ -27,8 +27,8 @@ use crate::{
         inventory_reorder_requests, inventory_serial_numbers, inventory_stocktakes,
         invoice_templates, invoices, landed_costs, late_fees, leave, mileage, notes, notifications,
         opening_balances, organizations, payment_links, payment_plans, payment_terms, payments,
-        payroll, payroll_tax, payslips, portal_payment_methods, prepaid_expenses, prepayments,
-        price_lists, product_categories, product_variants, products, progress_claims,
+        payroll, payroll_tax, payslips, plaid, portal_payment_methods, prepaid_expenses,
+        prepayments, price_lists, product_categories, product_variants, products, progress_claims,
         project_phases, project_tasks, projects, purchase_orders, purchase_requisitions,
         purchase_returns, quotes, recurring, recurring_bills, recurring_invoices,
         recurring_journal_entries, report_schedules, reports, retainers, rev_rec, roles,
@@ -1902,6 +1902,15 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/invoices/:id/rev-rec-schedule",
             get(rev_rec::get_rev_rec_schedule).post(rev_rec::create_rev_rec_schedule),
+        )
+        // Plaid bank feed integration
+        .route("/plaid/link-token", post(plaid::create_link_token))
+        .route("/plaid/exchange-token", post(plaid::exchange_public_token))
+        .route("/plaid/sync", post(plaid::sync_transactions))
+        .route("/plaid/items", get(plaid::list_items))
+        .route(
+            "/plaid/items/:id",
+            axum::routing::delete(plaid::disconnect_item),
         )
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 

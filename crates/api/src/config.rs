@@ -6,6 +6,8 @@ pub struct Settings {
     pub database: DatabaseSettings,
     pub auth: AuthSettings,
     pub app: AppSettings,
+    #[serde(default)]
+    pub integrations: IntegrationsSettings,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -40,6 +42,13 @@ pub struct AppSettings {
     pub exchange_rate_url: String,
     /// Stripe webhook signing secret (optional). When set, incoming Stripe webhooks are verified.
     pub stripe_webhook_secret: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct IntegrationsSettings {
+    pub plaid_client_id: Option<String>,
+    pub plaid_secret: Option<String>,
+    pub plaid_sandbox: Option<bool>,
 }
 
 impl Settings {
