@@ -152,6 +152,20 @@ fn to_request(r: RequestRow, decisions: Vec<ApprovalDecision>) -> ApprovalReques
     }
 }
 
+fn role_level(role: &str) -> u8 {
+    match role {
+        "owner" => 4,
+        "admin" => 3,
+        "accountant" => 2,
+        "viewer" => 1,
+        _ => 0,
+    }
+}
+
+fn role_satisfies(actual: &str, required: &str) -> bool {
+    role_level(actual) >= role_level(required)
+}
+
 pub struct ApprovalChainRepo;
 
 impl ApprovalChainRepo {
@@ -257,9 +271,10 @@ impl ApprovalChainRepo {
         let entity_uuid = parse_uuid(&input.entity_id)?;
         let requester_uuid = parse_uuid(requester_id)?;
 
-        // Verify chain belongs to org and is active.
-        let chain: Option<(bool,)> = sqlx::query_as(
-            "SELECT is_active FROM approval_chains WHERE id = $1 AND organization_id = $2",
+        // Verify chain belongs to org, is active, and entity_type matches.
+        let chain: Option<(bool, String)> = sqlx::query_as(
+            "SELECT is_active, entity_type FROM approval_chains \
+             WHERE id = $1 AND organization_id = $2",
         )
         .bind(chain_uuid)
         .bind(org_uuid)
@@ -268,15 +283,32 @@ impl ApprovalChainRepo {
         .map_err(map_sqlx_err)?;
         match chain {
             None => return Err(DbError::NotFound),
-            Some((false,)) => return Err(DbError::Conflict("approval chain is inactive".into())),
+            Some((false, _)) => return Err(DbError::Conflict("approval chain is inactive".into())),
+            Some((true, chain_entity_type)) if chain_entity_type != input.entity_type => {
+                return Err(DbError::Conflict(format!(
+                    "chain entity_type is '{}', request entity_type is '{}'",
+                    chain_entity_type, input.entity_type
+                )));
+            }
             _ => {}
         }
+
+        // Use the chain's minimum step_order as the initial current_step so
+        // that chains whose first step is not numbered 1 work correctly.
+        let first_step: Option<(i32,)> =
+            sqlx::query_as("SELECT MIN(step_order) FROM approval_chain_steps WHERE chain_id = $1")
+                .bind(chain_uuid)
+                .fetch_optional(pool)
+                .await
+                .map_err(map_sqlx_err)?;
+        let initial_step = first_step.map(|(s,)| s).unwrap_or(1);
 
         let id = Uuid::new_v4();
         sqlx::query(
             "INSERT INTO approval_requests \
-             (id, organization_id, chain_id, entity_type, entity_id, requested_by, notes) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7)",
+             (id, organization_id, chain_id, entity_type, entity_id, \
+              requested_by, notes, current_step) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
         )
         .bind(id)
         .bind(org_uuid)
@@ -285,6 +317,7 @@ impl ApprovalChainRepo {
         .bind(entity_uuid)
         .bind(requester_uuid)
         .bind(&input.notes)
+        .bind(initial_step)
         .execute(pool)
         .await
         .map_err(map_sqlx_err)?;
@@ -372,6 +405,49 @@ impl ApprovalChainRepo {
                 "request is already '{}'",
                 req.status
             )));
+        }
+
+        // Enforce current-step authorization.
+        let step: Option<(String, Option<Uuid>, bool)> = sqlx::query_as(
+            "SELECT required_role, approver_user_id, require_all \
+             FROM approval_chain_steps \
+             WHERE chain_id = $1 AND step_order = $2",
+        )
+        .bind(req.chain_id)
+        .bind(req.current_step)
+        .fetch_optional(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        if let Some((required_role, approver_user_id, _require_all)) = step {
+            // If the step designates a specific approver, enforce it.
+            if let Some(designated) = approver_user_id {
+                if designated != approver_uuid {
+                    return Err(DbError::Conflict(
+                        "this step requires a specific approver".into(),
+                    ));
+                }
+            }
+
+            // Verify the approver's role in this org meets required_role.
+            let user_role: Option<(String,)> =
+                sqlx::query_as("SELECT role FROM users WHERE id = $1 AND organization_id = $2")
+                    .bind(approver_uuid)
+                    .bind(org_uuid)
+                    .fetch_optional(pool)
+                    .await
+                    .map_err(map_sqlx_err)?;
+
+            let user_role = user_role
+                .map(|(r,)| r)
+                .ok_or_else(|| DbError::Conflict("approver not found in organization".into()))?;
+
+            if !role_satisfies(&user_role, &required_role) {
+                return Err(DbError::Conflict(format!(
+                    "step requires role '{}', approver has role '{}'",
+                    required_role, user_role
+                )));
+            }
         }
 
         // Record the decision.
