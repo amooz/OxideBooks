@@ -86,6 +86,7 @@ pub mod retainer;
 pub mod role;
 pub mod sales_order;
 pub mod sales_order_shipment;
+pub mod sales_return;
 pub mod sales_tax_nexus;
 pub mod service_territory;
 pub mod session;
@@ -306,6 +307,10 @@ pub use sales_order::{
 };
 pub use sales_order_shipment::{
     CreateSalesOrderShipment, CreateShipmentLine, SalesOrderShipment, ShipmentLine,
+};
+pub use sales_return::{
+    ApproveSalesReturn, CreateSalesReturn, CreateSalesReturnLine, ReceiveSalesReturn, SalesReturn,
+    SalesReturnLine,
 };
 pub use sales_tax_nexus::{CreateSalesTaxNexus, SalesTaxNexus, UpdateSalesTaxNexus};
 pub use service_territory::{CreateServiceTerritory, ServiceTerritory, UpdateServiceTerritory};
