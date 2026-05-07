@@ -28,12 +28,13 @@ use crate::{
         late_fees, leave, mileage, notes, notifications, opening_balances, organizations,
         payment_links, payment_plans, payment_terms, payments, payroll, payroll_tax, payslips,
         prepaid_expenses, prepayments, price_lists, product_categories, product_variants, products,
-        project_phases, project_tasks, projects, purchase_orders, purchase_requisitions, quotes,
-        recurring, recurring_bills, recurring_invoices, recurring_journal_entries, reports,
-        retainers, roles, sales_order_shipments, sales_orders, sales_returns, sales_tax_nexus,
-        scim, service_territories, sessions, stripe_webhook, subscriptions, tags, tax_groups,
-        tax_periods, tax_rates, tax_rules, time_entries, totp, tracking_categories, transactions,
-        users, vendor_credits, vendor_portal, warehouses, webhooks, work_orders,
+        project_phases, project_tasks, projects, purchase_orders, purchase_requisitions,
+        purchase_returns, quotes, recurring, recurring_bills, recurring_invoices,
+        recurring_journal_entries, reports, retainers, roles, sales_order_shipments, sales_orders,
+        sales_returns, sales_tax_nexus, scim, service_territories, sessions, stripe_webhook,
+        subscriptions, tags, tax_groups, tax_periods, tax_rates, tax_rules, time_entries, totp,
+        tracking_categories, transactions, users, vendor_credits, vendor_portal, warehouses,
+        webhooks, work_orders,
     },
     middleware::require_auth,
     state::AppState,
@@ -621,6 +622,24 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/purchase-requisitions/:id/convert",
             post(purchase_requisitions::convert_requisition_to_po),
+        )
+        // Purchase returns
+        .route(
+            "/purchase-returns",
+            get(purchase_returns::list_purchase_returns)
+                .post(purchase_returns::create_purchase_return),
+        )
+        .route(
+            "/purchase-returns/:id",
+            get(purchase_returns::get_purchase_return),
+        )
+        .route(
+            "/purchase-returns/:id/approve",
+            post(purchase_returns::approve_purchase_return),
+        )
+        .route(
+            "/purchase-returns/:id/ship",
+            post(purchase_returns::ship_purchase_return),
         )
         // Document number sequences
         .route(

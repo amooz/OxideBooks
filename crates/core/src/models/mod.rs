@@ -76,6 +76,7 @@ pub mod project_phase;
 pub mod project_task;
 pub mod purchase_order;
 pub mod purchase_requisition;
+pub mod purchase_return;
 pub mod quote;
 pub mod recurring;
 pub mod recurring_bill;
@@ -262,6 +263,10 @@ pub use purchase_order::{
 pub use purchase_requisition::{
     ConvertPrToPo, CreatePrLine, CreatePurchaseRequisition, PrLine, PurchaseRequisition,
     UpdatePurchaseRequisition,
+};
+pub use purchase_return::{
+    ApprovePurchaseReturn, CreatePurchaseReturn, CreatePurchaseReturnLine, PurchaseReturn,
+    PurchaseReturnLine, ShipPurchaseReturn,
 };
 pub use quote::{
     ConvertQuoteToInvoice, CreateQuote, CreateQuoteLine, Quote, QuoteLine, UpdateQuote,
