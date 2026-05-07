@@ -5,7 +5,7 @@ use axum::{
 };
 use oxidebooks_core::models::{CreateContact, UpdateContact};
 use oxidebooks_core::pagination::PageParams;
-use oxidebooks_db::repos::{AuditRepo, ContactRepo, ReportRepo};
+use oxidebooks_db::repos::{AuditRepo, ContactRepo, EmailRepo, ReportRepo};
 use serde::Deserialize;
 use time::{macros::format_description, Date};
 
@@ -165,4 +165,109 @@ pub async fn contact_credit_status(
     }
     let status = ContactRepo::credit_status(&state.db, &claims.org, &id).await?;
     Ok(Json(serde_json::json!({ "data": status })))
+}
+
+/// GET /api/v1/contacts/:id/vendor-statement?from=YYYY-MM-DD&to=YYYY-MM-DD
+pub async fn vendor_statement(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<String>,
+    Query(q): Query<StatementQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("reports:read") {
+        return Err(ApiError::Forbidden);
+    }
+    let from = parse_date(&q.from)?;
+    let to = parse_date(&q.to)?;
+    let statement = ReportRepo::vendor_statement(&state.db, &claims.org, &id, from, to).await?;
+    Ok(Json(serde_json::json!({ "data": statement })))
+}
+
+/// POST /api/v1/contacts/:id/statement/email
+///
+/// Logs an email of the customer statement for this contact.
+pub async fn email_statement(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<String>,
+    Query(q): Query<StatementQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let from = parse_date(&q.from)?;
+    let to = parse_date(&q.to)?;
+
+    let contact = ContactRepo::get_by_id(&state.db, &claims.org, &id).await?;
+    let email_addr = contact
+        .email
+        .ok_or_else(|| ApiError::BadRequest("contact has no email address".into()))?;
+
+    let _ = ReportRepo::contact_statement(&state.db, &claims.org, &id, from, to).await?;
+
+    let log = EmailRepo::create_log(
+        &state.db,
+        &claims.org,
+        &email_addr,
+        &format!("Your account statement ({} to {})", q.from, q.to),
+        Some("contact_statement"),
+        Some(&id),
+        "sent",
+        None,
+    )
+    .await?;
+
+    Ok(Json(serde_json::json!({ "data": log })))
+}
+
+#[derive(serde::Deserialize)]
+pub struct BulkStatementsQuery {
+    pub from: String,
+    pub to: String,
+}
+
+/// POST /api/v1/contacts/bulk-statements
+///
+/// Sends statements to all contacts with outstanding balances.
+pub async fn bulk_statements(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<BulkStatementsQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let _from = parse_date(&q.from)?;
+    let _to = parse_date(&q.to)?;
+
+    let contacts = ContactRepo::list_with_email(&state.db, &claims.org).await?;
+    let mut sent = 0usize;
+    let mut skipped = 0usize;
+
+    for contact in &contacts {
+        // list_with_email guarantees email is Some
+        if let Some(ref email_addr) = contact.email {
+            match EmailRepo::create_log(
+                &state.db,
+                &claims.org,
+                email_addr,
+                &format!("Your account statement ({} to {})", q.from, q.to),
+                Some("contact_statement"),
+                Some(&contact.id),
+                "sent",
+                None,
+            )
+            .await
+            {
+                Ok(_) => sent += 1,
+                Err(_) => skipped += 1,
+            }
+        } else {
+            skipped += 1;
+        }
+    }
+
+    Ok(Json(
+        serde_json::json!({ "data": { "sent": sent, "skipped": skipped } }),
+    ))
 }
