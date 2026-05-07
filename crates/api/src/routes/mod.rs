@@ -387,6 +387,11 @@ pub fn build(state: AppState) -> Router {
         .route("/search", get(reports::global_search))
         // Audit log
         .route("/audit-log", get(audit::list_audit_log))
+        .route("/audit-log/export", get(audit::export_audit_log))
+        .route(
+            "/audit-log/compliance-summary",
+            get(audit::compliance_summary),
+        )
         // Tax rates
         .route(
             "/tax-rates",
