@@ -1,5 +1,6 @@
 pub mod accounts;
 pub mod api_keys;
+pub mod approval_chains;
 pub mod approval_rules;
 pub mod assembly_orders;
 pub mod attachments;

@@ -1,5 +1,6 @@
 pub mod account;
 pub mod api_key;
+pub mod approval_chain;
 pub mod approval_rule;
 pub mod assembly_order;
 pub mod attachment;
@@ -111,6 +112,10 @@ pub mod work_order;
 
 pub use account::{Account, AccountType, CreateAccount, UpdateAccount};
 pub use api_key::{ApiKey, CreateApiKey, CreatedApiKey};
+pub use approval_chain::{
+    ApprovalChain, ApprovalChainStep, ApprovalDecision, ApprovalRequest, CreateApprovalChain,
+    CreateApprovalChainStep, RecordApprovalDecision, SubmitApprovalRequest,
+};
 pub use approval_rule::{ApprovalRule, CreateApprovalRule, UpdateApprovalRule};
 pub use assembly_order::{
     AssemblyOrder, AssemblyOrderLine, CreateAssemblyOrder, CreateAssemblyOrderLine,
