@@ -138,8 +138,10 @@ fn build_nacha(
 
     for (i, e) in entries.iter().enumerate() {
         let txn_code = if e.is_debit { "27" } else { "22" };
-        let routing_check: u64 = e.routing[..8.min(e.routing.len())].parse().unwrap_or(0);
-        hash_sum += routing_check;
+        // Use full 9-digit routing: first 8 digits for hash, all 9 for the record field.
+        let routing_9 = format!("{:0>9}", &e.routing[..e.routing.len().min(9)]);
+        let routing_hash: u64 = routing_9[..8].parse().unwrap_or(0);
+        hash_sum += routing_hash;
 
         let name_padded = format!("{:<22}", &e.name[..e.name.len().min(22)]);
         let acct_padded = format!("{:<17}", &e.account[..e.account.len().min(17)]);
@@ -151,10 +153,10 @@ fn build_nacha(
 
         // Record Type 6 — Entry Detail
         lines.push(format!(
-            "6{txn_code}{:0>9}{acct_padded}{:010}{name_padded}  0{trace}",
-            routing_check,
+            "6{txn_code}{routing_9}{acct_padded}{:010}{name_padded}  0{trace}",
             e.amount,
             txn_code = txn_code,
+            routing_9 = routing_9,
             acct_padded = acct_padded,
             name_padded = name_padded,
             trace = trace,
@@ -192,9 +194,9 @@ fn build_nacha(
         "",
     ));
 
-    // Pad to multiple of 10 lines with "9" records
+    // Pad to multiple of 10 lines — NACHA filler is 94 "9" characters.
     while lines.len() % 10 != 0 {
-        lines.push(format!("{:0>94}", "9"));
+        lines.push("9".repeat(94));
     }
 
     lines.join("\n")
@@ -258,7 +260,7 @@ impl AchRepo {
             "INSERT INTO ach_payments \
              (organization_id, entry_type, invoice_id, routing_number, account_number, \
               account_type, amount, status, trace_number, effective_date) \
-             VALUES ($1, 'collection', $2, $3, $4, $5, $6, 'submitted', $7, $8) \
+             VALUES ($1, 'collection', $2, $3, $4, $5, $6, 'pending', $7, $8) \
              RETURNING {ACH_COLS}"
         ))
         .bind(org_uuid)
@@ -285,9 +287,10 @@ impl AchRepo {
         let org_uuid = parse_uuid(org_id)?;
         let bill_uuid = parse_uuid(bill_id)?;
 
+        // bill_lines.quantity is a whole-unit integer (not ×100), so no /100 scaling.
         let amount: Option<i64> = sqlx::query_scalar(
             "SELECT \
-                (SELECT COALESCE(SUM(quantity * unit_price / 100), 0) \
+                (SELECT COALESCE(SUM(quantity * unit_price), 0) \
                  FROM bill_lines WHERE bill_id = vb.id)::BIGINT \
              FROM vendor_bills vb \
              WHERE vb.id = $1 AND vb.organization_id = $2",
@@ -318,7 +321,7 @@ impl AchRepo {
             "INSERT INTO ach_payments \
              (organization_id, entry_type, bill_id, routing_number, account_number, \
               account_type, amount, status, trace_number, effective_date) \
-             VALUES ($1, 'payment', $2, $3, $4, $5, $6, 'submitted', $7, $8) \
+             VALUES ($1, 'payment', $2, $3, $4, $5, $6, 'pending', $7, $8) \
              RETURNING {ACH_COLS}"
         ))
         .bind(org_uuid)
