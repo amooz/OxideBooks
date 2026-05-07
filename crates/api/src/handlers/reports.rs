@@ -130,7 +130,8 @@ pub async fn trial_balance(
             .collect();
 
         if fmt == "xlsx" {
-            let bytes = build_xlsx("Trial Balance", headers, &rows);
+            // Cols: Code, Name, Type, Debit, Credit, Balance — last 3 are numeric.
+            let bytes = build_xlsx("Trial Balance", headers, &rows, &[3, 4, 5]);
             return Ok(xlsx_response(bytes, "trial-balance.xlsx"));
         } else {
             let mut wtr = csv::Writer::from_writer(vec![]);
@@ -179,11 +180,24 @@ pub async fn profit_loss(
     let compare = q.compare.as_deref() == Some("prior_year");
     let fmt = q.format.as_deref().unwrap_or("json");
 
-    // Fetch prior year if requested
+    // Fetch prior year if requested — shift by exactly 1 calendar year.
     let prior = if compare {
-        use time::Duration;
-        let py_from = from - Duration::days(365);
-        let py_to = to - Duration::days(365);
+        let shift_year = |d: Date| {
+            let y = d.year() - 1;
+            // Clamp Feb 29 → Feb 28 in non-leap years.
+            let day = d.day().min(if d.month() == time::Month::February {
+                if y % 4 == 0 && (y % 100 != 0 || y % 400 == 0) {
+                    29
+                } else {
+                    28
+                }
+            } else {
+                d.day()
+            });
+            Date::from_calendar_date(y, d.month(), day).unwrap_or(d)
+        };
+        let py_from = shift_year(from);
+        let py_to = shift_year(to);
         let r = if q.basis == "cash" {
             ReportRepo::profit_loss_cash(&state.db, &claims.org, py_from, py_to).await?
         } else {
@@ -269,8 +283,10 @@ pub async fn profit_loss(
         rows.push(net_row);
 
         let headers_ref: Vec<&str> = headers.clone();
+        // Cols: Section, Code, Name, Amount [, Prior Year Amount] — amount cols are numeric.
+        let numeric: Vec<usize> = if has_prior { vec![3, 4] } else { vec![3] };
         if fmt == "xlsx" {
-            let bytes = build_xlsx("Profit & Loss", &headers_ref, &rows);
+            let bytes = build_xlsx("Profit & Loss", &headers_ref, &rows, &numeric);
             return Ok(xlsx_response(bytes, "profit-loss.xlsx"));
         } else {
             let mut wtr = csv::Writer::from_writer(vec![]);
@@ -329,7 +345,8 @@ pub async fn balance_sheet(
                 ]);
             }
             if fmt == "xlsx" {
-                let bytes = build_xlsx("Balance Sheet (Cash)", headers, &rows);
+                // Cols: Section, Code, Name, Amount — col 3 is numeric.
+                let bytes = build_xlsx("Balance Sheet (Cash)", headers, &rows, &[3]);
                 return Ok(xlsx_response(bytes, "balance-sheet.xlsx"));
             } else {
                 let mut wtr = csv::Writer::from_writer(vec![]);
@@ -374,7 +391,8 @@ pub async fn balance_sheet(
             ]);
         }
         if fmt == "xlsx" {
-            let bytes = build_xlsx("Balance Sheet", headers, &rows);
+            // Cols: Section, Code, Name, Amount — col 3 is numeric.
+            let bytes = build_xlsx("Balance Sheet", headers, &rows, &[3]);
             return Ok(xlsx_response(bytes, "balance-sheet.xlsx"));
         } else {
             let mut wtr = csv::Writer::from_writer(vec![]);

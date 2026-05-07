@@ -116,8 +116,16 @@ fn col_letter(mut col: usize) -> String {
 }
 
 /// Build XLSX bytes from a sheet name and rows of (header → cell value).
-/// `headers` controls column order. Values can be strings or numbers (JSON).
-pub fn build_xlsx(sheet_name: &str, headers: &[&str], rows: &[Vec<String>]) -> Vec<u8> {
+///
+/// `numeric_cols` marks which column indices contain numeric data and should be
+/// emitted as number cells. All other columns are always emitted as `inlineStr`
+/// to preserve identifiers such as account codes that may have leading zeros.
+pub fn build_xlsx(
+    sheet_name: &str,
+    headers: &[&str],
+    rows: &[Vec<String>],
+    numeric_cols: &[usize],
+) -> Vec<u8> {
     let mut sheet = String::from(
         "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
 <worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\
@@ -141,8 +149,7 @@ pub fn build_xlsx(sheet_name: &str, headers: &[&str], rows: &[Vec<String>]) -> V
         sheet.push_str(&format!("<row r=\"{rn}\">"));
         for (c, val) in row.iter().enumerate() {
             let cr = format!("{}{rn}", col_letter(c));
-            // Try to emit as a number if it parses cleanly
-            if val.parse::<f64>().is_ok() {
+            if numeric_cols.contains(&c) && val.parse::<f64>().is_ok() {
                 sheet.push_str(&format!("<c r=\"{cr}\"><v>{}</v></c>", xe(val)));
             } else {
                 sheet.push_str(&format!(
