@@ -900,6 +900,13 @@ pub fn build(state: AppState) -> Router {
                 .patch(webhooks::update_webhook)
                 .delete(webhooks::delete_webhook),
         )
+        .route("/webhooks/:id/deliveries", get(webhooks::list_deliveries))
+        .route("/webhooks/:id/test", post(webhooks::test_webhook))
+        .route("/webhooks/deliveries/:id", get(webhooks::get_delivery))
+        .route(
+            "/webhooks/deliveries/:id/retry",
+            post(webhooks::retry_delivery),
+        )
         // Exchange rates
         .route("/exchange-rates", get(exchange_rates::get_rate))
         // Bank accounts & reconciliation

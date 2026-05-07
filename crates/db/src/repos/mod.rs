@@ -235,5 +235,5 @@ pub use users::{UpdateUser, UserRepo};
 pub use vendor_credits::VendorCreditRepo;
 pub use vendor_portal::VendorPortalRepo;
 pub use warehouses::WarehouseRepo;
-pub use webhooks::WebhookRepo;
+pub use webhooks::{WebhookDelivery, WebhookDeliveryRepo, WebhookRepo};
 pub use work_orders::WorkOrderRepo;
