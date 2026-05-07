@@ -93,6 +93,7 @@ pub mod recurring;
 pub mod recurring_bills;
 pub mod recurring_invoices;
 pub mod recurring_journal_entries;
+pub mod report_schedules;
 pub mod reports;
 pub mod retainers;
 pub mod roles;
