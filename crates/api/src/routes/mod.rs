@@ -32,9 +32,9 @@ use crate::{
         purchase_requisitions, purchase_returns, quotes, recurring, recurring_bills,
         recurring_invoices, recurring_journal_entries, reports, retainers, roles,
         sales_order_shipments, sales_orders, sales_returns, sales_tax_nexus, scim,
-        service_territories, sessions, stripe_webhook, subscriptions, tags, tax_groups,
-        tax_periods, tax_rates, tax_rules, time_entries, totp, tracking_categories, transactions,
-        users, vendor_credits, vendor_portal, warehouses, webhooks, work_orders,
+        service_territories, sessions, stripe_webhook, subscriptions, tags, tax_filings,
+        tax_groups, tax_periods, tax_rates, tax_rules, time_entries, totp, tracking_categories,
+        transactions, users, vendor_credits, vendor_portal, warehouses, webhooks, work_orders,
     },
     middleware::require_auth,
     state::AppState,
@@ -1801,6 +1801,27 @@ pub fn build(state: AppState) -> Router {
             "/inventory-stocktakes/:id/post",
             post(inventory_stocktakes::post_stocktake),
         )
+        // Tax filings (1099, 941, T4, T4A, HST/GST)
+        .route("/tax-filings", get(tax_filings::list_tax_filings))
+        .route("/tax-filings/:id", get(tax_filings::get_tax_filing))
+        .route(
+            "/tax-filings/:id/submit",
+            post(tax_filings::submit_tax_filing),
+        )
+        .route(
+            "/tax-filings/generate-1099s",
+            post(tax_filings::generate_1099s),
+        )
+        .route("/tax-filings/generate-941", post(tax_filings::generate_941))
+        .route("/tax-filings/generate-t4s", post(tax_filings::generate_t4s))
+        .route("/tax-filings/generate-t4a", post(tax_filings::generate_t4a))
+        .route(
+            "/tax-filings/generate-hst-return",
+            post(tax_filings::generate_hst_return),
+        )
+        .route("/reports/t4-summary", get(tax_filings::t4_summary_report))
+        .route("/reports/t4a-summary", get(tax_filings::t4a_summary_report))
+        .route("/reports/hst-gst", get(tax_filings::hst_gst_report))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     // SCIM 2.0 endpoints (separate bearer-token auth, not JWT)
