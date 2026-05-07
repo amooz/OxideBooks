@@ -90,6 +90,7 @@ pub mod recurring_journal_entry;
 pub mod report_schedule;
 pub mod reports;
 pub mod retainer;
+pub mod rev_rec;
 pub mod role;
 pub mod sales_order;
 pub mod sales_order_shipment;
@@ -327,6 +328,7 @@ pub use reports::{
     VatReturnReport, Vendor1099Row, VendorBalancesReport, VendorSpendReport, VendorSpendRow, W2Row,
 };
 pub use retainer::{ApplyRetainer, CreateRetainer, DepositRetainer, Retainer, RetainerTransaction};
+pub use rev_rec::{CreateRevRecSchedule, RecognizeRevRec, RevRecEntry, RevRecSchedule};
 pub use role::{AssignPermission, CreateRole, Permission, Role};
 pub use sales_order::{
     ConvertSoToInvoice, CreateSalesOrder, CreateSoLine, SalesOrder, SoLine, UpdateSalesOrder,

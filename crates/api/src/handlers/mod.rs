@@ -98,6 +98,7 @@ pub mod recurring_journal_entries;
 pub mod report_schedules;
 pub mod reports;
 pub mod retainers;
+pub mod rev_rec;
 pub mod roles;
 pub mod sales_order_shipments;
 pub mod sales_orders;
