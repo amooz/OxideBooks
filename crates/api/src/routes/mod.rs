@@ -31,7 +31,7 @@ use crate::{
         product_categories, product_variants, products, progress_claims, project_phases,
         project_tasks, projects, purchase_orders, purchase_requisitions, purchase_returns, quotes,
         recurring, recurring_bills, recurring_invoices, recurring_journal_entries, report_schedules,
-        reports, retainers, roles, sales_order_shipments, sales_orders, sales_returns,
+        reports, retainers, rev_rec, roles, sales_order_shipments, sales_orders, sales_returns,
         sales_tax_nexus, scim, service_territories, sessions, stripe_webhook, subscriptions, tags,
         tax_filings,
         tax_groups, tax_periods, tax_rates, tax_rules, time_entries, totp, tracking_categories,
@@ -1865,6 +1865,13 @@ pub fn build(state: AppState) -> Router {
         .route("/invoices/:id/collect-ach", post(ach::collect_ach))
         .route("/bills/:id/pay-ach", post(ach::pay_bill_ach))
         .route("/ach/generate-nacha", post(ach::generate_nacha))
+        // Revenue Recognition (ASC 606)
+        .route("/rev-rec/schedules", get(rev_rec::list_rev_rec_schedules))
+        .route("/rev-rec/recognize", post(rev_rec::recognize_revenue))
+        .route(
+            "/invoices/:id/rev-rec-schedule",
+            get(rev_rec::get_rev_rec_schedule).post(rev_rec::create_rev_rec_schedule),
+        )
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     // SCIM 2.0 endpoints (separate bearer-token auth, not JWT)
