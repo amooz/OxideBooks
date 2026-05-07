@@ -80,6 +80,7 @@ pub mod price_lists;
 pub mod product_categories;
 pub mod product_variants;
 pub mod products;
+pub mod progress_claims;
 pub mod project_phases;
 pub mod project_tasks;
 pub mod projects;

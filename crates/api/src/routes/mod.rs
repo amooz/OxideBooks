@@ -28,13 +28,13 @@ use crate::{
         late_fees, leave, mileage, notes, notifications, opening_balances, organizations,
         payment_links, payment_plans, payment_terms, payments, payroll, payroll_tax, payslips,
         prepaid_expenses, prepayments, price_lists, product_categories, product_variants, products,
-        project_phases, project_tasks, projects, purchase_orders, purchase_requisitions,
-        purchase_returns, quotes, recurring, recurring_bills, recurring_invoices,
-        recurring_journal_entries, reports, retainers, roles, sales_order_shipments, sales_orders,
-        sales_returns, sales_tax_nexus, scim, service_territories, sessions, stripe_webhook,
-        subscriptions, tags, tax_groups, tax_periods, tax_rates, tax_rules, time_entries, totp,
-        tracking_categories, transactions, users, vendor_credits, vendor_portal, warehouses,
-        webhooks, work_orders,
+        progress_claims, project_phases, project_tasks, projects, purchase_orders,
+        purchase_requisitions, purchase_returns, quotes, recurring, recurring_bills,
+        recurring_invoices, recurring_journal_entries, reports, retainers, roles,
+        sales_order_shipments, sales_orders, sales_returns, sales_tax_nexus, scim,
+        service_territories, sessions, stripe_webhook, subscriptions, tags, tax_groups,
+        tax_periods, tax_rates, tax_rules, time_entries, totp, tracking_categories, transactions,
+        users, vendor_credits, vendor_portal, warehouses, webhooks, work_orders,
     },
     middleware::require_auth,
     state::AppState,
@@ -343,6 +343,10 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/reports/cash-basis-balance-sheet",
             get(reports::cash_basis_balance_sheet),
+        )
+        .route(
+            "/reports/project-billing",
+            get(progress_claims::project_billing_report),
         )
         // Dashboard
         .route("/dashboard", get(reports::dashboard))
@@ -739,6 +743,23 @@ pub fn build(state: AppState) -> Router {
                 .delete(projects::delete_project),
         )
         .route("/projects/:id/summary", get(projects::project_summary))
+        // Progress invoicing & retainage
+        .route(
+            "/projects/:id/progress-claims",
+            get(progress_claims::list_progress_claims).post(progress_claims::create_progress_claim),
+        )
+        .route(
+            "/progress-claims/:id/approve",
+            post(progress_claims::approve_progress_claim),
+        )
+        .route(
+            "/progress-claims/:id/invoice",
+            post(progress_claims::invoice_progress_claim),
+        )
+        .route(
+            "/projects/:id/release-retainage",
+            post(progress_claims::release_retainage),
+        )
         // Project phases
         .route(
             "/projects/:id/phases",

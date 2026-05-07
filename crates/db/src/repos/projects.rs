@@ -12,6 +12,7 @@ struct ProjectRow {
     name: String,
     contact_id: Option<Uuid>,
     status: String,
+    billing_method: String,
     budget_amount: Option<i64>,
     start_date: Option<Date>,
     end_date: Option<Date>,
@@ -37,6 +38,7 @@ fn from_row(r: ProjectRow) -> Project {
         name: r.name,
         contact_id: r.contact_id.map(|u| u.to_string()),
         status: r.status,
+        billing_method: r.billing_method,
         budget_amount: r.budget_amount,
         start_date: r.start_date,
         end_date: r.end_date,
@@ -50,8 +52,8 @@ fn parse_uuid(s: &str) -> Result<Uuid, DbError> {
     Uuid::parse_str(s).map_err(|_| DbError::Conflict(format!("invalid UUID: {s}")))
 }
 
-const COLS: &str = "id, organization_id, name, contact_id, status, budget_amount, \
-                    start_date, end_date, notes, created_at, updated_at";
+const COLS: &str = "id, organization_id, name, contact_id, status, billing_method, \
+                    budget_amount, start_date, end_date, notes, created_at, updated_at";
 
 pub struct ProjectRepo;
 
@@ -109,13 +111,15 @@ impl ProjectRepo {
 
         let id: Uuid = sqlx::query_scalar(
             "INSERT INTO projects \
-             (organization_id, name, contact_id, status, budget_amount, start_date, end_date, notes) \
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id",
+             (organization_id, name, contact_id, status, billing_method, \
+              budget_amount, start_date, end_date, notes) \
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id",
         )
         .bind(org_uuid)
         .bind(&input.name)
         .bind(contact_uuid)
         .bind(&input.status)
+        .bind(&input.billing_method)
         .bind(input.budget_amount)
         .bind(input.start_date)
         .bind(input.end_date)
@@ -138,16 +142,18 @@ impl ProjectRepo {
 
         let n = sqlx::query(
             "UPDATE projects SET \
-             name          = COALESCE($1, name), \
-             status        = COALESCE($2, status), \
-             budget_amount = COALESCE($3, budget_amount), \
-             end_date      = COALESCE($4, end_date), \
-             notes         = COALESCE($5, notes), \
-             updated_at    = NOW() \
-             WHERE id = $6 AND organization_id = $7",
+             name           = COALESCE($1, name), \
+             status         = COALESCE($2, status), \
+             billing_method = COALESCE($3, billing_method), \
+             budget_amount  = COALESCE($4, budget_amount), \
+             end_date       = COALESCE($5, end_date), \
+             notes          = COALESCE($6, notes), \
+             updated_at     = NOW() \
+             WHERE id = $7 AND organization_id = $8",
         )
         .bind(input.name)
         .bind(input.status)
+        .bind(input.billing_method)
         .bind(input.budget_amount)
         .bind(input.end_date)
         .bind(input.notes)
