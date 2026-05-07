@@ -16,8 +16,8 @@ use tower_http::{
 use crate::{
     handlers::{
         accounts, api_keys, approval_rules, assembly_orders, attachments, audit, auth, auth_sso,
-        bank, bank_deposits, bank_reconciliation, bank_rules, batch_payments, bills, budgets, bulk,
-        check_runs, client_portal, closed_periods, commissions, consolidated,
+        bank, bank_deposits, bank_feed, bank_reconciliation, bank_rules, batch_payments, bills,
+        budgets, bulk, check_runs, client_portal, closed_periods, commissions, consolidated,
         consolidation_eliminations, contact_groups, contacts, contractor_tax_info, cost_codes,
         credit_notes, custom_fields, deferred_charges, deferred_revenue, departments,
         direct_deposit, doc_sequences, dunning, email, employee_bank_accounts, employee_loans,
@@ -853,6 +853,24 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/bank-transactions/:id/exclude",
             post(bank::exclude_bank_transaction),
+        )
+        // Bank feeds
+        .route(
+            "/bank-accounts/:id/feed/import",
+            post(bank_feed::import_feed),
+        )
+        .route("/bank-accounts/:id/feed", get(bank_feed::list_feed))
+        .route(
+            "/bank-accounts/:id/feed/auto-match",
+            post(bank_feed::auto_match_feed),
+        )
+        .route(
+            "/bank-feed/:id/match",
+            post(bank_feed::match_feed_transaction),
+        )
+        .route(
+            "/bank-feed/:id/ignore",
+            post(bank_feed::ignore_feed_transaction),
         )
         // Bank deposits
         .route(

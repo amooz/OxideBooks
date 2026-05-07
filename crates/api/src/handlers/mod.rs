@@ -8,6 +8,7 @@ pub mod auth;
 pub mod auth_sso;
 pub mod bank;
 pub mod bank_deposits;
+pub mod bank_feed;
 pub mod bank_reconciliation;
 pub mod bank_rules;
 pub mod batch_payments;
