@@ -125,7 +125,7 @@ pub use approval_chains::ApprovalChainRepo;
 pub use approval_rules::ApprovalRuleRepo;
 pub use assembly_orders::AssemblyOrderRepo;
 pub use attachments::AttachmentRepo;
-pub use audit::{AuditEvent, AuditRepo};
+pub use audit::{AuditEvent, AuditRepo, ComplianceSummaryRow};
 pub use bank::BankRepo;
 pub use bank_deposits::BankDepositRepo;
 pub use bank_feed::BankFeedRepo;
