@@ -68,6 +68,14 @@ struct LineData {
     tax_rate: i64,
 }
 
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
+}
+
 fn build_ubl_xml(d: &InvoiceData) -> String {
     let mut lines_xml = String::new();
     for ln in &d.lines {
@@ -94,12 +102,12 @@ fn build_ubl_xml(d: &InvoiceData) -> String {
 "#,
             ln.id,
             qty,
-            d.currency,
+            xml_escape(&d.currency),
             line_ext,
-            d.currency,
+            xml_escape(&d.currency),
             tax_amt,
-            ln.description,
-            d.currency,
+            xml_escape(&ln.description),
+            xml_escape(&d.currency),
             price,
         ));
     }
@@ -107,12 +115,12 @@ fn build_ubl_xml(d: &InvoiceData) -> String {
     let seller_tax = d
         .seller_tax_number
         .as_deref()
-        .map(|t| format!("<cbc:CompanyID>{t}</cbc:CompanyID>"))
+        .map(|t| format!("<cbc:CompanyID>{}</cbc:CompanyID>", xml_escape(t)))
         .unwrap_or_default();
     let buyer_tax = d
         .buyer_tax_number
         .as_deref()
-        .map(|t| format!("<cbc:CompanyID>{t}</cbc:CompanyID>"))
+        .map(|t| format!("<cbc:CompanyID>{}</cbc:CompanyID>", xml_escape(t)))
         .unwrap_or_default();
     let total = d.total_amount as f64 / 100.0;
 
@@ -146,15 +154,15 @@ fn build_ubl_xml(d: &InvoiceData) -> String {
   </cac:LegalMonetaryTotal>
 {}
 </Invoice>"#,
-        d.invoice_number,
-        d.invoice_date,
-        d.due_date,
-        d.currency,
-        d.seller_name,
+        xml_escape(&d.invoice_number),
+        xml_escape(&d.invoice_date),
+        xml_escape(&d.due_date),
+        xml_escape(&d.currency),
+        xml_escape(&d.seller_name),
         seller_tax,
-        d.buyer_name,
+        xml_escape(&d.buyer_name),
         buyer_tax,
-        d.currency,
+        xml_escape(&d.currency),
         total,
         lines_xml.trim_end(),
     )
@@ -314,12 +322,16 @@ impl EInvoiceRepo {
         // Parse minimal fields from UBL XML using simple string extraction.
         let xml = &input.xml;
 
+        // Match opening tags with or without attributes (e.g. <cbc:ID schemeID="...">).
         let extract = |tag: &str| -> Option<String> {
-            let open = format!("<cbc:{tag}>");
+            let tag_prefix = format!("<cbc:{tag}");
             let close = format!("</cbc:{tag}>");
-            let start = xml.find(&open)?;
-            let end = xml.find(&close)?;
-            Some(xml[start + open.len()..end].to_string())
+            let tag_start = xml.find(&tag_prefix)?;
+            // Advance past any attributes to the closing `>` of the start tag.
+            let gt_offset = xml[tag_start..].find('>')?;
+            let content_start = tag_start + gt_offset + 1;
+            let end_offset = xml[content_start..].find(&close)?;
+            Some(xml[content_start..content_start + end_offset].to_string())
         };
 
         let invoice_number =
