@@ -5,6 +5,7 @@ pub mod assembly_order;
 pub mod attachment;
 pub mod bank;
 pub mod bank_deposit;
+pub mod bank_feed;
 pub mod bank_reconciliation;
 pub mod bank_rule;
 pub mod batch_payment;
@@ -119,6 +120,10 @@ pub use bank::{
 };
 pub use bank_deposit::{
     BankDeposit, BankDepositItem, ClearBankDeposit, CreateBankDeposit, CreateDepositItem,
+};
+pub use bank_feed::{
+    BankFeedAutoMatchResult, BankFeedTransaction, ImportBankFeed, ImportBankFeedRow,
+    MatchBankFeedTransaction,
 };
 pub use bank_reconciliation::{BankReconciliationStatement, CreateBankReconciliationStatement};
 pub use bank_rule::{BankRule, CreateBankRule};
