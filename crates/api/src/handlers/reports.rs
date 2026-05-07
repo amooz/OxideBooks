@@ -31,6 +31,8 @@ pub struct DateRangeQuery {
 #[derive(Deserialize)]
 pub struct AsOfQuery {
     pub as_of: String,
+    #[serde(default)]
+    pub basis: String,
 }
 
 #[derive(Deserialize)]
@@ -87,7 +89,7 @@ pub async fn profit_loss(
     ))
 }
 
-/// GET /api/v1/reports/balance-sheet?as_of=YYYY-MM-DD
+/// GET /api/v1/reports/balance-sheet?as_of=YYYY-MM-DD[&basis=cash]
 pub async fn balance_sheet(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
@@ -97,8 +99,48 @@ pub async fn balance_sheet(
         return Err(ApiError::Forbidden);
     }
     let as_of = parse_date(&q.as_of)?;
+    if q.basis == "cash" {
+        let report = ReportRepo::cash_basis_balance_sheet(&state.db, &claims.org, as_of).await?;
+        return Ok(Json(serde_json::json!({ "data": report, "basis": "cash" })));
+    }
     let report = ReportRepo::balance_sheet(&state.db, &claims.org, as_of).await?;
-    Ok(Json(serde_json::json!({ "data": report })))
+    Ok(Json(
+        serde_json::json!({ "data": report, "basis": "accrual" }),
+    ))
+}
+
+/// GET /api/v1/reports/cash-basis-pl?from=YYYY-MM-DD&to=YYYY-MM-DD
+pub async fn cash_basis_pl(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<DateRangeQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("reports:read") {
+        return Err(ApiError::Forbidden);
+    }
+    let from = parse_date(&q.from)?;
+    let to = parse_date(&q.to)?;
+    if from > to {
+        return Err(ApiError::BadRequest(
+            "'from' must be on or before 'to'".into(),
+        ));
+    }
+    let report = ReportRepo::profit_loss_cash(&state.db, &claims.org, from, to).await?;
+    Ok(Json(serde_json::json!({ "data": report, "basis": "cash" })))
+}
+
+/// GET /api/v1/reports/cash-basis-balance-sheet?as_of=YYYY-MM-DD
+pub async fn cash_basis_balance_sheet(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<AsOfQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.has("reports:read") {
+        return Err(ApiError::Forbidden);
+    }
+    let as_of = parse_date(&q.as_of)?;
+    let report = ReportRepo::cash_basis_balance_sheet(&state.db, &claims.org, as_of).await?;
+    Ok(Json(serde_json::json!({ "data": report, "basis": "cash" })))
 }
 
 #[derive(Deserialize)]
