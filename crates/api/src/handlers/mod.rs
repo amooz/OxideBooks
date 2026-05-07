@@ -94,6 +94,7 @@ pub mod retainers;
 pub mod roles;
 pub mod sales_order_shipments;
 pub mod sales_orders;
+pub mod sales_returns;
 pub mod sales_tax_nexus;
 pub mod scim;
 pub mod service_territories;

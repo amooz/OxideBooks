@@ -30,8 +30,8 @@ use crate::{
         prepaid_expenses, prepayments, price_lists, product_categories, product_variants, products,
         project_phases, project_tasks, projects, purchase_orders, purchase_requisitions, quotes,
         recurring, recurring_bills, recurring_invoices, recurring_journal_entries, reports,
-        retainers, roles, sales_order_shipments, sales_orders, sales_tax_nexus, scim,
-        service_territories, sessions, stripe_webhook, subscriptions, tags, tax_groups,
+        retainers, roles, sales_order_shipments, sales_orders, sales_returns, sales_tax_nexus,
+        scim, service_territories, sessions, stripe_webhook, subscriptions, tags, tax_groups,
         tax_periods, tax_rates, tax_rules, time_entries, totp, tracking_categories, transactions,
         users, vendor_credits, vendor_portal, warehouses, webhooks, work_orders,
     },
@@ -1408,6 +1408,20 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/so-shipments/:id",
             get(sales_order_shipments::get_shipment),
+        )
+        // Sales returns (RMAs)
+        .route(
+            "/sales-returns",
+            get(sales_returns::list_sales_returns).post(sales_returns::create_sales_return),
+        )
+        .route("/sales-returns/:id", get(sales_returns::get_sales_return))
+        .route(
+            "/sales-returns/:id/approve",
+            post(sales_returns::approve_sales_return),
+        )
+        .route(
+            "/sales-returns/:id/receive",
+            post(sales_returns::receive_sales_return),
         )
         // Sales tax nexus
         .route(
