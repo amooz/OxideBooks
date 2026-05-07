@@ -95,6 +95,7 @@ pub mod service_territory;
 pub mod session;
 pub mod subscription;
 pub mod tag;
+pub mod tax_filing;
 pub mod tax_group;
 pub mod tax_period;
 pub mod tax_rate;
@@ -334,6 +335,7 @@ pub use subscription::{
     UpdateSubscriptionPlan,
 };
 pub use tag::{CreateTag, Tag, UpdateTag};
+pub use tax_filing::{HstGstReturn, T4AFilingSummary, T4ASlip, T4Slip, T4Summary, TaxFiling};
 pub use tax_group::{CreateTaxGroup, TaxGroup, TaxGroupRate, TaxGroupRateInput, UpdateTaxGroup};
 pub use tax_period::{CreateTaxPeriod, FileTaxPeriod, TaxPeriod};
 pub use tax_rate::{CreateTaxRate, TaxRate, UpdateTaxRate};
