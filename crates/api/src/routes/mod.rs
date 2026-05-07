@@ -20,7 +20,7 @@ use crate::{
         batch_payments, bills, budgets, bulk, check_runs, client_portal, closed_periods,
         commissions, consolidated, consolidation_eliminations, contact_groups, contacts,
         contractor_tax_info, cost_codes, credit_notes, custom_fields, deferred_charges,
-        deferred_revenue, departments, direct_deposit, doc_sequences, dunning, email,
+        deferred_revenue, departments, direct_deposit, doc_sequences, dunning, einvoice, email,
         employee_bank_accounts, employee_loans, employees, exchange_rates, expense_categories,
         expense_claims, expense_policies, expense_reports, expenses, export, fixed_assets, fx,
         fx_revaluations, grn, health, identity, import, intercompany, inventory, inventory_lots,
@@ -1853,6 +1853,13 @@ pub fn build(state: AppState) -> Router {
         .route("/reports/t4-summary", get(tax_filings::t4_summary_report))
         .route("/reports/t4a-summary", get(tax_filings::t4a_summary_report))
         .route("/reports/hst-gst", get(tax_filings::hst_gst_report))
+        // E-invoicing (Peppol/UBL 2.1)
+        .route("/invoices/:id/send-einvoice", post(einvoice::send_einvoice))
+        .route(
+            "/invoices/:id/einvoice-status",
+            get(einvoice::einvoice_status),
+        )
+        .route("/einvoice/receive", post(einvoice::receive_einvoice))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     // SCIM 2.0 endpoints (separate bearer-token auth, not JWT)

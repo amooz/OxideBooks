@@ -31,6 +31,7 @@ pub mod department;
 pub mod direct_deposit;
 pub mod doc_sequence;
 pub mod dunning;
+pub mod einvoice;
 pub mod email;
 pub mod employee;
 pub mod employee_bank_account;
@@ -176,6 +177,7 @@ pub use direct_deposit::{
 };
 pub use doc_sequence::{DocSequence, ResetDocSequence, UpsertDocSequence};
 pub use dunning::{CreateDunningRule, DunningRule, InvoiceReminder, OverdueInvoice};
+pub use einvoice::{EInvoiceTransmission, InboundEInvoice, SendEInvoice};
 pub use email::{EmailLog, EmailSettings, SendEmailRequest, UpsertEmailSettings};
 pub use employee::{CreateEmployee, Employee, UpdateEmployee};
 pub use employee_bank_account::{

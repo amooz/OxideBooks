@@ -34,6 +34,7 @@ pub mod departments;
 pub mod direct_deposit;
 pub mod doc_sequences;
 pub mod dunning;
+pub mod einvoice;
 pub mod email;
 pub mod employee_bank_accounts;
 pub mod employee_loans;
