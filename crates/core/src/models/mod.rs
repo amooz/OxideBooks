@@ -72,6 +72,7 @@ pub mod price_list;
 pub mod product;
 pub mod product_category;
 pub mod product_variant;
+pub mod progress_claim;
 pub mod project;
 pub mod project_phase;
 pub mod project_task;
@@ -258,6 +259,9 @@ pub use product::{
 };
 pub use product_category::{CreateProductCategory, ProductCategory, UpdateProductCategory};
 pub use product_variant::{CreateProductVariant, ProductVariant, UpdateProductVariant};
+pub use progress_claim::{
+    CreateProgressClaim, ProgressClaim, ProjectBillingReport, ProjectBillingRow, ReleaseRetainage,
+};
 pub use project::{CreateProject, Project, ProjectSummary, UpdateProject};
 pub use project_phase::{CreateProjectPhase, ProjectPhase, UpdateProjectPhase};
 pub use project_task::{CreateProjectTask, ProjectTask, UpdateProjectTask};

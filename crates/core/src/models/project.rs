@@ -10,6 +10,7 @@ pub struct Project {
     pub name: String,
     pub contact_id: Option<String>,
     pub status: String,
+    pub billing_method: String,
     pub budget_amount: Option<i64>,
     #[serde(default, with = "opt_date_serde")]
     pub start_date: Option<Date>,
@@ -28,6 +29,8 @@ pub struct CreateProject {
     pub contact_id: Option<String>,
     #[serde(default = "default_status")]
     pub status: String,
+    #[serde(default = "default_billing_method")]
+    pub billing_method: String,
     pub budget_amount: Option<i64>,
     #[serde(default, with = "opt_date_serde")]
     pub start_date: Option<Date>,
@@ -40,10 +43,15 @@ fn default_status() -> String {
     "active".to_string()
 }
 
+fn default_billing_method() -> String {
+    "time_and_materials".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UpdateProject {
     pub name: Option<String>,
     pub status: Option<String>,
+    pub billing_method: Option<String>,
     pub budget_amount: Option<i64>,
     #[serde(default, with = "opt_date_serde")]
     pub end_date: Option<Date>,
