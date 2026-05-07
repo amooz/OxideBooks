@@ -85,6 +85,7 @@ pub mod recurring;
 pub mod recurring_bill;
 pub mod recurring_invoice;
 pub mod recurring_journal_entry;
+pub mod report_schedule;
 pub mod reports;
 pub mod retainer;
 pub mod role;
@@ -301,6 +302,7 @@ pub use recurring_journal_entry::{
     CreateRecurringJournalEntry, CreateRecurringJournalEntryLine, RecurringJournalEntry,
     RecurringJournalEntryLine, UpdateRecurringJournalEntry,
 };
+pub use report_schedule::{CreateReportSchedule, ReportSchedule, UpdateReportSchedule};
 pub use reports::{
     AccountBalance, AccountLedger, AgingReport, AgingRow, ApAgingDetailReport, ApAgingDetailRow,
     ArAgingDetailReport, ArAgingDetailRow, AutoReversalResult, BalanceSheetComparisonReport,

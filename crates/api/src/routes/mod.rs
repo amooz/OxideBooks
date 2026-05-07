@@ -30,9 +30,10 @@ use crate::{
         payroll, payroll_tax, payslips, prepaid_expenses, prepayments, price_lists,
         product_categories, product_variants, products, progress_claims, project_phases,
         project_tasks, projects, purchase_orders, purchase_requisitions, purchase_returns, quotes,
-        recurring, recurring_bills, recurring_invoices, recurring_journal_entries, reports,
-        retainers, roles, sales_order_shipments, sales_orders, sales_returns, sales_tax_nexus,
-        scim, service_territories, sessions, stripe_webhook, subscriptions, tags, tax_filings,
+        recurring, recurring_bills, recurring_invoices, recurring_journal_entries, report_schedules,
+        reports, retainers, roles, sales_order_shipments, sales_orders, sales_returns,
+        sales_tax_nexus, scim, service_territories, sessions, stripe_webhook, subscriptions, tags,
+        tax_filings,
         tax_groups, tax_periods, tax_rates, tax_rules, time_entries, totp, tracking_categories,
         transactions, users, vendor_credits, vendor_portal, warehouses, webhooks, work_orders,
     },
@@ -311,6 +312,17 @@ pub fn build(state: AppState) -> Router {
             get(users::get_user)
                 .patch(users::update_user)
                 .delete(users::delete_user),
+        )
+        // Report schedules
+        .route(
+            "/report-schedules",
+            get(report_schedules::list_schedules).post(report_schedules::create_schedule),
+        )
+        .route(
+            "/report-schedules/:id",
+            get(report_schedules::get_schedule)
+                .patch(report_schedules::update_schedule)
+                .delete(report_schedules::delete_schedule),
         )
         // Reports
         .route("/reports/trial-balance", get(reports::trial_balance))

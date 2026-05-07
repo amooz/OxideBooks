@@ -1,5 +1,6 @@
 use axum::{
     extract::{Extension, Query, State},
+    response::{IntoResponse, Response},
     Json,
 };
 use oxidebooks_db::repos::ReportRepo;
@@ -8,11 +9,54 @@ use time::macros::format_description;
 use time::Date;
 use time::OffsetDateTime;
 
+use oxidebooks_core::models::ReportLine;
+
 use crate::{
     error::{ApiError, ApiResult},
     middleware::Claims,
     state::AppState,
+    xlsx::{build_xlsx, XLSX_CONTENT_TYPE},
 };
+
+fn xlsx_response(bytes: Vec<u8>, filename: &str) -> Response {
+    (
+        [
+            (
+                axum::http::header::CONTENT_TYPE,
+                axum::http::HeaderValue::from_static(XLSX_CONTENT_TYPE),
+            ),
+            (
+                axum::http::header::CONTENT_DISPOSITION,
+                axum::http::HeaderValue::from_str(&format!("attachment; filename=\"{filename}\""))
+                    .unwrap_or_else(|_| {
+                        axum::http::HeaderValue::from_static("attachment; filename=\"report.xlsx\"")
+                    }),
+            ),
+        ],
+        bytes,
+    )
+        .into_response()
+}
+
+fn csv_response(csv: String, filename: &str) -> Response {
+    (
+        [
+            (
+                axum::http::header::CONTENT_TYPE,
+                axum::http::HeaderValue::from_static("text/csv; charset=utf-8"),
+            ),
+            (
+                axum::http::header::CONTENT_DISPOSITION,
+                axum::http::HeaderValue::from_str(&format!("attachment; filename=\"{filename}\""))
+                    .unwrap_or_else(|_| {
+                        axum::http::HeaderValue::from_static("attachment; filename=\"report.csv\"")
+                    }),
+            ),
+        ],
+        csv,
+    )
+        .into_response()
+}
 
 fn parse_date(s: &str) -> Result<Date, ApiError> {
     let fmt = format_description!("[year]-[month]-[day]");
@@ -26,6 +70,8 @@ pub struct DateRangeQuery {
     pub to: String,
     #[serde(default)]
     pub basis: String,
+    pub format: Option<String>,
+    pub compare: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -33,6 +79,7 @@ pub struct AsOfQuery {
     pub as_of: String,
     #[serde(default)]
     pub basis: String,
+    pub format: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -41,18 +88,61 @@ pub struct PriorAsOfQuery {
     pub prior_as_of: String,
 }
 
-/// GET /api/v1/reports/trial-balance
-///
-/// Returns the trial balance for the authenticated organization. Only `posted`
-/// journal entries are included.
+#[derive(Deserialize)]
+pub struct FormatQuery {
+    pub format: Option<String>,
+}
+
+/// GET /api/v1/reports/trial-balance[?format=xlsx|csv]
 pub async fn trial_balance(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
-) -> ApiResult<Json<serde_json::Value>> {
+    Query(q): Query<FormatQuery>,
+) -> ApiResult<Response> {
     if !claims.has("reports:read") {
         return Err(ApiError::Forbidden);
     }
     let tb = ReportRepo::trial_balance(&state.db, &claims.org).await?;
+    let fmt = q.format.as_deref().unwrap_or("json");
+
+    if fmt == "xlsx" || fmt == "csv" {
+        let headers = &[
+            "Account Code",
+            "Account Name",
+            "Account Type",
+            "Debit",
+            "Credit",
+            "Balance",
+        ];
+        let rows: Vec<Vec<String>> = tb
+            .accounts
+            .iter()
+            .map(|a| {
+                vec![
+                    a.account_code.clone(),
+                    a.account_name.clone(),
+                    format!("{:?}", a.account_type),
+                    a.debit_total.to_string(),
+                    a.credit_total.to_string(),
+                    a.balance().to_string(),
+                ]
+            })
+            .collect();
+
+        if fmt == "xlsx" {
+            let bytes = build_xlsx("Trial Balance", headers, &rows);
+            return Ok(xlsx_response(bytes, "trial-balance.xlsx"));
+        } else {
+            let mut wtr = csv::Writer::from_writer(vec![]);
+            wtr.write_record(headers).ok();
+            for row in &rows {
+                wtr.write_record(row).ok();
+            }
+            let csv = String::from_utf8(wtr.into_inner().unwrap_or_default()).unwrap_or_default();
+            return Ok(csv_response(csv, "trial-balance.csv"));
+        }
+    }
+
     Ok(Json(serde_json::json!({
         "data": {
             "accounts": tb.accounts,
@@ -60,15 +150,16 @@ pub async fn trial_balance(
             "total_credits": tb.total_credits,
             "is_balanced": tb.is_balanced(),
         }
-    })))
+    }))
+    .into_response())
 }
 
-/// GET /api/v1/reports/profit-loss?from=YYYY-MM-DD&to=YYYY-MM-DD
+/// GET /api/v1/reports/profit-loss?from=YYYY-MM-DD&to=YYYY-MM-DD[&compare=prior_year][&format=xlsx|csv]
 pub async fn profit_loss(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
     Query(q): Query<DateRangeQuery>,
-) -> ApiResult<Json<serde_json::Value>> {
+) -> ApiResult<Response> {
     if !claims.has("reports:read") {
         return Err(ApiError::Forbidden);
     }
@@ -84,29 +175,218 @@ pub async fn profit_loss(
     } else {
         ReportRepo::profit_loss(&state.db, &claims.org, from, to).await?
     };
-    Ok(Json(
-        serde_json::json!({ "data": report, "basis": q.basis }),
-    ))
+
+    let compare = q.compare.as_deref() == Some("prior_year");
+    let fmt = q.format.as_deref().unwrap_or("json");
+
+    // Fetch prior year if requested
+    let prior = if compare {
+        use time::Duration;
+        let py_from = from - Duration::days(365);
+        let py_to = to - Duration::days(365);
+        let r = if q.basis == "cash" {
+            ReportRepo::profit_loss_cash(&state.db, &claims.org, py_from, py_to).await?
+        } else {
+            ReportRepo::profit_loss(&state.db, &claims.org, py_from, py_to).await?
+        };
+        Some(r)
+    } else {
+        None
+    };
+
+    if fmt == "xlsx" || fmt == "csv" {
+        let has_prior = prior.is_some();
+        let mut headers: Vec<&str> = vec!["Section", "Account Code", "Account Name", "Amount"];
+        if has_prior {
+            headers.push("Prior Year Amount");
+        }
+
+        let mut rows: Vec<Vec<String>> = Vec::new();
+        let build_section = |section_name: &str, lines: &[ReportLine]| {
+            lines
+                .iter()
+                .map(|l| {
+                    vec![
+                        section_name.to_string(),
+                        l.account_code.clone(),
+                        l.account_name.clone(),
+                        l.amount.to_string(),
+                    ]
+                })
+                .collect::<Vec<_>>()
+        };
+
+        let mut rev_rows = build_section("Revenue", &report.revenue.accounts);
+        let mut exp_rows = build_section("Expenses", &report.expenses.accounts);
+
+        if let Some(ref p) = prior {
+            // Merge prior year amounts by account_id
+            use std::collections::HashMap;
+            let prior_rev: HashMap<&str, i64> = p
+                .revenue
+                .accounts
+                .iter()
+                .map(|l| (l.account_id.as_str(), l.amount))
+                .collect();
+            let prior_exp: HashMap<&str, i64> = p
+                .expenses
+                .accounts
+                .iter()
+                .map(|l| (l.account_id.as_str(), l.amount))
+                .collect();
+
+            for (row, line) in rev_rows.iter_mut().zip(report.revenue.accounts.iter()) {
+                row.push(
+                    prior_rev
+                        .get(line.account_id.as_str())
+                        .map(|v| v.to_string())
+                        .unwrap_or_default(),
+                );
+            }
+            for (row, line) in exp_rows.iter_mut().zip(report.expenses.accounts.iter()) {
+                row.push(
+                    prior_exp
+                        .get(line.account_id.as_str())
+                        .map(|v| v.to_string())
+                        .unwrap_or_default(),
+                );
+            }
+        }
+
+        rows.extend(rev_rows);
+        rows.extend(exp_rows);
+
+        // Net income row
+        let mut net_row = vec![
+            "Net Income".to_string(),
+            String::new(),
+            String::new(),
+            report.net_income.to_string(),
+        ];
+        if let Some(ref p) = prior {
+            net_row.push(p.net_income.to_string());
+        }
+        rows.push(net_row);
+
+        let headers_ref: Vec<&str> = headers.clone();
+        if fmt == "xlsx" {
+            let bytes = build_xlsx("Profit & Loss", &headers_ref, &rows);
+            return Ok(xlsx_response(bytes, "profit-loss.xlsx"));
+        } else {
+            let mut wtr = csv::Writer::from_writer(vec![]);
+            wtr.write_record(&headers_ref).ok();
+            for row in &rows {
+                wtr.write_record(row).ok();
+            }
+            let csv = String::from_utf8(wtr.into_inner().unwrap_or_default()).unwrap_or_default();
+            return Ok(csv_response(csv, "profit-loss.csv"));
+        }
+    }
+
+    if let Some(prior_report) = prior {
+        Ok(Json(serde_json::json!({
+            "data": report,
+            "prior_year": prior_report,
+            "basis": q.basis,
+        }))
+        .into_response())
+    } else {
+        Ok(Json(serde_json::json!({ "data": report, "basis": q.basis })).into_response())
+    }
 }
 
-/// GET /api/v1/reports/balance-sheet?as_of=YYYY-MM-DD[&basis=cash]
+/// GET /api/v1/reports/balance-sheet?as_of=YYYY-MM-DD[&basis=cash][&format=xlsx|csv]
 pub async fn balance_sheet(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
     Query(q): Query<AsOfQuery>,
-) -> ApiResult<Json<serde_json::Value>> {
+) -> ApiResult<Response> {
     if !claims.has("reports:read") {
         return Err(ApiError::Forbidden);
     }
     let as_of = parse_date(&q.as_of)?;
+    let fmt = q.format.as_deref().unwrap_or("json");
+
     if q.basis == "cash" {
         let report = ReportRepo::cash_basis_balance_sheet(&state.db, &claims.org, as_of).await?;
-        return Ok(Json(serde_json::json!({ "data": report, "basis": "cash" })));
+        if fmt == "xlsx" || fmt == "csv" {
+            let headers = &["Section", "Account Code", "Account Name", "Amount"];
+            let mut rows: Vec<Vec<String>> = Vec::new();
+            for a in &report.cash.accounts {
+                rows.push(vec![
+                    "Cash".into(),
+                    a.account_code.clone(),
+                    a.account_name.clone(),
+                    a.amount.to_string(),
+                ]);
+            }
+            for e in &report.equity.accounts {
+                rows.push(vec![
+                    "Equity".into(),
+                    e.account_code.clone(),
+                    e.account_name.clone(),
+                    e.amount.to_string(),
+                ]);
+            }
+            if fmt == "xlsx" {
+                let bytes = build_xlsx("Balance Sheet (Cash)", headers, &rows);
+                return Ok(xlsx_response(bytes, "balance-sheet.xlsx"));
+            } else {
+                let mut wtr = csv::Writer::from_writer(vec![]);
+                wtr.write_record(headers).ok();
+                for row in &rows {
+                    wtr.write_record(row).ok();
+                }
+                let csv =
+                    String::from_utf8(wtr.into_inner().unwrap_or_default()).unwrap_or_default();
+                return Ok(csv_response(csv, "balance-sheet.csv"));
+            }
+        }
+        return Ok(Json(serde_json::json!({ "data": report, "basis": "cash" })).into_response());
     }
+
     let report = ReportRepo::balance_sheet(&state.db, &claims.org, as_of).await?;
-    Ok(Json(
-        serde_json::json!({ "data": report, "basis": "accrual" }),
-    ))
+    if fmt == "xlsx" || fmt == "csv" {
+        let headers = &["Section", "Account Code", "Account Name", "Amount"];
+        let mut rows: Vec<Vec<String>> = Vec::new();
+        for a in &report.assets.accounts {
+            rows.push(vec![
+                "Assets".into(),
+                a.account_code.clone(),
+                a.account_name.clone(),
+                a.amount.to_string(),
+            ]);
+        }
+        for l in &report.liabilities.accounts {
+            rows.push(vec![
+                "Liabilities".into(),
+                l.account_code.clone(),
+                l.account_name.clone(),
+                l.amount.to_string(),
+            ]);
+        }
+        for e in &report.equity.accounts {
+            rows.push(vec![
+                "Equity".into(),
+                e.account_code.clone(),
+                e.account_name.clone(),
+                e.amount.to_string(),
+            ]);
+        }
+        if fmt == "xlsx" {
+            let bytes = build_xlsx("Balance Sheet", headers, &rows);
+            return Ok(xlsx_response(bytes, "balance-sheet.xlsx"));
+        } else {
+            let mut wtr = csv::Writer::from_writer(vec![]);
+            wtr.write_record(headers).ok();
+            for row in &rows {
+                wtr.write_record(row).ok();
+            }
+            let csv = String::from_utf8(wtr.into_inner().unwrap_or_default()).unwrap_or_default();
+            return Ok(csv_response(csv, "balance-sheet.csv"));
+        }
+    }
+    Ok(Json(serde_json::json!({ "data": report, "basis": "accrual" })).into_response())
 }
 
 /// GET /api/v1/reports/cash-basis-pl?from=YYYY-MM-DD&to=YYYY-MM-DD
