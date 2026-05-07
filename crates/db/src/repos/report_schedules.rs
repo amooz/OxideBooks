@@ -50,27 +50,23 @@ const COLS: &str = "id, organization_id, name, report_type, \
     frequency::TEXT, params, recipients, is_active, last_run_at, next_run_at, \
     created_by, created_at, updated_at";
 
+fn add_months(d: time::Date, months: u32) -> time::Date {
+    let total = d.month() as u32 - 1 + months;
+    let year = d.year() + (total / 12) as i32;
+    let month_num = (total % 12 + 1) as u8;
+    let month = time::Month::try_from(month_num).unwrap_or(time::Month::January);
+    let day = d.day().min(days_in_month(year, month));
+    time::Date::from_calendar_date(year, month, day).unwrap_or(d)
+}
+
 fn next_run(frequency: &str, from: OffsetDateTime) -> OffsetDateTime {
     use time::Duration;
+    let d = from.date();
     match frequency {
         "daily" => from + Duration::days(1),
         "weekly" => from + Duration::weeks(1),
-        "quarterly" => from + Duration::days(91),
-        _ => {
-            // monthly: advance by ~30 days, then snap to same day next month
-            let d = from.date();
-            let next_month = if d.month() == time::Month::December {
-                time::Date::from_calendar_date(d.year() + 1, time::Month::January, 1)
-            } else {
-                let m = d.month().next();
-                let days_in_next = days_in_month(d.year(), m);
-                time::Date::from_calendar_date(d.year(), m, d.day().min(days_in_next))
-            };
-            match next_month {
-                Ok(date) => from.replace_date(date),
-                Err(_) => from + Duration::days(30),
-            }
-        }
+        "quarterly" => from.replace_date(add_months(d, 3)),
+        _ => from.replace_date(add_months(d, 1)),
     }
 }
 
