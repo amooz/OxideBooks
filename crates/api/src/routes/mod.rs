@@ -788,6 +788,18 @@ pub fn build(state: AppState) -> Router {
             post(fixed_assets::dispose_asset),
         )
         .route("/fixed-assets/register", get(fixed_assets::asset_register))
+        .route(
+            "/fixed-assets/depreciate-all",
+            post(fixed_assets::bulk_depreciate),
+        )
+        .route(
+            "/fixed-assets/:id/schedule",
+            get(fixed_assets::get_depreciation_schedule),
+        )
+        .route(
+            "/fixed-assets/:id/schedule/export",
+            get(fixed_assets::export_depreciation_schedule),
+        )
         // Projects
         .route(
             "/projects",

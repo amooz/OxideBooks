@@ -8,6 +8,7 @@ use crate::models::opt_date_serde;
 pub enum DepreciationMethod {
     StraightLine,
     DecliningBalance,
+    SumOfYearsDigits,
 }
 
 impl std::fmt::Display for DepreciationMethod {
@@ -15,6 +16,7 @@ impl std::fmt::Display for DepreciationMethod {
         f.write_str(match self {
             DepreciationMethod::StraightLine => "straight_line",
             DepreciationMethod::DecliningBalance => "declining_balance",
+            DepreciationMethod::SumOfYearsDigits => "sum_of_years_digits",
         })
     }
 }
@@ -25,9 +27,29 @@ impl std::str::FromStr for DepreciationMethod {
         match s {
             "straight_line" => Ok(Self::StraightLine),
             "declining_balance" => Ok(Self::DecliningBalance),
+            "sum_of_years_digits" => Ok(Self::SumOfYearsDigits),
             _ => Err(()),
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DepreciationScheduleLine {
+    pub period: i32,
+    #[serde(with = "crate::models::date_serde")]
+    pub period_date: Date,
+    pub amount: i64,
+    pub accumulated_depreciation: i64,
+    pub book_value: i64,
+    pub is_posted: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BulkDepreciationResult {
+    pub period_date: String,
+    pub processed: usize,
+    pub succeeded: usize,
+    pub skipped: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
