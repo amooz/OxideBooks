@@ -84,6 +84,19 @@ pub struct BalanceSheetReport {
     pub is_balanced: bool,
 }
 
+// ── Cash-Basis Balance Sheet ──────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CashBasisBalanceSheet {
+    pub as_of: Date,
+    /// Cash and cash-equivalent assets (bank account net inflows up to as_of).
+    pub cash: ReportSection,
+    /// Owner's equity / retained cash earnings.
+    pub equity: ReportSection,
+    pub net_cash: MinorUnits,
+    pub is_balanced: bool,
+}
+
 // ── Balance Sheet Comparison ──────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

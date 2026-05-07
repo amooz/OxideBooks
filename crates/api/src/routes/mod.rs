@@ -339,6 +339,11 @@ pub fn build(state: AppState) -> Router {
             "/reports/project-profitability",
             get(reports::project_profitability),
         )
+        .route("/reports/cash-basis-pl", get(reports::cash_basis_pl))
+        .route(
+            "/reports/cash-basis-balance-sheet",
+            get(reports::cash_basis_balance_sheet),
+        )
         // Dashboard
         .route("/dashboard", get(reports::dashboard))
         // Global search

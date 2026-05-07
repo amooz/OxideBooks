@@ -1,21 +1,21 @@
 use oxidebooks_core::models::{
     AccountBalance, AccountLedger, AccountType, AgingReport, AgingRow, ApAgingDetailReport,
     ApAgingDetailRow, ArAgingDetailReport, ArAgingDetailRow, BalanceSheetComparisonReport,
-    BalanceSheetComparisonSection, BalanceSheetReport, CashDisbursementsJournal,
-    CashDisbursementsJournalRow, CashFlowForecast, CashFlowForecastBucket, CashFlowIndirectLine,
-    CashFlowIndirectReport, CashFlowIndirectSection, CashFlowReport, CashFlowSection,
-    CashReceiptsJournal, CashReceiptsJournalRow, ConsolidatedProfitLoss, ContactBalanceRow,
-    ContactStatement, CurrencyExposureReport, CurrencyExposureRow, CustomerBalancesReport,
-    DashboardKpis, EquityStatement, EquityStatementLine, Form941Quarter, GrniReport, GrniRow,
-    InventoryAgingReport, InventoryAgingRow, JobCostingCostCodeRow, JobCostingReport,
-    JobCostingRow, LedgerLine, OrgProfitLoss, OutstandingQuoteRow, OutstandingQuotesReport,
-    PLComparisonReport, PayrollSummaryReport, PayrollSummaryRow, PoSpendingReport, PoSpendingRow,
-    ProfitLossReport, ProjectBurnReport, ProjectBurnRow, ProjectProfitabilityReport,
-    ProjectProfitabilityRow, ReportLine, ReportSection, SalesByCustomerReport, SalesByCustomerRow,
-    SalesByProductReport, SalesByProductRow, SalesByRepReport, SalesByRepRow,
-    SalesTaxByNexusReport, SalesTaxByNexusRow, StatementLine, TaxSummaryLine, TaxSummaryReport,
-    TrackingPLReport, TrackingPLRow, TrialBalance, VatReturnLine, VatReturnReport,
-    VendorBalancesReport, VendorSpendReport, VendorSpendRow, W2Row,
+    BalanceSheetComparisonSection, BalanceSheetReport, CashBasisBalanceSheet,
+    CashDisbursementsJournal, CashDisbursementsJournalRow, CashFlowForecast,
+    CashFlowForecastBucket, CashFlowIndirectLine, CashFlowIndirectReport, CashFlowIndirectSection,
+    CashFlowReport, CashFlowSection, CashReceiptsJournal, CashReceiptsJournalRow,
+    ConsolidatedProfitLoss, ContactBalanceRow, ContactStatement, CurrencyExposureReport,
+    CurrencyExposureRow, CustomerBalancesReport, DashboardKpis, EquityStatement,
+    EquityStatementLine, Form941Quarter, GrniReport, GrniRow, InventoryAgingReport,
+    InventoryAgingRow, JobCostingCostCodeRow, JobCostingReport, JobCostingRow, LedgerLine,
+    OrgProfitLoss, OutstandingQuoteRow, OutstandingQuotesReport, PLComparisonReport,
+    PayrollSummaryReport, PayrollSummaryRow, PoSpendingReport, PoSpendingRow, ProfitLossReport,
+    ProjectBurnReport, ProjectBurnRow, ProjectProfitabilityReport, ProjectProfitabilityRow,
+    ReportLine, ReportSection, SalesByCustomerReport, SalesByCustomerRow, SalesByProductReport,
+    SalesByProductRow, SalesByRepReport, SalesByRepRow, SalesTaxByNexusReport, SalesTaxByNexusRow,
+    StatementLine, TaxSummaryLine, TaxSummaryReport, TrackingPLReport, TrackingPLRow, TrialBalance,
+    VatReturnLine, VatReturnReport, VendorBalancesReport, VendorSpendReport, VendorSpendRow, W2Row,
 };
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -3660,6 +3660,105 @@ impl ReportRepo {
         Ok(ProjectBurnReport {
             as_of,
             rows: report_rows,
+        })
+    }
+
+    /// Cash-basis balance sheet as of a given date.
+    ///
+    /// Assets = net cash inflows (payments received on invoices minus bill payments made).
+    /// Equity = retained cash earnings (mirrors assets in a pure cash-basis model).
+    pub async fn cash_basis_balance_sheet(
+        pool: &PgPool,
+        org_id: &str,
+        as_of: Date,
+    ) -> Result<CashBasisBalanceSheet, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        // Cash receipts from customers (invoice payments) up to as_of
+        let cash_in: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(SUM(p.amount), 0)::BIGINT \
+             FROM payments p \
+             JOIN invoices inv ON inv.id = p.invoice_id \
+             WHERE inv.organization_id = $1 \
+               AND p.payment_date <= $2 \
+               AND inv.invoice_type = 'invoice'",
+        )
+        .bind(org_uuid)
+        .bind(as_of)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        // Cash paid to vendors (bill payments) up to as_of
+        let cash_out_bills: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(SUM(bp.amount), 0)::BIGINT \
+             FROM bill_payments bp \
+             JOIN vendor_bills vb ON vb.id = bp.bill_id \
+             WHERE vb.organization_id = $1 \
+               AND bp.payment_date <= $2",
+        )
+        .bind(org_uuid)
+        .bind(as_of)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        // Cash paid for reimbursed expenses up to as_of
+        let cash_out_expenses: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(SUM(amount), 0)::BIGINT \
+             FROM expenses \
+             WHERE organization_id = $1 \
+               AND status = 'reimbursed' \
+               AND expense_date <= $2",
+        )
+        .bind(org_uuid)
+        .bind(as_of)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let net_cash = cash_in - cash_out_bills - cash_out_expenses;
+
+        let cash_section = ReportSection {
+            accounts: vec![
+                ReportLine {
+                    account_id: String::new(),
+                    account_code: String::new(),
+                    account_name: "Cash Receipts from Customers".to_string(),
+                    amount: cash_in,
+                },
+                ReportLine {
+                    account_id: String::new(),
+                    account_code: String::new(),
+                    account_name: "Less: Bill Payments to Vendors".to_string(),
+                    amount: -cash_out_bills,
+                },
+                ReportLine {
+                    account_id: String::new(),
+                    account_code: String::new(),
+                    account_name: "Less: Reimbursed Expenses".to_string(),
+                    amount: -cash_out_expenses,
+                },
+            ],
+            total: net_cash,
+        };
+
+        let equity_section = ReportSection {
+            accounts: vec![ReportLine {
+                account_id: String::new(),
+                account_code: String::new(),
+                account_name: "Retained Cash Earnings".to_string(),
+                amount: net_cash,
+            }],
+            total: net_cash,
+        };
+
+        Ok(CashBasisBalanceSheet {
+            as_of,
+            cash: cash_section,
+            equity: equity_section,
+            net_cash,
+            is_balanced: true,
         })
     }
 }
