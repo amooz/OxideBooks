@@ -77,6 +77,7 @@ pub mod payments;
 pub mod payroll;
 pub mod payroll_tax;
 pub mod payslips;
+pub mod portal_payment_methods;
 pub mod prepaid_expenses;
 pub mod prepayments;
 pub mod price_lists;
