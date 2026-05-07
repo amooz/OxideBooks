@@ -27,13 +27,13 @@ use crate::{
         inventory_reorder_requests, inventory_serial_numbers, inventory_stocktakes,
         invoice_templates, invoices, landed_costs, late_fees, leave, mileage, notes, notifications,
         opening_balances, organizations, payment_links, payment_plans, payment_terms, payments,
-        payroll, payroll_tax, payslips, prepaid_expenses, prepayments, price_lists,
-        product_categories, product_variants, products, progress_claims, project_phases,
-        project_tasks, projects, purchase_orders, purchase_requisitions, purchase_returns, quotes,
-        recurring, recurring_bills, recurring_invoices, recurring_journal_entries, report_schedules,
-        reports, retainers, rev_rec, roles, sales_order_shipments, sales_orders, sales_returns,
-        sales_tax_nexus, scim, service_territories, sessions, stripe_webhook, subscriptions, tags,
-        tax_filings,
+        payroll, payroll_tax, payslips, portal_payment_methods, prepaid_expenses, prepayments,
+        price_lists, product_categories, product_variants, products, progress_claims,
+        project_phases, project_tasks, projects, purchase_orders, purchase_requisitions,
+        purchase_returns, quotes, recurring, recurring_bills, recurring_invoices,
+        recurring_journal_entries, report_schedules, reports, retainers, rev_rec, roles,
+        sales_order_shipments, sales_orders, sales_returns, sales_tax_nexus, scim,
+        service_territories, sessions, stripe_webhook, subscriptions, tags, tax_filings,
         tax_groups, tax_periods, tax_rates, tax_rules, time_entries, totp, tracking_categories,
         transactions, users, vendor_credits, vendor_portal, warehouses, webhooks, work_orders,
     },
@@ -133,6 +133,27 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/portal/:token/invoices/:invoice_id",
             get(client_portal::portal_invoice),
+        )
+        // Portal payment methods (token-based, no JWT)
+        .route(
+            "/portal/:token/payment-methods",
+            get(portal_payment_methods::portal_list_payment_methods)
+                .post(portal_payment_methods::portal_add_payment_method),
+        )
+        .route(
+            "/portal/:token/payment-methods/:pm_id",
+            axum::routing::delete(portal_payment_methods::portal_delete_payment_method),
+        )
+        .route(
+            "/portal/:token/payment-methods/:pm_id/default",
+            axum::routing::post(portal_payment_methods::portal_set_default_payment_method),
+        )
+        // Portal autopay (token-based, no JWT)
+        .route(
+            "/portal/:token/autopay",
+            get(portal_payment_methods::portal_get_autopay)
+                .post(portal_payment_methods::portal_enroll_autopay)
+                .delete(portal_payment_methods::portal_cancel_autopay),
         )
         // Vendor portal (public — token-based)
         .route(
@@ -1259,6 +1280,16 @@ pub fn build(state: AppState) -> Router {
         )
         // Client portal token creation
         .route("/portal-tokens", post(client_portal::create_portal_token))
+        // Admin view of portal payment methods and autopay per contact
+        .route(
+            "/contacts/:contact_id/payment-methods",
+            get(portal_payment_methods::admin_list_payment_methods),
+        )
+        .route(
+            "/contacts/:contact_id/autopay",
+            get(portal_payment_methods::admin_get_autopay)
+                .delete(portal_payment_methods::admin_cancel_autopay),
+        )
         // Vendor portal token management
         .route(
             "/vendor-portal/tokens",

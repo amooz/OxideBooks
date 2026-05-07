@@ -150,7 +150,10 @@ pub use budget::{
 };
 pub use cash_sale::CreateCashSale;
 pub use check_run::{CheckRun, CheckRunItem, CreateCheckRun, CreateCheckRunItem};
-pub use client_portal::{ClientPortalToken, CreateClientPortalToken};
+pub use client_portal::{
+    ClientPortalToken, CreateClientPortalToken, CreatePortalAutopay, CreatePortalPaymentMethod,
+    PortalAutopayEnrollment, PortalPayInvoice, PortalPaymentMethod,
+};
 pub use closed_period::{ClosedPeriod, CreateClosedPeriod};
 pub use commission::{CreateSalesCommission, PayCommission, SalesCommission};
 pub use consolidated::{ConsolidatedProfitLoss, OrgProfitLoss};
