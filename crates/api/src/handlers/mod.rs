@@ -8,6 +8,7 @@ pub mod attachments;
 pub mod audit;
 pub mod auth;
 pub mod auth_sso;
+pub mod backorders;
 pub mod bank;
 pub mod bank_deposits;
 pub mod bank_feed;
