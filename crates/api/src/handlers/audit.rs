@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Extension, Query, State},
+    extract::{Extension, Path, Query, State},
     response::Response,
     Json,
 };
@@ -163,6 +163,39 @@ pub async fn export_audit_log(
 pub struct SummaryQuery {
     pub since: Option<String>,
     pub until: Option<String>,
+}
+
+pub async fn get_audit_for_resource(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path((resource_type, resource_id)): Path<(String, String)>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_admin() {
+        return Err(ApiError::Forbidden);
+    }
+    let events =
+        AuditRepo::get_for_resource(&state.db, &claims.org, &resource_type, &resource_id).await?;
+    Ok(Json(serde_json::json!({ "data": events })))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PurgeQuery {
+    pub older_than_days: i64,
+}
+
+pub async fn purge_audit_log(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<PurgeQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_admin() {
+        return Err(ApiError::Forbidden);
+    }
+    if q.older_than_days < 1 {
+        return Err(ApiError::BadRequest("older_than_days must be >= 1".into()));
+    }
+    let deleted = AuditRepo::purge_old(&state.db, &claims.org, q.older_than_days).await?;
+    Ok(Json(serde_json::json!({ "deleted": deleted })))
 }
 
 pub async fn compliance_summary(

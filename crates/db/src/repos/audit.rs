@@ -314,6 +314,49 @@ impl AuditRepo {
 
         Ok(rows.into_iter().map(Into::into).collect())
     }
+
+    /// Fetch all events for a specific resource (no pagination).
+    pub async fn get_for_resource(
+        pool: &PgPool,
+        org_id: &str,
+        resource_type: &str,
+        resource_id: &str,
+    ) -> Result<Vec<AuditEvent>, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let rows: Vec<AuditRow> = sqlx::query_as(&format!(
+            "SELECT {COLS} FROM audit_events \
+             WHERE organization_id = $1 AND resource_type = $2 AND resource_id = $3 \
+             ORDER BY created_at DESC LIMIT 500"
+        ))
+        .bind(org_uuid)
+        .bind(resource_type)
+        .bind(resource_id)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+        Ok(rows.into_iter().map(AuditEvent::from).collect())
+    }
+
+    /// Delete audit events older than the given number of days. Returns count deleted.
+    pub async fn purge_old(
+        pool: &PgPool,
+        org_id: &str,
+        older_than_days: i64,
+    ) -> Result<u64, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let n = sqlx::query(
+            "DELETE FROM audit_events \
+             WHERE organization_id = $1 \
+               AND created_at < NOW() - ($2::bigint * INTERVAL '1 day')",
+        )
+        .bind(org_uuid)
+        .bind(older_than_days)
+        .execute(pool)
+        .await
+        .map_err(map_sqlx_err)?
+        .rows_affected();
+        Ok(n)
+    }
 }
 
 fn parse_uuid(s: &str) -> Result<Uuid, DbError> {

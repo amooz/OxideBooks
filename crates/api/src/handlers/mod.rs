@@ -51,6 +51,7 @@ pub mod export;
 pub mod fixed_assets;
 pub mod fx;
 pub mod fx_revaluations;
+pub mod gdpr;
 pub mod grn;
 pub mod health;
 pub mod identity;
