@@ -65,6 +65,7 @@ pub mod invoice_templates;
 pub mod invoices;
 pub mod landed_costs;
 pub mod late_fees;
+pub mod leases;
 pub mod leave;
 pub mod mileage;
 pub mod notes;

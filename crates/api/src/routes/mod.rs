@@ -25,14 +25,14 @@ use crate::{
         expense_claims, expense_policies, expense_reports, expenses, export, fixed_assets, fx,
         fx_revaluations, grn, health, identity, import, intercompany, inventory, inventory_lots,
         inventory_reorder_requests, inventory_serial_numbers, inventory_stocktakes,
-        invoice_templates, invoices, landed_costs, late_fees, leave, mileage, notes, notifications,
-        opening_balances, organizations, payment_links, payment_plans, payment_terms, payments,
-        payroll, payroll_tax, payslips, plaid, portal_payment_methods, prepaid_expenses,
-        prepayments, price_lists, product_categories, product_variants, products, progress_claims,
-        project_phases, project_tasks, projects, purchase_orders, purchase_requisitions,
-        purchase_returns, quotes, recurring, recurring_bills, recurring_invoices,
-        recurring_journal_entries, report_schedules, reports, retainers, rev_rec, roles,
-        sales_order_shipments, sales_orders, sales_returns, sales_tax_nexus, scim,
+        invoice_templates, invoices, landed_costs, late_fees, leases, leave, mileage, notes,
+        notifications, opening_balances, organizations, payment_links, payment_plans,
+        payment_terms, payments, payroll, payroll_tax, payslips, plaid, portal_payment_methods,
+        prepaid_expenses, prepayments, price_lists, product_categories, product_variants, products,
+        progress_claims, project_phases, project_tasks, projects, purchase_orders,
+        purchase_requisitions, purchase_returns, quotes, recurring, recurring_bills,
+        recurring_invoices, recurring_journal_entries, report_schedules, reports, retainers,
+        rev_rec, roles, sales_order_shipments, sales_orders, sales_returns, sales_tax_nexus, scim,
         service_territories, sessions, stripe_webhook, subscriptions, tags, tax_filings,
         tax_groups, tax_periods, tax_rates, tax_rules, time_entries, totp, tracking_categories,
         transactions, users, vendor_credits, vendor_portal, warehouses, webhooks, work_orders,
@@ -1623,6 +1623,18 @@ pub fn build(state: AppState) -> Router {
             "/drop-ship/:id",
             get(backorders::get_drop_ship).patch(backorders::update_drop_ship),
         )
+        // Lease accounting (ASC 842 / IFRS 16)
+        .route(
+            "/leases",
+            get(leases::list_leases).post(leases::create_lease),
+        )
+        .route("/leases/:id", get(leases::get_lease))
+        .route("/leases/:id/schedule", get(leases::get_lease_schedule))
+        .route(
+            "/leases/:id/payments",
+            get(leases::list_lease_payments).post(leases::record_lease_payment),
+        )
+        .route("/leases/:id/terminate", post(leases::terminate_lease))
         // Sales tax nexus
         .route(
             "/sales-tax-nexus",
