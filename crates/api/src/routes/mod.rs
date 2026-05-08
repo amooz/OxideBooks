@@ -16,10 +16,10 @@ use tower_http::{
 use crate::{
     handlers::{
         accounts, ach, api_keys, approval_chains, approval_rules, assembly_orders, attachments,
-        audit, auth, auth_sso, bank, bank_deposits, bank_feed, bank_reconciliation, bank_rules,
-        batch_payments, bills, budgets, bulk, check_runs, client_portal, closed_periods,
-        commissions, consolidated, consolidation_eliminations, contact_groups, contacts,
-        contractor_tax_info, cost_codes, credit_notes, custom_fields, deferred_charges,
+        audit, auth, auth_sso, backorders, bank, bank_deposits, bank_feed, bank_reconciliation,
+        bank_rules, batch_payments, bills, budgets, bulk, check_runs, client_portal,
+        closed_periods, commissions, consolidated, consolidation_eliminations, contact_groups,
+        contacts, contractor_tax_info, cost_codes, credit_notes, custom_fields, deferred_charges,
         deferred_revenue, departments, direct_deposit, doc_sequences, dunning, einvoice, email,
         employee_bank_accounts, employee_loans, employees, exchange_rates, expense_categories,
         expense_claims, expense_policies, expense_reports, expenses, export, fixed_assets, fx,
@@ -1602,6 +1602,26 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/sales-returns/:id/receive",
             post(sales_returns::receive_sales_return),
+        )
+        // Backorders
+        .route(
+            "/backorders",
+            get(backorders::list_backorders).post(backorders::create_backorder),
+        )
+        .route("/backorders/:id", get(backorders::get_backorder))
+        .route(
+            "/backorders/:id/fulfill",
+            post(backorders::fulfill_backorder),
+        )
+        .route("/backorders/:id/cancel", post(backorders::cancel_backorder))
+        // Drop-ship requests
+        .route(
+            "/drop-ship",
+            get(backorders::list_drop_ships).post(backorders::create_drop_ship),
+        )
+        .route(
+            "/drop-ship/:id",
+            get(backorders::get_drop_ship).patch(backorders::update_drop_ship),
         )
         // Sales tax nexus
         .route(

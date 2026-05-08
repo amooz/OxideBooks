@@ -5,6 +5,7 @@ pub mod approval_chain;
 pub mod approval_rule;
 pub mod assembly_order;
 pub mod attachment;
+pub mod backorder;
 pub mod bank;
 pub mod bank_deposit;
 pub mod bank_feed;
@@ -127,6 +128,10 @@ pub use assembly_order::{
     AssemblyOrder, AssemblyOrderLine, CreateAssemblyOrder, CreateAssemblyOrderLine,
 };
 pub use attachment::{Attachment, CreateAttachment};
+pub use backorder::{
+    Backorder, CreateBackorder, CreateDropShipRequest, DropShipRequest, FulfillBackorder,
+    UpdateDropShipRequest,
+};
 pub use bank::{
     BankAccount, BankTransaction, CreateBankAccount, ImportBankTransaction, MatchTransaction,
     ReconciliationSummary, UpdateBankAccount,
