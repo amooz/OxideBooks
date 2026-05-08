@@ -1,5 +1,10 @@
 -- Sprint 90: subscription pause/resume and plan-change support
 
+-- Extend the status check to allow 'paused'
+ALTER TABLE subscriptions DROP CONSTRAINT IF EXISTS subscriptions_status_check;
+ALTER TABLE subscriptions ADD CONSTRAINT subscriptions_status_check
+    CHECK (status IN ('trialing','active','past_due','cancelled','expired','paused'));
+
 -- Track when a subscription was paused
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS paused_at TIMESTAMPTZ;
 

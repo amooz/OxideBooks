@@ -764,12 +764,13 @@ impl SubscriptionRepo {
         struct SubPlanRow {
             old_plan_id: Uuid,
             old_price: i64,
+            quantity: i32,
             period_start: Date,
             period_end: Date,
         }
 
         let row: SubPlanRow = sqlx::query_as(
-            "SELECT s.plan_id AS old_plan_id, p.price AS old_price,
+            "SELECT s.plan_id AS old_plan_id, p.price AS old_price, s.quantity,
                     s.current_period_start AS period_start,
                     s.current_period_end   AS period_end
              FROM subscriptions s
@@ -795,12 +796,12 @@ impl SubscriptionRepo {
         .map_err(map_sqlx_err)?
         .ok_or(DbError::NotFound)?;
 
-        // Prorated credit = old daily rate × remaining days in current period
+        // Prorated credit = old billing amount × (remaining days / period days)
         let proration_credit = if input.prorate {
             let today = time::OffsetDateTime::now_utc().date();
             let period_days = (row.period_end - row.period_start).whole_days().max(1);
             let remaining_days = (row.period_end - today).whole_days().max(0);
-            row.old_price * remaining_days / period_days
+            row.old_price * row.quantity as i64 * remaining_days / period_days
         } else {
             0
         };
