@@ -360,8 +360,8 @@ pub use sales_tax_nexus::{CreateSalesTaxNexus, SalesTaxNexus, UpdateSalesTaxNexu
 pub use service_territory::{CreateServiceTerritory, ServiceTerritory, UpdateServiceTerritory};
 pub use session::Session;
 pub use subscription::{
-    CreateSubscription, CreateSubscriptionPlan, Subscription, SubscriptionPlan, UpdateSubscription,
-    UpdateSubscriptionPlan,
+    ChurnReport, CreateSubscription, CreateSubscriptionPlan, MrrByPlan, MrrSnapshot, Subscription,
+    SubscriptionPlan, UpdateSubscription, UpdateSubscriptionPlan,
 };
 pub use tag::{CreateTag, Tag, UpdateTag};
 pub use tax_filing::{HstGstReturn, T4AFilingSummary, T4ASlip, T4Slip, T4Summary, TaxFiling};
