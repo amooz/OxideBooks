@@ -7,15 +7,16 @@ use oxidebooks_core::models::{
     CashFlowReport, CashFlowSection, CashReceiptsJournal, CashReceiptsJournalRow,
     ConsolidatedProfitLoss, ContactBalanceRow, ContactStatement, CurrencyExposureReport,
     CurrencyExposureRow, CustomerBalancesReport, DashboardKpis, EquityStatement,
-    EquityStatementLine, Form941Quarter, GrniReport, GrniRow, InventoryAgingReport,
-    InventoryAgingRow, JobCostingCostCodeRow, JobCostingReport, JobCostingRow, LedgerLine,
-    OrgProfitLoss, OutstandingQuoteRow, OutstandingQuotesReport, PLComparisonReport,
-    PayrollSummaryReport, PayrollSummaryRow, PoSpendingReport, PoSpendingRow, ProfitLossReport,
-    ProjectBurnReport, ProjectBurnRow, ProjectProfitabilityReport, ProjectProfitabilityRow,
-    ReportLine, ReportSection, SalesByCustomerReport, SalesByCustomerRow, SalesByProductReport,
-    SalesByProductRow, SalesByRepReport, SalesByRepRow, SalesTaxByNexusReport, SalesTaxByNexusRow,
-    StatementLine, TaxSummaryLine, TaxSummaryReport, TrackingPLReport, TrackingPLRow, TrialBalance,
-    VatReturnLine, VatReturnReport, VendorBalancesReport, VendorSpendReport, VendorSpendRow, W2Row,
+    EquityStatementLine, FinancialRatios, Form941Quarter, GrniReport, GrniRow,
+    InventoryAgingReport, InventoryAgingRow, JobCostingCostCodeRow, JobCostingReport,
+    JobCostingRow, KpiPeriod, LedgerLine, OrgProfitLoss, OutstandingQuoteRow,
+    OutstandingQuotesReport, PLComparisonReport, PayrollSummaryReport, PayrollSummaryRow,
+    PoSpendingReport, PoSpendingRow, ProfitLossReport, ProjectBurnReport, ProjectBurnRow,
+    ProjectProfitabilityReport, ProjectProfitabilityRow, ReportLine, ReportSection,
+    SalesByCustomerReport, SalesByCustomerRow, SalesByProductReport, SalesByProductRow,
+    SalesByRepReport, SalesByRepRow, SalesTaxByNexusReport, SalesTaxByNexusRow, StatementLine,
+    TaxSummaryLine, TaxSummaryReport, TrackingPLReport, TrackingPLRow, TrialBalance, VatReturnLine,
+    VatReturnReport, VendorBalancesReport, VendorSpendReport, VendorSpendRow, W2Row,
 };
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -3900,4 +3901,332 @@ impl ReportRepo {
             is_balanced: true,
         })
     }
+
+    /// Compute key financial ratios using balance-sheet snapshot (`as_of`) and
+    /// trailing 12-month P&L data. Account categorization uses name patterns
+    /// since the schema does not yet have current/non-current sub-types.
+    pub async fn financial_ratios(
+        pool: &PgPool,
+        org_id: &str,
+        as_of: Date,
+    ) -> Result<FinancialRatios, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+        let period_from = add_months_date(as_of, -12);
+
+        #[derive(sqlx::FromRow)]
+        struct AcctBal {
+            account_type: String,
+            account_name: String,
+            balance: i64,
+        }
+
+        // Balance-sheet snapshot
+        let bs_rows: Vec<AcctBal> = sqlx::query_as(
+            "SELECT a.account_type, LOWER(a.name) AS account_name, \
+               CASE WHEN a.account_type = 'asset' \
+                    THEN COALESCE(SUM(jl.debit),0) - COALESCE(SUM(jl.credit),0) \
+                    ELSE COALESCE(SUM(jl.credit),0) - COALESCE(SUM(jl.debit),0) \
+               END::BIGINT AS balance \
+             FROM accounts a \
+             LEFT JOIN journal_lines jl ON jl.account_id = a.id \
+             LEFT JOIN journal_entries je ON je.id = jl.journal_entry_id \
+                   AND je.organization_id = $1 AND je.status = 'posted' \
+                   AND je.date <= $2 \
+             WHERE a.organization_id = $1 \
+               AND a.account_type IN ('asset','liability','equity') \
+             GROUP BY a.id, a.account_type, a.name",
+        )
+        .bind(org_uuid)
+        .bind(as_of)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        // P&L for trailing period
+        #[derive(sqlx::FromRow)]
+        struct PlBal {
+            account_type: String,
+            account_name: String,
+            net: i64,
+        }
+
+        let pl_rows: Vec<PlBal> = sqlx::query_as(
+            "SELECT a.account_type, LOWER(a.name) AS account_name, \
+               CASE WHEN a.account_type = 'revenue' \
+                    THEN COALESCE(SUM(jl.credit),0) - COALESCE(SUM(jl.debit),0) \
+                    ELSE COALESCE(SUM(jl.debit),0) - COALESCE(SUM(jl.credit),0) \
+               END::BIGINT AS net \
+             FROM accounts a \
+             LEFT JOIN journal_lines jl ON jl.account_id = a.id \
+             LEFT JOIN journal_entries je ON je.id = jl.journal_entry_id \
+                   AND je.organization_id = $1 AND je.status = 'posted' \
+                   AND je.date >= $2 AND je.date <= $3 \
+             WHERE a.organization_id = $1 \
+               AND a.account_type IN ('revenue','expense') \
+             GROUP BY a.id, a.account_type, a.name",
+        )
+        .bind(org_uuid)
+        .bind(period_from)
+        .bind(as_of)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        // Categorize balance-sheet buckets by name pattern
+        let mut total_assets: i64 = 0;
+        let mut current_assets: i64 = 0;
+        let mut inventory: i64 = 0;
+        let mut accounts_receivable: i64 = 0;
+        let mut total_liabilities: i64 = 0;
+        let mut current_liabilities: i64 = 0;
+        let mut accounts_payable: i64 = 0;
+        let mut total_equity: i64 = 0;
+
+        for r in &bs_rows {
+            let bal = r.balance.max(0);
+            let n = &r.account_name;
+            match r.account_type.as_str() {
+                "asset" => {
+                    total_assets += r.balance;
+                    if n.contains("inventor") || n.contains("stock") {
+                        inventory += bal;
+                        current_assets += bal;
+                    } else if n.contains("receiv") || n.contains("debtors") {
+                        accounts_receivable += bal;
+                        current_assets += bal;
+                    } else if n.contains("cash")
+                        || n.contains("bank")
+                        || n.contains("prepaid")
+                        || n.contains("current")
+                    {
+                        current_assets += bal;
+                    }
+                }
+                "liability" => {
+                    total_liabilities += r.balance;
+                    if n.contains("payable")
+                        || n.contains("creditors")
+                        || n.contains("accrued")
+                        || n.contains("current")
+                        || n.contains("short")
+                    {
+                        if n.contains("accounts payable") || n.contains("creditors") {
+                            accounts_payable += bal;
+                        }
+                        current_liabilities += bal;
+                    }
+                }
+                "equity" => total_equity += r.balance,
+                _ => {}
+            }
+        }
+
+        // Categorize P&L buckets
+        let mut revenue: i64 = 0;
+        let mut cogs: i64 = 0;
+        let mut total_expenses: i64 = 0;
+
+        for r in &pl_rows {
+            match r.account_type.as_str() {
+                "revenue" => revenue += r.net,
+                "expense" => {
+                    let n = &r.account_name;
+                    total_expenses += r.net;
+                    if n.contains("cost of") || n.contains("cogs") || n.contains("cost of goods") {
+                        cogs += r.net;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let gross_profit = revenue - cogs;
+        let net_income = revenue - total_expenses;
+        let days = (as_of - period_from).whole_days() as f64;
+
+        let current_ratio = if current_liabilities > 0 {
+            Some(current_assets as f64 / current_liabilities as f64)
+        } else {
+            None
+        };
+        let quick_ratio = if current_liabilities > 0 {
+            Some((current_assets - inventory) as f64 / current_liabilities as f64)
+        } else {
+            None
+        };
+        let gross_profit_margin_pct = if revenue > 0 {
+            Some(gross_profit as f64 / revenue as f64 * 100.0)
+        } else {
+            None
+        };
+        let net_profit_margin_pct = if revenue > 0 {
+            Some(net_income as f64 / revenue as f64 * 100.0)
+        } else {
+            None
+        };
+        let dso_days = if revenue > 0 && days > 0.0 {
+            Some(accounts_receivable as f64 / (revenue as f64 / days))
+        } else {
+            None
+        };
+        let inventory_turnover = if inventory > 0 {
+            Some(cogs as f64 / inventory as f64)
+        } else {
+            None
+        };
+        let ap_days = if cogs > 0 && days > 0.0 {
+            Some(accounts_payable as f64 / (cogs as f64 / days))
+        } else {
+            None
+        };
+        let debt_to_equity = if total_equity != 0 {
+            Some(total_liabilities as f64 / total_equity as f64)
+        } else {
+            None
+        };
+
+        Ok(FinancialRatios {
+            as_of,
+            period_from,
+            current_assets,
+            current_liabilities,
+            current_ratio,
+            inventory,
+            quick_ratio,
+            revenue,
+            cogs,
+            gross_profit,
+            gross_profit_margin_pct,
+            net_income,
+            net_profit_margin_pct,
+            accounts_receivable,
+            dso_days,
+            inventory_turnover,
+            accounts_payable,
+            ap_days,
+            total_assets,
+            total_liabilities,
+            total_equity,
+            debt_to_equity,
+        })
+    }
+
+    /// Month-by-month KPI trends over the given date range.
+    pub async fn kpi_trends(
+        pool: &PgPool,
+        org_id: &str,
+        from: Date,
+        to: Date,
+    ) -> Result<Vec<KpiPeriod>, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        #[derive(sqlx::FromRow)]
+        struct PeriodRow {
+            period_start: Date,
+            period_end: Date,
+            account_type: String,
+            account_name: String,
+            net: i64,
+        }
+
+        let rows: Vec<PeriodRow> = sqlx::query_as(
+            "SELECT \
+               DATE_TRUNC('month', je.date)::DATE AS period_start, \
+               (DATE_TRUNC('month', je.date) + INTERVAL '1 month' - INTERVAL '1 day')::DATE AS period_end, \
+               a.account_type, LOWER(a.name) AS account_name, \
+               CASE WHEN a.account_type = 'revenue' \
+                    THEN COALESCE(SUM(jl.credit),0) - COALESCE(SUM(jl.debit),0) \
+                    ELSE COALESCE(SUM(jl.debit),0) - COALESCE(SUM(jl.credit),0) \
+               END::BIGINT AS net \
+             FROM accounts a \
+             JOIN journal_lines jl ON jl.account_id = a.id \
+             JOIN journal_entries je ON je.id = jl.journal_entry_id \
+                   AND je.organization_id = $1 AND je.status = 'posted' \
+                   AND je.date >= $2 AND je.date <= $3 \
+             WHERE a.organization_id = $1 \
+               AND a.account_type IN ('revenue','expense') \
+             GROUP BY period_start, period_end, a.id, a.account_type, a.name \
+             ORDER BY period_start",
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        // Group by period_start
+        let mut periods: std::collections::BTreeMap<Date, (Date, i64, i64, i64)> =
+            std::collections::BTreeMap::new();
+
+        for r in &rows {
+            let e = periods
+                .entry(r.period_start)
+                .or_insert((r.period_end, 0, 0, 0));
+            match r.account_type.as_str() {
+                "revenue" => e.1 += r.net,
+                "expense" => {
+                    e.3 += r.net;
+                    let n = &r.account_name;
+                    if n.contains("cost of") || n.contains("cogs") {
+                        e.2 += r.net;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let result = periods
+            .into_iter()
+            .map(|(start, (end, revenue, cogs, total_exp))| {
+                let gross_profit = revenue - cogs;
+                let net_income = revenue - total_exp;
+                KpiPeriod {
+                    period_label: format!("{}-{:02}", start.year(), start.month() as u8),
+                    from: start,
+                    to: end,
+                    revenue,
+                    gross_profit,
+                    net_income,
+                    gross_profit_margin_pct: if revenue > 0 {
+                        Some(gross_profit as f64 / revenue as f64 * 100.0)
+                    } else {
+                        None
+                    },
+                    net_profit_margin_pct: if revenue > 0 {
+                        Some(net_income as f64 / revenue as f64 * 100.0)
+                    } else {
+                        None
+                    },
+                }
+            })
+            .collect();
+
+        Ok(result)
+    }
+}
+
+fn add_months_date(d: Date, months: i32) -> Date {
+    use time::Month;
+    let total = d.month() as i32 - 1 + months;
+    let year = d.year() + total.div_euclid(12);
+    let month = Month::try_from((total.rem_euclid(12) + 1) as u8).expect("valid month");
+    let days_in = match month {
+        Month::January
+        | Month::March
+        | Month::May
+        | Month::July
+        | Month::August
+        | Month::October
+        | Month::December => 31u8,
+        Month::April | Month::June | Month::September | Month::November => 30,
+        Month::February => {
+            if year % 400 == 0 || (year % 4 == 0 && year % 100 != 0) {
+                29
+            } else {
+                28
+            }
+        }
+    };
+    Date::from_calendar_date(year, month, d.day().min(days_in)).expect("valid date")
 }

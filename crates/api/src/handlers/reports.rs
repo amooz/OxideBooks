@@ -1124,3 +1124,37 @@ pub async fn project_burn(
     let report = ReportRepo::project_burn(&state.db, &claims.org, as_of).await?;
     Ok(Json(serde_json::json!({ "data": report })))
 }
+
+/// GET /api/v1/reports/financial-ratios?as_of=YYYY-MM-DD
+pub async fn financial_ratios(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<AsOfQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let as_of = parse_date(&q.as_of)?;
+    let ratios = ReportRepo::financial_ratios(&state.db, &claims.org, as_of).await?;
+    Ok(Json(serde_json::json!({ "data": ratios })))
+}
+
+/// GET /api/v1/reports/kpi-trends?from=YYYY-MM-DD&to=YYYY-MM-DD
+pub async fn kpi_trends(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<DateRangeQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let from = parse_date(&q.from)?;
+    let to = parse_date(&q.to)?;
+    if from > to {
+        return Err(ApiError::BadRequest(
+            "'from' must be on or before 'to'".into(),
+        ));
+    }
+    let periods = ReportRepo::kpi_trends(&state.db, &claims.org, from, to).await?;
+    Ok(Json(serde_json::json!({ "data": periods })))
+}
