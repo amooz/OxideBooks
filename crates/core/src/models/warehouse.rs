@@ -55,8 +55,52 @@ pub struct InventoryTransfer {
     pub item_id: String,
     pub quantity: i64,
     pub notes: Option<String>,
+    pub status: String,
     #[serde(with = "time::serde::rfc3339")]
     pub transferred_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreatePendingTransfer {
+    pub from_warehouse_id: String,
+    pub to_warehouse_id: String,
+    pub item_id: String,
+    pub quantity: i64,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StockAdjustment {
+    pub id: String,
+    pub organization_id: String,
+    pub warehouse_id: String,
+    pub item_id: String,
+    pub quantity_delta: i64,
+    pub reason: String,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateStockAdjustment {
+    pub item_id: String,
+    pub quantity_delta: i64,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StockSummaryRow {
+    pub item_id: String,
+    pub product_name: String,
+    pub total_quantity: i64,
+    pub by_warehouse: Vec<WarehouseStockLine>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WarehouseStockLine {
+    pub warehouse_id: String,
+    pub warehouse_name: String,
+    pub quantity: i64,
 }

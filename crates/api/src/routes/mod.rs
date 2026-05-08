@@ -1051,6 +1051,20 @@ pub fn build(state: AppState) -> Router {
         )
         .route("/warehouses/transfer", post(warehouses::transfer_stock))
         .route(
+            "/warehouses/transfers",
+            get(warehouses::list_transfers).post(warehouses::create_pending_transfer),
+        )
+        .route("/warehouses/stock-summary", get(warehouses::stock_summary))
+        .route("/warehouses/transfers/:id", get(warehouses::get_transfer))
+        .route(
+            "/warehouses/transfers/:id/receive",
+            post(warehouses::receive_transfer),
+        )
+        .route(
+            "/warehouses/transfers/:id/cancel",
+            post(warehouses::cancel_transfer),
+        )
+        .route(
             "/warehouses/:id",
             get(warehouses::get_warehouse)
                 .patch(warehouses::update_warehouse)
@@ -1059,6 +1073,14 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/warehouses/:id/stock",
             get(warehouses::get_warehouse_stock),
+        )
+        .route(
+            "/warehouses/:id/stock/adjust",
+            post(warehouses::adjust_stock),
+        )
+        .route(
+            "/warehouses/:id/stock/adjustments",
+            get(warehouses::list_adjustments),
         )
         // Custom fields
         .route(
