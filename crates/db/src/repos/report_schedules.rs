@@ -233,6 +233,18 @@ impl ReportScheduleRepo {
         Ok(())
     }
 
+    /// Return IDs of all active schedules that are due (next_run_at <= NOW()).
+    pub async fn list_due(pool: &PgPool) -> Result<Vec<String>, DbError> {
+        let ids: Vec<(Uuid,)> = sqlx::query_as(
+            "SELECT id FROM report_schedules \
+             WHERE is_active = true AND next_run_at <= NOW()",
+        )
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+        Ok(ids.into_iter().map(|(u,)| u.to_string()).collect())
+    }
+
     pub async fn mark_run(pool: &PgPool, id: &str) -> Result<(), DbError> {
         let s_uuid = parse_uuid(id)?;
 
