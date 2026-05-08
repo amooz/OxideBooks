@@ -1,6 +1,6 @@
 use oxidebooks_core::models::{
-    CreateSubscription, CreateSubscriptionPlan, Subscription, SubscriptionPlan, UpdateSubscription,
-    UpdateSubscriptionPlan,
+    ChurnReport, CreateSubscription, CreateSubscriptionPlan, MrrByPlan, MrrSnapshot, Subscription,
+    SubscriptionPlan, UpdateSubscription, UpdateSubscriptionPlan,
 };
 use sqlx::PgPool;
 use time::{Date, OffsetDateTime};
@@ -513,6 +513,174 @@ impl SubscriptionRepo {
             failed_count: failed.len() as i64,
             invoice_ids: invoiced,
             failed_subscription_ids: failed,
+        })
+    }
+
+    /// Monthly Recurring Revenue snapshot as of a given date.
+    pub async fn mrr_snapshot(
+        pool: &PgPool,
+        org_id: &str,
+        as_of: Date,
+    ) -> Result<MrrSnapshot, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        #[derive(sqlx::FromRow)]
+        struct PlanMrrRow {
+            plan_id: Uuid,
+            plan_name: String,
+            billing_cycle: String,
+            active_count: i64,
+            total_billing: i64,
+        }
+
+        let rows: Vec<PlanMrrRow> = sqlx::query_as(
+            "SELECT p.id AS plan_id, p.name AS plan_name, p.billing_cycle, \
+               COUNT(s.id) AS active_count, \
+               COALESCE(SUM(p.price * s.quantity), 0)::BIGINT AS total_billing \
+             FROM subscriptions s \
+             JOIN subscription_plans p ON p.id = s.plan_id \
+             WHERE s.organization_id = $1 \
+               AND s.status = 'active' \
+               AND s.current_period_start <= $2 \
+               AND s.current_period_end >= $2 \
+             GROUP BY p.id, p.name, p.billing_cycle",
+        )
+        .bind(org_uuid)
+        .bind(as_of)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let mut total_mrr: i64 = 0;
+        let mut total_active: i64 = 0;
+        let mut by_plan = Vec::new();
+
+        for r in rows {
+            let plan_mrr = match r.billing_cycle.as_str() {
+                "weekly" => r.total_billing * 52 / 12,
+                "quarterly" => r.total_billing / 3,
+                "annually" => r.total_billing / 12,
+                _ => r.total_billing, // monthly
+            };
+            total_mrr += plan_mrr;
+            total_active += r.active_count;
+            by_plan.push(MrrByPlan {
+                plan_id: r.plan_id.to_string(),
+                plan_name: r.plan_name,
+                billing_cycle: r.billing_cycle,
+                active_count: r.active_count,
+                mrr: plan_mrr,
+            });
+        }
+
+        by_plan.sort_by(|a, b| b.mrr.cmp(&a.mrr));
+
+        Ok(MrrSnapshot {
+            as_of,
+            mrr: total_mrr,
+            arr: total_mrr * 12,
+            active_subscriptions: total_active,
+            by_plan,
+        })
+    }
+
+    /// Churn analysis: new vs churned subscriptions and MRR impact over a date range.
+    pub async fn churn_report(
+        pool: &PgPool,
+        org_id: &str,
+        from: Date,
+        to: Date,
+    ) -> Result<ChurnReport, DbError> {
+        let org_uuid = parse_uuid(org_id)?;
+
+        // Active at start of period
+        let active_at_start: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM subscriptions s \
+             WHERE organization_id = $1 AND status IN ('active','trialing') \
+               AND current_period_start < $2 AND current_period_end >= $2",
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        // New subscriptions in period
+        let new_subscriptions: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM subscriptions \
+             WHERE organization_id = $1 AND created_at::DATE >= $2 AND created_at::DATE <= $3",
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        // Churned in period
+        #[derive(sqlx::FromRow)]
+        struct ChurnRow {
+            churned: i64,
+            churned_mrr: i64,
+        }
+
+        let churn: ChurnRow = sqlx::query_as(
+            "SELECT COUNT(s.id) AS churned, \
+               COALESCE(SUM(CASE p.billing_cycle \
+                 WHEN 'weekly'    THEN p.price * s.quantity * 52 / 12 \
+                 WHEN 'quarterly' THEN p.price * s.quantity / 3 \
+                 WHEN 'annually'  THEN p.price * s.quantity / 12 \
+                 ELSE                  p.price * s.quantity \
+               END), 0)::BIGINT AS churned_mrr \
+             FROM subscriptions s \
+             JOIN subscription_plans p ON p.id = s.plan_id \
+             WHERE s.organization_id = $1 AND s.status = 'cancelled' \
+               AND s.cancelled_at::DATE >= $2 AND s.cancelled_at::DATE <= $3",
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        // New MRR from new subscriptions in period
+        let new_mrr: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(SUM(CASE p.billing_cycle \
+               WHEN 'weekly'    THEN p.price * s.quantity * 52 / 12 \
+               WHEN 'quarterly' THEN p.price * s.quantity / 3 \
+               WHEN 'annually'  THEN p.price * s.quantity / 12 \
+               ELSE                  p.price * s.quantity \
+             END), 0)::BIGINT \
+             FROM subscriptions s \
+             JOIN subscription_plans p ON p.id = s.plan_id \
+             WHERE s.organization_id = $1 AND s.created_at::DATE >= $2 AND s.created_at::DATE <= $3",
+        )
+        .bind(org_uuid)
+        .bind(from)
+        .bind(to)
+        .fetch_one(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let denominator = active_at_start + new_subscriptions;
+        let churn_rate_pct = if denominator > 0 {
+            Some(churn.churned as f64 / denominator as f64 * 100.0)
+        } else {
+            None
+        };
+
+        Ok(ChurnReport {
+            from,
+            to,
+            active_at_start,
+            new_subscriptions,
+            churned: churn.churned,
+            churn_rate_pct,
+            net_new: new_subscriptions - churn.churned,
+            churned_mrr: churn.churned_mrr,
+            new_mrr,
+            net_mrr_change: new_mrr - churn.churned_mrr,
         })
     }
 }

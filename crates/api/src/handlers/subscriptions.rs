@@ -170,6 +170,65 @@ pub async fn bill_subscription(
 }
 
 #[derive(Deserialize)]
+pub struct MrrQuery {
+    pub as_of: Option<String>,
+}
+
+/// GET /api/v1/reports/subscription-mrr
+pub async fn subscription_mrr(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<MrrQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let as_of = if let Some(s) = q.as_of.as_deref() {
+        let fmt = time::macros::format_description!("[year]-[month]-[day]");
+        time::Date::parse(s, fmt)
+            .map_err(|_| ApiError::BadRequest(format!("invalid date '{s}'; expected YYYY-MM-DD")))?
+    } else {
+        time::OffsetDateTime::now_utc().date()
+    };
+    let snapshot = SubscriptionRepo::mrr_snapshot(&state.db, &claims.org, as_of).await?;
+    Ok(Json(serde_json::json!({ "data": snapshot })))
+}
+
+#[derive(Deserialize)]
+pub struct ChurnQuery {
+    pub from: Option<String>,
+    pub to: Option<String>,
+}
+
+/// GET /api/v1/reports/subscription-churn
+pub async fn subscription_churn(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Query(q): Query<ChurnQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let fmt = time::macros::format_description!("[year]-[month]-[day]");
+    let today = time::OffsetDateTime::now_utc().date();
+    let to = if let Some(s) = q.to.as_deref() {
+        time::Date::parse(s, fmt)
+            .map_err(|_| ApiError::BadRequest(format!("invalid date '{s}'; expected YYYY-MM-DD")))?
+    } else {
+        today
+    };
+    let from = if let Some(s) = q.from.as_deref() {
+        time::Date::parse(s, fmt)
+            .map_err(|_| ApiError::BadRequest(format!("invalid date '{s}'; expected YYYY-MM-DD")))?
+    } else {
+        // default: last 30 days
+        to - time::Duration::days(30)
+    };
+    let report = SubscriptionRepo::churn_report(&state.db, &claims.org, from, to).await?;
+    Ok(Json(serde_json::json!({ "data": report })))
+}
+
+#[derive(Deserialize)]
 pub struct BillingRunQuery {
     pub as_of: Option<String>,
 }

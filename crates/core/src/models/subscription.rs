@@ -94,3 +94,45 @@ fn default_cycle() -> String {
 fn default_quantity() -> i32 {
     1
 }
+
+/// MRR snapshot at a point in time.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MrrSnapshot {
+    #[serde(with = "date_serde")]
+    pub as_of: Date,
+    /// Monthly Recurring Revenue (minor units, base currency).
+    pub mrr: MinorUnits,
+    /// Annual Recurring Revenue = MRR × 12.
+    pub arr: MinorUnits,
+    /// Number of active subscriptions contributing to MRR.
+    pub active_subscriptions: i64,
+    /// Breakdown by plan.
+    pub by_plan: Vec<MrrByPlan>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MrrByPlan {
+    pub plan_id: String,
+    pub plan_name: String,
+    pub billing_cycle: String,
+    pub active_count: i64,
+    pub mrr: MinorUnits,
+}
+
+/// Subscription churn analysis over a date range.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChurnReport {
+    #[serde(with = "date_serde")]
+    pub from: Date,
+    #[serde(with = "date_serde")]
+    pub to: Date,
+    pub active_at_start: i64,
+    pub new_subscriptions: i64,
+    pub churned: i64,
+    /// Churned / (active_at_start + new). None if denominator is 0.
+    pub churn_rate_pct: Option<f64>,
+    pub net_new: i64,
+    pub churned_mrr: MinorUnits,
+    pub new_mrr: MinorUnits,
+    pub net_mrr_change: MinorUnits,
+}
