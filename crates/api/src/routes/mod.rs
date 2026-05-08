@@ -1925,6 +1925,8 @@ pub fn build(state: AppState) -> Router {
         .route("/reports/vendor-balances", get(reports::vendor_balances))
         .route("/reports/sales-by-rep", get(reports::sales_by_rep))
         .route("/reports/project-burn", get(reports::project_burn))
+        .route("/reports/financial-ratios", get(reports::financial_ratios))
+        .route("/reports/kpi-trends", get(reports::kpi_trends))
         // Inventory serial number tracking
         .route(
             "/inventory-serial-numbers",

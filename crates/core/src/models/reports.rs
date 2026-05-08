@@ -885,6 +885,64 @@ pub struct SearchHit {
     pub hit_type: String,
 }
 
+/// Key financial ratios computed from balance-sheet and P&L data.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FinancialRatios {
+    /// Date the balance-sheet snapshot was taken.
+    #[serde(with = "crate::models::date_serde")]
+    pub as_of: Date,
+    /// Start of the trailing period used for flow metrics (revenue, COGS).
+    #[serde(with = "crate::models::date_serde")]
+    pub period_from: Date,
+    // ── Liquidity ────────────────────────────────────────────────────────────
+    pub current_assets: MinorUnits,
+    pub current_liabilities: MinorUnits,
+    /// Current Assets / Current Liabilities. None if current_liabilities = 0.
+    pub current_ratio: Option<f64>,
+    pub inventory: MinorUnits,
+    /// (Current Assets − Inventory) / Current Liabilities.
+    pub quick_ratio: Option<f64>,
+    // ── Profitability ────────────────────────────────────────────────────────
+    pub revenue: MinorUnits,
+    pub cogs: MinorUnits,
+    pub gross_profit: MinorUnits,
+    /// Gross Profit / Revenue × 100. None if revenue = 0.
+    pub gross_profit_margin_pct: Option<f64>,
+    pub net_income: MinorUnits,
+    /// Net Income / Revenue × 100. None if revenue = 0.
+    pub net_profit_margin_pct: Option<f64>,
+    // ── Efficiency ───────────────────────────────────────────────────────────
+    pub accounts_receivable: MinorUnits,
+    /// Days Sales Outstanding = AR / (Revenue / Days). None if revenue = 0.
+    pub dso_days: Option<f64>,
+    /// Inventory Turnover = COGS / Inventory. None if inventory = 0.
+    pub inventory_turnover: Option<f64>,
+    pub accounts_payable: MinorUnits,
+    /// AP Days = AP / (COGS / Days). None if cogs = 0.
+    pub ap_days: Option<f64>,
+    // ── Leverage ─────────────────────────────────────────────────────────────
+    pub total_assets: MinorUnits,
+    pub total_liabilities: MinorUnits,
+    pub total_equity: MinorUnits,
+    /// Total Liabilities / Total Equity. None if equity = 0.
+    pub debt_to_equity: Option<f64>,
+}
+
+/// One period's KPI snapshot for trend analysis.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KpiPeriod {
+    pub period_label: String,
+    #[serde(with = "crate::models::date_serde")]
+    pub from: Date,
+    #[serde(with = "crate::models::date_serde")]
+    pub to: Date,
+    pub revenue: MinorUnits,
+    pub gross_profit: MinorUnits,
+    pub net_income: MinorUnits,
+    pub gross_profit_margin_pct: Option<f64>,
+    pub net_profit_margin_pct: Option<f64>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
