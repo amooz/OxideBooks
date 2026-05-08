@@ -345,6 +345,14 @@ pub fn build(state: AppState) -> Router {
                 .patch(report_schedules::update_schedule)
                 .delete(report_schedules::delete_schedule),
         )
+        .route(
+            "/report-schedules/:id/run",
+            post(report_schedules::run_schedule),
+        )
+        .route(
+            "/report-schedules/run-due",
+            post(report_schedules::run_due_schedules),
+        )
         // Reports
         .route("/reports/trial-balance", get(reports::trial_balance))
         .route("/reports/profit-loss", get(reports::profit_loss))
