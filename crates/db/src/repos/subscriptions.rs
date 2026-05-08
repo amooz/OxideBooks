@@ -556,12 +556,12 @@ impl SubscriptionRepo {
         let mut by_plan = Vec::new();
 
         for r in rows {
-            let months = match r.billing_cycle.as_str() {
-                "quarterly" => 3i64,
-                "annual" | "yearly" => 12,
-                _ => 1,
+            let plan_mrr = match r.billing_cycle.as_str() {
+                "weekly" => r.total_billing * 52 / 12,
+                "quarterly" => r.total_billing / 3,
+                "annually" => r.total_billing / 12,
+                _ => r.total_billing, // monthly
             };
-            let plan_mrr = r.total_billing / months;
             total_mrr += plan_mrr;
             total_active += r.active_count;
             by_plan.push(MrrByPlan {
@@ -626,10 +626,12 @@ impl SubscriptionRepo {
 
         let churn: ChurnRow = sqlx::query_as(
             "SELECT COUNT(s.id) AS churned, \
-               COALESCE(SUM(p.price * s.quantity / \
-                 CASE p.billing_cycle \
-                   WHEN 'quarterly' THEN 3 WHEN 'annual' THEN 12 WHEN 'yearly' THEN 12 ELSE 1 \
-                 END), 0)::BIGINT AS churned_mrr \
+               COALESCE(SUM(CASE p.billing_cycle \
+                 WHEN 'weekly'    THEN p.price * s.quantity * 52 / 12 \
+                 WHEN 'quarterly' THEN p.price * s.quantity / 3 \
+                 WHEN 'annually'  THEN p.price * s.quantity / 12 \
+                 ELSE                  p.price * s.quantity \
+               END), 0)::BIGINT AS churned_mrr \
              FROM subscriptions s \
              JOIN subscription_plans p ON p.id = s.plan_id \
              WHERE s.organization_id = $1 AND s.status = 'cancelled' \
@@ -644,10 +646,12 @@ impl SubscriptionRepo {
 
         // New MRR from new subscriptions in period
         let new_mrr: i64 = sqlx::query_scalar(
-            "SELECT COALESCE(SUM(p.price * s.quantity / \
-               CASE p.billing_cycle \
-                 WHEN 'quarterly' THEN 3 WHEN 'annual' THEN 12 WHEN 'yearly' THEN 12 ELSE 1 \
-               END), 0)::BIGINT \
+            "SELECT COALESCE(SUM(CASE p.billing_cycle \
+               WHEN 'weekly'    THEN p.price * s.quantity * 52 / 12 \
+               WHEN 'quarterly' THEN p.price * s.quantity / 3 \
+               WHEN 'annually'  THEN p.price * s.quantity / 12 \
+               ELSE                  p.price * s.quantity \
+             END), 0)::BIGINT \
              FROM subscriptions s \
              JOIN subscription_plans p ON p.id = s.plan_id \
              WHERE s.organization_id = $1 AND s.created_at::DATE >= $2 AND s.created_at::DATE <= $3",
