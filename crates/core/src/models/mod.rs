@@ -376,7 +376,9 @@ pub use vendor_credit::{
 };
 pub use vendor_portal::{CreateVendorPortalToken, VendorPortalToken};
 pub use warehouse::{
-    CreateWarehouse, InventoryTransfer, TransferStock, UpdateWarehouse, Warehouse, WarehouseStock,
+    CreatePendingTransfer, CreateStockAdjustment, CreateWarehouse, InventoryTransfer,
+    StockAdjustment, StockSummaryRow, TransferStock, UpdateWarehouse, Warehouse, WarehouseStock,
+    WarehouseStockLine,
 };
 pub use webhook::{
     CreateWebhookEndpoint, UpdateWebhookEndpoint, WebhookEndpoint, WebhookPayload, ALL_EVENT_TYPES,
