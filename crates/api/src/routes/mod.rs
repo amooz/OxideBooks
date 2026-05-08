@@ -23,8 +23,8 @@ use crate::{
         deferred_revenue, departments, direct_deposit, doc_sequences, dunning, einvoice, email,
         employee_bank_accounts, employee_loans, employees, exchange_rates, expense_categories,
         expense_claims, expense_policies, expense_reports, expenses, export, fixed_assets, fx,
-        fx_revaluations, grn, health, identity, import, intercompany, inventory, inventory_lots,
-        inventory_reorder_requests, inventory_serial_numbers, inventory_stocktakes,
+        fx_revaluations, gdpr, grn, health, identity, import, intercompany, inventory,
+        inventory_lots, inventory_reorder_requests, inventory_serial_numbers, inventory_stocktakes,
         invoice_templates, invoices, landed_costs, late_fees, leases, leave, mileage, notes,
         notifications, opening_balances, organizations, payment_links, payment_plans,
         payment_terms, payments, payroll, payroll_tax, payslips, plaid, portal_payment_methods,
@@ -392,6 +392,15 @@ pub fn build(state: AppState) -> Router {
             "/audit-log/compliance-summary",
             get(audit::compliance_summary),
         )
+        .route(
+            "/audit-log/:resource_type/:resource_id",
+            get(audit::get_audit_for_resource),
+        )
+        // GDPR
+        .route("/gdpr/export-contact-data", get(gdpr::export_contact_data))
+        .route("/gdpr/forget-contact", delete(gdpr::forget_contact))
+        // Admin operations
+        .route("/admin/purge-audit-log", post(audit::purge_audit_log))
         // Tax rates
         .route(
             "/tax-rates",
