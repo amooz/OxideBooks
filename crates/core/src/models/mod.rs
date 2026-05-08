@@ -58,6 +58,7 @@ pub mod invoice;
 pub mod invoice_template;
 pub mod landed_cost;
 pub mod late_fee;
+pub mod lease;
 pub mod leave;
 pub mod mileage;
 pub mod note;
@@ -248,6 +249,9 @@ pub use invoice::{
 pub use invoice_template::{InvoiceTemplate, UpsertInvoiceTemplate};
 pub use landed_cost::{CreateLandedCost, LandedCost, LandedCostAllocation};
 pub use late_fee::{LateFee, LateFeeRule, UpsertLateFeeRule};
+pub use lease::{
+    CreateLease, Lease, LeasePayment, LeaseScheduleLine, RecordLeasePayment, TerminateLease,
+};
 pub use leave::{
     CreateLeaveRequest, CreateLeaveType, LeaveBalance, LeaveRequest, LeaveType, UpdateLeaveType,
 };
