@@ -4,7 +4,8 @@ use axum::{
     Json,
 };
 use oxidebooks_core::models::{
-    CreateSubscription, CreateSubscriptionPlan, UpdateSubscription, UpdateSubscriptionPlan,
+    ChangePlan, CreateSubscription, CreateSubscriptionPlan, UpdateSubscription,
+    UpdateSubscriptionPlan,
 };
 use oxidebooks_db::repos::{BillingRunResult, SubscriptionRepo};
 use serde::Deserialize;
@@ -138,6 +139,59 @@ pub async fn cancel_subscription(
     }
     let sub = SubscriptionRepo::cancel(&state.db, &claims.org, &id).await?;
     Ok(Json(serde_json::json!(sub)))
+}
+
+pub async fn pause_subscription(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let sub = SubscriptionRepo::pause(&state.db, &claims.org, &id).await?;
+    Ok(Json(serde_json::json!({ "data": sub })))
+}
+
+pub async fn resume_subscription(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let sub = SubscriptionRepo::resume(&state.db, &claims.org, &id).await?;
+    Ok(Json(serde_json::json!({ "data": sub })))
+}
+
+pub async fn change_subscription_plan(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<String>,
+    Json(body): Json<ChangePlan>,
+) -> ApiResult<(StatusCode, Json<serde_json::Value>)> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let change =
+        SubscriptionRepo::change_plan(&state.db, &claims.org, &id, body, &claims.sub).await?;
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({ "data": change })),
+    ))
+}
+
+pub async fn list_subscription_plan_changes(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !claims.is_at_least_accountant() {
+        return Err(ApiError::Forbidden);
+    }
+    let changes = SubscriptionRepo::list_plan_changes(&state.db, &claims.org, &id).await?;
+    Ok(Json(serde_json::json!({ "data": changes })))
 }
 
 pub async fn renew_subscription(

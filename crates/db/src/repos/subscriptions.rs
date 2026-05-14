@@ -1,6 +1,6 @@
 use oxidebooks_core::models::{
-    ChurnReport, CreateSubscription, CreateSubscriptionPlan, MrrByPlan, MrrSnapshot, Subscription,
-    SubscriptionPlan, UpdateSubscription, UpdateSubscriptionPlan,
+    ChangePlan, ChurnReport, CreateSubscription, CreateSubscriptionPlan, MrrByPlan, MrrSnapshot,
+    PlanChange, Subscription, SubscriptionPlan, UpdateSubscription, UpdateSubscriptionPlan,
 };
 use sqlx::PgPool;
 use time::{Date, OffsetDateTime};
@@ -682,6 +682,224 @@ impl SubscriptionRepo {
             new_mrr,
             net_mrr_change: new_mrr - churn.churned_mrr,
         })
+    }
+
+    /// Pause an active/trialing subscription. Billing is suspended until resumed.
+    pub async fn pause(pool: &PgPool, org_id: &str, id: &str) -> Result<Subscription, DbError> {
+        let org = parse_uuid(org_id)?;
+        let sid = parse_uuid(id)?;
+        let n = sqlx::query(
+            "UPDATE subscriptions
+             SET status = 'paused', paused_at = now(), updated_at = now()
+             WHERE organization_id = $1 AND id = $2
+               AND status IN ('active','trialing')",
+        )
+        .bind(org)
+        .bind(sid)
+        .execute(pool)
+        .await
+        .map_err(map_sqlx_err)?
+        .rows_affected();
+        if n == 0 {
+            return Err(DbError::Conflict(
+                "subscription cannot be paused in its current state".into(),
+            ));
+        }
+        Self::get_by_id(pool, org_id, id).await
+    }
+
+    /// Resume a paused subscription. The billing period restarts from today.
+    pub async fn resume(pool: &PgPool, org_id: &str, id: &str) -> Result<Subscription, DbError> {
+        let org = parse_uuid(org_id)?;
+        let sid = parse_uuid(id)?;
+
+        let row: Option<(String,)> = sqlx::query_as(
+            "SELECT p.billing_cycle FROM subscriptions s
+             JOIN subscription_plans p ON p.id = s.plan_id
+             WHERE s.organization_id = $1 AND s.id = $2 AND s.status = 'paused'",
+        )
+        .bind(org)
+        .bind(sid)
+        .fetch_optional(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let (billing_cycle,) = row.ok_or(DbError::NotFound)?;
+        let today = time::OffsetDateTime::now_utc().date();
+        let new_end = next_period_end(today, &billing_cycle);
+
+        sqlx::query(
+            "UPDATE subscriptions
+             SET status = 'active', paused_at = NULL,
+                 current_period_start = $3, current_period_end = $4,
+                 updated_at = now()
+             WHERE organization_id = $1 AND id = $2",
+        )
+        .bind(org)
+        .bind(sid)
+        .bind(today)
+        .bind(new_end)
+        .execute(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        Self::get_by_id(pool, org_id, id).await
+    }
+
+    /// Change the subscription to a different plan (upgrade or downgrade).
+    /// If `input.prorate = true`, calculates unused days credit from the old plan.
+    pub async fn change_plan(
+        pool: &PgPool,
+        org_id: &str,
+        id: &str,
+        input: ChangePlan,
+        changed_by: &str,
+    ) -> Result<PlanChange, DbError> {
+        let org = parse_uuid(org_id)?;
+        let sid = parse_uuid(id)?;
+        let new_plan_id = parse_uuid(&input.new_plan_id)?;
+        let changer = parse_uuid(changed_by)?;
+
+        #[derive(sqlx::FromRow)]
+        struct SubPlanRow {
+            old_plan_id: Uuid,
+            old_price: i64,
+            quantity: i32,
+            period_start: Date,
+            period_end: Date,
+        }
+
+        let row: SubPlanRow = sqlx::query_as(
+            "SELECT s.plan_id AS old_plan_id, p.price AS old_price, s.quantity,
+                    s.current_period_start AS period_start,
+                    s.current_period_end   AS period_end
+             FROM subscriptions s
+             JOIN subscription_plans p ON p.id = s.plan_id
+             WHERE s.organization_id = $1 AND s.id = $2
+               AND s.status IN ('active','trialing','paused')",
+        )
+        .bind(org)
+        .bind(sid)
+        .fetch_optional(pool)
+        .await
+        .map_err(map_sqlx_err)?
+        .ok_or(DbError::NotFound)?;
+
+        let new_price: i64 = sqlx::query_scalar(
+            "SELECT price FROM subscription_plans
+             WHERE organization_id = $1 AND id = $2 AND is_active = TRUE",
+        )
+        .bind(org)
+        .bind(new_plan_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(map_sqlx_err)?
+        .ok_or(DbError::NotFound)?;
+
+        // Prorated credit = old billing amount × (remaining days / period days)
+        let proration_credit = if input.prorate {
+            let today = time::OffsetDateTime::now_utc().date();
+            let period_days = (row.period_end - row.period_start).whole_days().max(1);
+            let remaining_days = (row.period_end - today).whole_days().max(0);
+            row.old_price * row.quantity as i64 * remaining_days / period_days
+        } else {
+            0
+        };
+
+        let mut tx = pool.begin().await.map_err(map_sqlx_err)?;
+
+        sqlx::query(
+            "UPDATE subscriptions SET plan_id = $3, updated_at = now()
+             WHERE organization_id = $1 AND id = $2",
+        )
+        .bind(org)
+        .bind(sid)
+        .bind(new_plan_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        let change_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO subscription_plan_changes
+                (id, subscription_id, organization_id, old_plan_id, new_plan_id,
+                 old_price, new_price, proration_credit, changed_by)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+        )
+        .bind(change_id)
+        .bind(sid)
+        .bind(org)
+        .bind(row.old_plan_id)
+        .bind(new_plan_id)
+        .bind(row.old_price)
+        .bind(new_price)
+        .bind(proration_credit)
+        .bind(changer)
+        .execute(&mut *tx)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        tx.commit().await.map_err(map_sqlx_err)?;
+
+        Ok(PlanChange {
+            id: change_id.to_string(),
+            subscription_id: sid.to_string(),
+            old_plan_id: row.old_plan_id.to_string(),
+            new_plan_id: new_plan_id.to_string(),
+            old_price: row.old_price,
+            new_price,
+            proration_credit,
+            changed_at: time::OffsetDateTime::now_utc(),
+        })
+    }
+
+    /// List the plan-change history for a subscription.
+    pub async fn list_plan_changes(
+        pool: &PgPool,
+        org_id: &str,
+        subscription_id: &str,
+    ) -> Result<Vec<PlanChange>, DbError> {
+        let org = parse_uuid(org_id)?;
+        let sid = parse_uuid(subscription_id)?;
+
+        #[derive(sqlx::FromRow)]
+        struct PlanChangeRow {
+            id: Uuid,
+            subscription_id: Uuid,
+            old_plan_id: Uuid,
+            new_plan_id: Uuid,
+            old_price: i64,
+            new_price: i64,
+            proration_credit: i64,
+            changed_at: OffsetDateTime,
+        }
+
+        let rows: Vec<PlanChangeRow> = sqlx::query_as(
+            "SELECT id, subscription_id, old_plan_id, new_plan_id,
+                    old_price, new_price, proration_credit, changed_at
+             FROM subscription_plan_changes
+             WHERE organization_id = $1 AND subscription_id = $2
+             ORDER BY changed_at DESC",
+        )
+        .bind(org)
+        .bind(sid)
+        .fetch_all(pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| PlanChange {
+                id: r.id.to_string(),
+                subscription_id: r.subscription_id.to_string(),
+                old_plan_id: r.old_plan_id.to_string(),
+                new_plan_id: r.new_plan_id.to_string(),
+                old_price: r.old_price,
+                new_price: r.new_price,
+                proration_credit: r.proration_credit,
+                changed_at: r.changed_at,
+            })
+            .collect())
     }
 }
 

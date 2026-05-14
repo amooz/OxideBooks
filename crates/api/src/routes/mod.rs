@@ -1865,6 +1865,23 @@ pub fn build(state: AppState) -> Router {
                 .patch(service_territories::update_service_territory)
                 .delete(service_territories::delete_service_territory),
         )
+        // Subscription lifecycle
+        .route(
+            "/subscriptions/:id/pause",
+            post(subscriptions::pause_subscription),
+        )
+        .route(
+            "/subscriptions/:id/resume",
+            post(subscriptions::resume_subscription),
+        )
+        .route(
+            "/subscriptions/:id/change-plan",
+            post(subscriptions::change_subscription_plan),
+        )
+        .route(
+            "/subscriptions/:id/plan-changes",
+            get(subscriptions::list_subscription_plan_changes),
+        )
         // Subscription billing
         .route(
             "/subscriptions/:id/bill",

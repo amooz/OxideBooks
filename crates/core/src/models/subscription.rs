@@ -85,6 +85,27 @@ pub struct UpdateSubscription {
     pub notes: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ChangePlan {
+    pub new_plan_id: String,
+    /// If true, issue a prorated credit note for unused days on the old plan.
+    #[serde(default)]
+    pub prorate: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlanChange {
+    pub id: String,
+    pub subscription_id: String,
+    pub old_plan_id: String,
+    pub new_plan_id: String,
+    pub old_price: MinorUnits,
+    pub new_price: MinorUnits,
+    pub proration_credit: MinorUnits,
+    #[serde(with = "time::serde::rfc3339")]
+    pub changed_at: OffsetDateTime,
+}
+
 fn default_currency() -> String {
     "USD".to_string()
 }
