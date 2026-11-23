@@ -24,10 +24,9 @@ Contains all business logic that is independent of storage or transport:
 
 Persistence only — no HTTP types:
 
-- **Repositories** — one struct per resource (`AccountRepo`, `TransactionRepo`, etc.), all methods are `async fn` that take `&PgPool`.
+- **Repositories** — one struct per resource (`AccountRepo`, `TransactionRepo`, etc.); every method is an `async fn` that takes `&PgPool` and an organization ID.
 - **Row types** — private `*Row` structs with `#[derive(sqlx::FromRow)]`, converted to domain types with `TryFrom`/`From`.
 - **`DbError`** — wraps `sqlx::Error` and `CoreError`; has `is_not_found()` and `is_conflict()` helpers for HTTP status mapping.
-- **`MIGRATOR`** — `sqlx::Migrator` embedded from `migrations/` at compile time; run automatically on startup.
 - **`pub static MIGRATOR`** — exported so test harnesses (`#[sqlx::test(migrator = ...)]`) can spin up a fresh schema per test.
 
 All queries use `sqlx::query_as` (runtime, not the compile-time `query!` macro) so the build never requires a live database.
@@ -99,7 +98,7 @@ Migrations live in `crates/db/migrations/` and are applied in order at startup:
 |---|---|
 | `0001_initial.sql` | Core schema: organizations, users, accounts, journal_entries, journal_lines, contacts, invoices, invoice_lines |
 | `0002_rbac.sql` | RBAC: permissions table, roles table, role_permissions join table; migrates users.role TEXT → users.role_id UUID |
-| `0003_identity.sql` | SSO & provisioning: identity_providers, oidc_states, scim_tokens; extends users with auth_method, identity_provider_id, external_id |
+| `0003_identity.sql` | SSO and SCIM provisioning: identity_providers, oidc_states, scim_tokens; extends users with auth_method, identity_provider_id, external_id |
 
 ---
 
@@ -116,6 +115,8 @@ JSON: {"error": {"code": "…", "message": "…"}}
 ```
 
 Internal errors log the full cause but return a redacted message to the client.
+
+Every error response also carries a `request_id`, matching the `x-request-id` header and the server logs, so a support ticket can be traced to the exact request.
 
 ---
 
